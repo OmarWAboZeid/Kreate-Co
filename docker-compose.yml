@@ -1,0 +1,18 @@
+services:
+  supabase:
+    image: supabase/postgres
+    ports:
+      - "54322:5432"
+
+  tigerbeetle:
+    image: ghcr.io/tigerbeetle/tigerbeetle
+    volumes:
+      - ./data/tigerbeetle:/data
+    ports:
+      - "3000:3000"
+    command:
+      [
+        "start",
+        "--addresses=0.0.0.0:3000",
+        "/data/0_0.tigerbeetle"
+      ]
