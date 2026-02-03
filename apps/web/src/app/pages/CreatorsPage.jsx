@@ -284,45 +284,64 @@ export default function CreatorsPage() {
             </select>
           </div>
 
-          <div className="creator-directory">
+          <div className="influencer-grid">
             {filteredInfluencers.length === 0 ? (
               <EmptyState title="No influencers found" description="Try adjusting your filters." />
             ) : (
               filteredInfluencers.map((creator) => {
                 const totalFollowers = Object.values(creator.followers || {}).reduce((a, b) => a + b, 0);
+                const formatFollowers = (num) => {
+                  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+                  if (num >= 1000) return (num / 1000).toFixed(0) + 'K';
+                  return num;
+                };
                 return (
-                  <div key={creator.id} className="card creator-card">
-                    <div className="creator-info">
-                      <h3>{creator.name}</h3>
-                      <p className="creator-meta">
-                        {creator.handles?.instagram} · {creator.niche} · {creator.region}
-                      </p>
-                      <p className="creator-stats">
-                        <span className="stat">
-                          <strong>{(totalFollowers / 1000).toFixed(0)}K</strong> Total Followers
-                        </span>
-                        <span className="stat">
-                          <strong>{creator.engagement}%</strong> Engagement
-                        </span>
-                      </p>
-                      <p className="creator-details">
-                        {creator.platforms?.map((platform) => (
-                          <span key={platform} className="pill pill-outline">{platform}</span>
-                        ))}
-                      </p>
-                      {creator.notes && <p className="muted">{creator.notes}</p>}
-                    </div>
-                    <div className="creator-campaigns">
-                      {(creatorCampaigns[creator.id] || []).length === 0 ? (
-                        <p className="muted">No campaigns yet.</p>
-                      ) : (
-                        creatorCampaigns[creator.id].map((entry) => (
-                          <div key={`${creator.id}-${entry.campaign?.id}`}>
-                            <span>{entry.campaign?.name}</span>
-                            <StatusPill status={entry.status} />
+                  <div key={creator.id} className="influencer-card">
+                    <div className="influencer-card-header">
+                      <div className="influencer-avatar">
+                        {creator.avatar ? (
+                          <img src={creator.avatar} alt={creator.name} />
+                        ) : (
+                          <div className="avatar-placeholder">
+                            {creator.name.split(' ').map(n => n[0]).join('')}
                           </div>
-                        ))
+                        )}
+                      </div>
+                      <div className="influencer-niche-badge">{creator.niche}</div>
+                    </div>
+                    <div className="influencer-card-body">
+                      <h3 className="influencer-name">{creator.name}</h3>
+                      <p className="influencer-handle">{creator.handles?.instagram}</p>
+                      <p className="influencer-region">
+                        <i className="fas fa-map-marker-alt"></i> {creator.region}
+                      </p>
+                      <div className="influencer-stats-row">
+                        <div className="influencer-stat">
+                          <span className="stat-value">{formatFollowers(totalFollowers)}</span>
+                          <span className="stat-label">Followers</span>
+                        </div>
+                        <div className="influencer-stat">
+                          <span className="stat-value">{creator.engagement}%</span>
+                          <span className="stat-label">Engagement</span>
+                        </div>
+                      </div>
+                      <div className="influencer-platforms">
+                        {creator.platforms?.map((platform) => (
+                          <span key={platform} className="platform-icon" title={platform}>
+                            <i className={`fab fa-${platform.toLowerCase()}`}></i>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="influencer-card-footer">
+                      {(creatorCampaigns[creator.id] || []).length === 0 ? (
+                        <span className="campaign-count available">Available</span>
+                      ) : (
+                        <span className="campaign-count active">
+                          {creatorCampaigns[creator.id].length} Campaign{creatorCampaigns[creator.id].length > 1 ? 's' : ''}
+                        </span>
                       )}
+                      <button type="button" className="btn-view-profile">View Profile</button>
                     </div>
                   </div>
                 );
