@@ -36,6 +36,15 @@ export default function CampaignsPage() {
     return campaigns.filter((campaign) => campaign.brand === brandFilter);
   }, [brandFilter, campaigns]);
 
+  const openWizard = () => {
+    if (role === 'brand' && brandFilter) {
+      setForm({ ...defaultForm, brand: brandFilter });
+    } else {
+      setForm(defaultForm);
+    }
+    setShowWizard(true);
+  };
+
   const updateForm = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -95,8 +104,8 @@ export default function CampaignsPage() {
           <h2>Campaigns</h2>
           <p>Track progress from brief to activation.</p>
         </div>
-        {role === 'admin' && (
-          <button type="button" className="btn btn-primary" onClick={() => setShowWizard(true)}>
+        {(role === 'admin' || role === 'brand') && (
+          <button type="button" className="btn btn-primary" onClick={openWizard}>
             Create Campaign
           </button>
         )}
@@ -123,8 +132,8 @@ export default function CampaignsPage() {
           title="No campaigns yet"
           description="Create your first campaign to start building a roster."
           action={
-            role === 'admin' ? (
-              <button type="button" className="btn btn-primary" onClick={() => setShowWizard(true)}>
+            (role === 'admin' || role === 'brand') ? (
+              <button type="button" className="btn btn-primary" onClick={openWizard}>
                 Create Campaign
               </button>
             ) : null
@@ -180,19 +189,31 @@ export default function CampaignsPage() {
               <div className="wizard-panel">
                 <label>
                   Campaign name
-                  <input className="input" value={form.name} onChange={(e) => updateForm('name', e.target.value)} />
+                  <input 
+                    className="input" 
+                    value={form.name} 
+                    onChange={(e) => updateForm('name', e.target.value)} 
+                    placeholder="e.g. Summer Collection Launch"
+                  />
                 </label>
-                <label>
-                  Brand
-                  <select className="input" value={form.brand} onChange={(e) => updateForm('brand', e.target.value)}>
-                    <option value="">Select brand</option>
-                    {brands.map((brand) => (
-                      <option key={brand} value={brand}>
-                        {brand}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {role === 'brand' ? (
+                  <div>
+                    <p className="label">Brand</p>
+                    <p style={{ fontWeight: 600, color: 'var(--color-crimson)' }}>{form.brand}</p>
+                  </div>
+                ) : (
+                  <label>
+                    Brand
+                    <select className="input" value={form.brand} onChange={(e) => updateForm('brand', e.target.value)}>
+                      <option value="">Select brand</option>
+                      {brands.map((brand) => (
+                        <option key={brand} value={brand}>
+                          {brand}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 <div className="field-row">
                   <label>
                     Start date
@@ -314,16 +335,30 @@ export default function CampaignsPage() {
             )}
 
             <div className="wizard-actions">
-              <button type="button" className="btn btn-secondary" onClick={resetWizard}>
-                Cancel
-              </button>
+              {step === 1 ? (
+                <button type="button" className="btn btn-secondary" onClick={resetWizard}>
+                  Cancel
+                </button>
+              ) : (
+                <button type="button" className="btn btn-secondary" onClick={() => setStep(step - 1)}>
+                  ← Previous
+                </button>
+              )}
               <div>
-                <button type="button" className="btn btn-secondary" onClick={() => handleCreateCampaign('Draft')}>
-                  Save Draft
-                </button>
-                <button type="button" className="btn btn-primary" onClick={() => handleCreateCampaign('Submitted')}>
-                  Submit for Processing
-                </button>
+                {step < 3 ? (
+                  <button type="button" className="btn btn-primary" onClick={() => setStep(step + 1)}>
+                    Next →
+                  </button>
+                ) : (
+                  <>
+                    <button type="button" className="btn btn-secondary" onClick={() => handleCreateCampaign('Draft')}>
+                      Save Draft
+                    </button>
+                    <button type="button" className="btn btn-primary" onClick={() => handleCreateCampaign('Submitted')}>
+                      {role === 'brand' ? 'Submit Brief' : 'Submit for Processing'}
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>
