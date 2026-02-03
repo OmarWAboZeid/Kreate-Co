@@ -76,12 +76,37 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
 - `GET /api/influencers` - Fetch all influencers from database
 - `GET /api/ugc-creators` - Fetch all UGC creators from database
 
+## User Roles & Permissions
+- **Super Admin**: Full access to all features (Campaigns, Creator Network, Analytics, Settings)
+- **Employee**: Limited access to Campaigns and Creator Network only
+- **Brand**: Access to their own campaigns, creator network, analytics
+- **Creator**: Onboarding flow and campaign participation
+
+## Campaign Wizard Features
+- **Brand Selection**: New brand (with name input) or existing brand dropdown
+- **Payment Type**: Collab, Paid, or Mix
+- **Campaign Type**: UGC only, Influencer only, or Hybrid
+- **Objectives**: Awareness, Sales, Launch, Content Bank
+- **Packages**: Bundles (Buzz/Hype/Impact/Viral) or custom package counts
+- **Creator Tiers**: Multi-select (Nano/Micro/Mid-tier/Macro) - hidden for UGC-only
+- **Platforms**: TikTok, Instagram (YouTube removed)
+- **Content Formats**: Reel, Post, Story (Live removed)
+
+## Creator Workflow Management (Brand View)
+- **Status Dropdown**: Filming, Brief Sent, Posted, Need Alternative
+- **Final Video Link**: Input for submitted content URL
+- **Add Submitted Content**: Modal with content link, type, and notes
+
 ## Recent Changes
+- **Feb 2026**: Complete Brand Portal overhaul with revamped campaign wizard
+- **Feb 2026**: Added Employee role with restricted permissions
+- **Feb 2026**: Renamed "Creators" to "Creator Network" throughout app
+- **Feb 2026**: Added creator workflow management (status, video link, content submission)
+- **Feb 2026**: Removed Content tab from Brand/Admin navigation
+- **Feb 2026**: Added Filter by Brand dropdown for admin/employee views
 - **Feb 2026**: Migrated creator data from Excel to PostgreSQL database (300 influencers, 65 UGC creators)
-- **Feb 2026**: Added API endpoints for fetching creators from database
 - **Feb 2026**: Separated Creators page into UGC Creators and Influencers with distinct filter sets
-- **Feb 2026**: Added Create Campaign wizard for brand users with 3-step flow
-- **Feb 2026**: Comprehensive UI/UX enhancement with glassmorphism, gradients, and micro-interactions across all 9 pages
+- **Feb 2026**: Comprehensive UI/UX enhancement with glassmorphism, gradients, and micro-interactions
 
 ## Notes
 - The frontend is configured to proxy `/api` requests to the backend
