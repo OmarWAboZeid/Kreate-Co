@@ -1,13 +1,13 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import EmptyState from '../components/EmptyState.jsx';
-import StatusPill from '../components/StatusPill.jsx';
-import { useAppState } from '../state.jsx';
 
 export default function CreatorsPage() {
   const { role } = useParams();
-  const { creators, campaigns, campaignCreators } = useAppState();
   const [activeTab, setActiveTab] = useState('ugc');
+  const [ugcCreators, setUgcCreators] = useState([]);
+  const [influencers, setInfluencers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [ugcFilters, setUgcFilters] = useState({
     search: '',
@@ -15,31 +15,53 @@ export default function CreatorsPage() {
     age: '',
     gender: '',
     language: '',
-    experience: '',
   });
 
   const [influencerFilters, setInfluencerFilters] = useState({
     search: '',
     niche: '',
-    followers: '',
-    engagement: '',
-    platform: '',
-    gender: '',
+    category: '',
   });
 
-  const ugcCreators = useMemo(() => creators.filter((c) => c.type === 'ugc'), [creators]);
-  const influencers = useMemo(() => creators.filter((c) => c.type === 'influencer'), [creators]);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchCreators = async () => {
+      try {
+        const [ugcRes, influencerRes] = await Promise.all([
+          fetch('/api/ugc-creators'),
+          fetch('/api/influencers'),
+        ]);
+        
+        if (!ugcRes.ok || !influencerRes.ok) {
+          throw new Error('Failed to fetch creator data');
+        }
+        
+        const ugcData = await ugcRes.json();
+        const influencerData = await influencerRes.json();
+        
+        if (ugcData.ok) setUgcCreators(ugcData.data || []);
+        if (influencerData.ok) setInfluencers(influencerData.data || []);
+      } catch (err) {
+        console.error('Failed to fetch creators:', err);
+        setError('Unable to load creators. Please try again later.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchCreators();
+  }, []);
 
   const filteredUgc = useMemo(() => {
     return ugcCreators.filter((creator) => {
       if (ugcFilters.search && !creator.name.toLowerCase().includes(ugcFilters.search.toLowerCase())) return false;
-      if (ugcFilters.niche && creator.niche !== ugcFilters.niche) return false;
+      if (ugcFilters.niche && creator.niche && !creator.niche.toLowerCase().includes(ugcFilters.niche.toLowerCase())) return false;
       if (ugcFilters.gender && creator.gender !== ugcFilters.gender) return false;
-      if (ugcFilters.language && !creator.languages?.includes(ugcFilters.language)) return false;
-      if (ugcFilters.experience && creator.experienceLevel !== ugcFilters.experience) return false;
+      if (ugcFilters.language && creator.languages && !creator.languages.toLowerCase().includes(ugcFilters.language.toLowerCase())) return false;
       if (ugcFilters.age) {
         const [min, max] = ugcFilters.age.split('-').map(Number);
-        if (creator.age < min || creator.age > max) return false;
+        if (!creator.age || creator.age < min || creator.age > max) return false;
       }
       return true;
     });
@@ -48,38 +70,35 @@ export default function CreatorsPage() {
   const filteredInfluencers = useMemo(() => {
     return influencers.filter((creator) => {
       if (influencerFilters.search && !creator.name.toLowerCase().includes(influencerFilters.search.toLowerCase())) return false;
-      if (influencerFilters.niche && creator.niche !== influencerFilters.niche) return false;
-      if (influencerFilters.gender && creator.gender !== influencerFilters.gender) return false;
-      if (influencerFilters.platform && !creator.platforms?.includes(influencerFilters.platform)) return false;
-      if (influencerFilters.followers) {
-        const totalFollowers = Object.values(creator.followers || {}).reduce((a, b) => a + b, 0);
-        const [min, max] = influencerFilters.followers.split('-').map((v) => parseInt(v.replace('k', '000').replace('m', '000000')));
-        if (totalFollowers < min || (max && totalFollowers > max)) return false;
-      }
-      if (influencerFilters.engagement) {
-        const [min, max] = influencerFilters.engagement.split('-').map(Number);
-        if (creator.engagement < min || creator.engagement > max) return false;
-      }
+      if (influencerFilters.niche && creator.niche && !creator.niche.toLowerCase().includes(influencerFilters.niche.toLowerCase())) return false;
+      if (influencerFilters.category && creator.category !== influencerFilters.category) return false;
       return true;
     });
   }, [influencers, influencerFilters]);
 
-  const creatorCampaigns = useMemo(() => {
-    const map = {};
-    creators.forEach((creator) => {
-      map[creator.id] = [];
-    });
-    Object.entries(campaignCreators).forEach(([campaignId, data]) => {
-      data.shortlist.forEach((creatorId) => {
-        map[creatorId] = map[creatorId] || [];
-        map[creatorId].push({
-          campaign: campaigns.find((item) => item.id === campaignId),
-          status: data.approvals[creatorId] || 'Suggested',
-        });
-      });
-    });
-    return map;
-  }, [campaignCreators, campaigns, creators]);
+  const niches = useMemo(() => {
+    const allNiches = [...ugcCreators, ...influencers]
+      .map(c => c.niche)
+      .filter(Boolean)
+      .flatMap(n => n.split(/[,\/]/))
+      .map(n => n.trim())
+      .filter(Boolean);
+    return [...new Set(allNiches)].sort();
+  }, [ugcCreators, influencers]);
+
+  const categories = useMemo(() => {
+    return [...new Set(influencers.map(c => c.category).filter(Boolean))].sort();
+  }, [influencers]);
+
+  const languages = useMemo(() => {
+    const allLangs = ugcCreators
+      .map(c => c.languages)
+      .filter(Boolean)
+      .flatMap(l => l.split(/[,\/]/))
+      .map(l => l.trim())
+      .filter(Boolean);
+    return [...new Set(allLangs)].sort();
+  }, [ugcCreators]);
 
   if (role !== 'admin') {
     return (
@@ -90,9 +109,30 @@ export default function CreatorsPage() {
     );
   }
 
-  const niches = [...new Set(creators.map((c) => c.niche))].filter(Boolean);
-  const languages = [...new Set(creators.flatMap((c) => c.languages || []))];
-  const platforms = [...new Set(creators.flatMap((c) => c.platforms || []))];
+  if (loading) {
+    return (
+      <div className="page-stack">
+        <div className="page-header">
+          <div>
+            <h2>Creators</h2>
+            <p>Loading creator profiles...</p>
+          </div>
+        </div>
+        <div className="loading-spinner"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="page-stack">
+        <EmptyState
+          title="Error loading creators"
+          description={error}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="page-stack">
@@ -135,7 +175,7 @@ export default function CreatorsPage() {
               onChange={(e) => setUgcFilters({ ...ugcFilters, niche: e.target.value })}
             >
               <option value="">All Niches</option>
-              {niches.map((n) => (
+              {niches.slice(0, 20).map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>
@@ -158,7 +198,6 @@ export default function CreatorsPage() {
               <option value="">All Genders</option>
               <option value="Female">Female</option>
               <option value="Male">Male</option>
-              <option value="Non-binary">Non-binary</option>
             </select>
             <select
               className="input"
@@ -169,16 +208,6 @@ export default function CreatorsPage() {
               {languages.map((l) => (
                 <option key={l} value={l}>{l}</option>
               ))}
-            </select>
-            <select
-              className="input"
-              value={ugcFilters.experience}
-              onChange={(e) => setUgcFilters({ ...ugcFilters, experience: e.target.value })}
-            >
-              <option value="">All Experience</option>
-              <option value="Beginner">Beginner</option>
-              <option value="Intermediate">Intermediate</option>
-              <option value="Expert">Expert</option>
             </select>
           </div>
 
@@ -191,26 +220,24 @@ export default function CreatorsPage() {
                   <div className="creator-info">
                     <h3>{creator.name}</h3>
                     <p className="creator-meta">
-                      {creator.niche} · {creator.region} · {creator.gender}, {creator.age} yrs
+                      {creator.niche || 'General'} · {creator.region || 'Egypt'}
+                      {creator.gender && creator.age && ` · ${creator.gender}, ${creator.age} yrs`}
                     </p>
                     <p className="creator-details">
-                      <span className="pill">{creator.experienceLevel}</span>
-                      {creator.languages?.map((lang) => (
-                        <span key={lang} className="pill pill-outline">{lang}</span>
+                      {creator.has_mock_video && <span className="pill">Has Mock Video</span>}
+                      {creator.accepts_gifted_collab && <span className="pill pill-sand">Gifted Collab</span>}
+                      {creator.languages && creator.languages.split(',').map((lang) => (
+                        <span key={lang.trim()} className="pill pill-outline">{lang.trim()}</span>
                       ))}
                     </p>
                     {creator.notes && <p className="muted">{creator.notes}</p>}
                   </div>
-                  <div className="creator-campaigns">
-                    {(creatorCampaigns[creator.id] || []).length === 0 ? (
-                      <p className="muted">No campaigns yet.</p>
-                    ) : (
-                      creatorCampaigns[creator.id].map((entry) => (
-                        <div key={`${creator.id}-${entry.campaign?.id}`}>
-                          <span>{entry.campaign?.name}</span>
-                          <StatusPill status={entry.status} />
-                        </div>
-                      ))
+                  <div className="creator-contact">
+                    {creator.phone && <span className="contact-item"><i className="fas fa-phone"></i> {creator.phone}</span>}
+                    {creator.portfolio_url && (
+                      <a href={creator.portfolio_url} target="_blank" rel="noopener noreferrer" className="btn-view-profile">
+                        View Portfolio
+                      </a>
                     )}
                   </div>
                 </div>
@@ -235,52 +262,19 @@ export default function CreatorsPage() {
               onChange={(e) => setInfluencerFilters({ ...influencerFilters, niche: e.target.value })}
             >
               <option value="">All Niches</option>
-              {niches.map((n) => (
+              {niches.slice(0, 20).map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>
             <select
               className="input"
-              value={influencerFilters.followers}
-              onChange={(e) => setInfluencerFilters({ ...influencerFilters, followers: e.target.value })}
+              value={influencerFilters.category}
+              onChange={(e) => setInfluencerFilters({ ...influencerFilters, category: e.target.value })}
             >
-              <option value="">All Follower Ranges</option>
-              <option value="0-50000">0 - 50K</option>
-              <option value="50000-100000">50K - 100K</option>
-              <option value="100000-500000">100K - 500K</option>
-              <option value="500000-1000000">500K - 1M</option>
-              <option value="1000000-">1M+</option>
-            </select>
-            <select
-              className="input"
-              value={influencerFilters.engagement}
-              onChange={(e) => setInfluencerFilters({ ...influencerFilters, engagement: e.target.value })}
-            >
-              <option value="">All Engagement Rates</option>
-              <option value="0-2">0% - 2%</option>
-              <option value="2-4">2% - 4%</option>
-              <option value="4-6">4% - 6%</option>
-              <option value="6-100">6%+</option>
-            </select>
-            <select
-              className="input"
-              value={influencerFilters.platform}
-              onChange={(e) => setInfluencerFilters({ ...influencerFilters, platform: e.target.value })}
-            >
-              <option value="">All Platforms</option>
-              {platforms.map((p) => (
-                <option key={p} value={p}>{p}</option>
+              <option value="">All Categories</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>{c}</option>
               ))}
-            </select>
-            <select
-              className="input"
-              value={influencerFilters.gender}
-              onChange={(e) => setInfluencerFilters({ ...influencerFilters, gender: e.target.value })}
-            >
-              <option value="">All Genders</option>
-              <option value="Female">Female</option>
-              <option value="Male">Male</option>
-              <option value="Non-binary">Non-binary</option>
             </select>
           </div>
 
@@ -289,59 +283,54 @@ export default function CreatorsPage() {
               <EmptyState title="No influencers found" description="Try adjusting your filters." />
             ) : (
               filteredInfluencers.map((creator) => {
-                const totalFollowers = Object.values(creator.followers || {}).reduce((a, b) => a + b, 0);
-                const formatFollowers = (num) => {
-                  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-                  if (num >= 1000) return (num / 1000).toFixed(0) + 'K';
-                  return num;
-                };
+                const tiktokHandle = creator.tiktok_url ? 
+                  creator.tiktok_url.match(/@([^?/]+)/)?.[1] || 'TikTok' : null;
                 return (
                   <div key={creator.id} className="influencer-card">
                     <div className="influencer-card-header">
                       <div className="influencer-avatar">
-                        {creator.avatar ? (
-                          <img src={creator.avatar} alt={creator.name} />
-                        ) : (
-                          <div className="avatar-placeholder">
-                            {creator.name.split(' ').map(n => n[0]).join('')}
-                          </div>
-                        )}
+                        <div className="avatar-placeholder">
+                          {creator.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        </div>
                       </div>
-                      <div className="influencer-niche-badge">{creator.niche}</div>
+                      <div className="influencer-niche-badge">{creator.category || 'General'}</div>
                     </div>
                     <div className="influencer-card-body">
                       <h3 className="influencer-name">{creator.name}</h3>
-                      <p className="influencer-handle">{creator.handles?.instagram}</p>
+                      {tiktokHandle && <p className="influencer-handle">@{tiktokHandle}</p>}
                       <p className="influencer-region">
-                        <i className="fas fa-map-marker-alt"></i> {creator.region}
+                        <i className="fas fa-map-marker-alt"></i> {creator.region || 'Egypt'}
                       </p>
-                      <div className="influencer-stats-row">
-                        <div className="influencer-stat">
-                          <span className="stat-value">{formatFollowers(totalFollowers)}</span>
-                          <span className="stat-label">Followers</span>
+                      {creator.followers && (
+                        <div className="influencer-stats-row">
+                          <div className="influencer-stat">
+                            <span className="stat-value">{creator.followers}</span>
+                            <span className="stat-label">Followers</span>
+                          </div>
                         </div>
-                        <div className="influencer-stat">
-                          <span className="stat-value">{creator.engagement}%</span>
-                          <span className="stat-label">Engagement</span>
-                        </div>
-                      </div>
+                      )}
                       <div className="influencer-platforms">
-                        {creator.platforms?.map((platform) => (
-                          <span key={platform} className="platform-icon" title={platform}>
-                            <i className={`fab fa-${platform.toLowerCase()}`}></i>
-                          </span>
-                        ))}
+                        {creator.tiktok_url && (
+                          <a href={creator.tiktok_url} target="_blank" rel="noopener noreferrer" className="platform-icon" title="TikTok">
+                            <i className="fab fa-tiktok"></i>
+                          </a>
+                        )}
+                        {creator.instagram_url && (
+                          <a href={creator.instagram_url} target="_blank" rel="noopener noreferrer" className="platform-icon" title="Instagram">
+                            <i className="fab fa-instagram"></i>
+                          </a>
+                        )}
                       </div>
                     </div>
                     <div className="influencer-card-footer">
-                      {(creatorCampaigns[creator.id] || []).length === 0 ? (
-                        <span className="campaign-count available">Available</span>
-                      ) : (
-                        <span className="campaign-count active">
-                          {creatorCampaigns[creator.id].length} Campaign{creatorCampaigns[creator.id].length > 1 ? 's' : ''}
-                        </span>
+                      <span className="campaign-count available">
+                        {creator.niche || 'Available'}
+                      </span>
+                      {creator.phone && (
+                        <a href={`tel:${creator.phone}`} className="btn-view-profile">
+                          <i className="fas fa-phone"></i> Contact
+                        </a>
                       )}
-                      <button type="button" className="btn-view-profile">View Profile</button>
                     </div>
                   </div>
                 );

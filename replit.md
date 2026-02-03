@@ -61,7 +61,24 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
   - Filters: Niche, Follower Range, Engagement Rate, Platforms, Gender
   - Fields: name, handles, followers, engagement, niche, platforms, gender, region, notes
 
+## Database Schema
+### influencers table
+- id, name, tiktok_url, instagram_url, followers, niche, phone, region, notes, category, created_at, updated_at
+
+### ugc_creators table
+- id, name, phone, handle, niche, has_mock_video, portfolio_url, age, gender, languages, accepts_gifted_collab, turnaround_time, has_equipment, has_editing_skills, can_voiceover, skills_rating, base_rate, region, notes, created_at, updated_at
+
+## API Endpoints
+- `GET /api/health` - Basic health check
+- `GET /api/health/db` - Database connectivity check
+- `GET /api/health/tigerbeetle` - TigerBeetle service check
+- `GET /api/health/all` - Combined health status
+- `GET /api/influencers` - Fetch all influencers from database
+- `GET /api/ugc-creators` - Fetch all UGC creators from database
+
 ## Recent Changes
+- **Feb 2026**: Migrated creator data from Excel to PostgreSQL database (300 influencers, 65 UGC creators)
+- **Feb 2026**: Added API endpoints for fetching creators from database
 - **Feb 2026**: Separated Creators page into UGC Creators and Influencers with distinct filter sets
 - **Feb 2026**: Added Create Campaign wizard for brand users with 3-step flow
 - **Feb 2026**: Comprehensive UI/UX enhancement with glassmorphism, gradients, and micro-interactions across all 9 pages
