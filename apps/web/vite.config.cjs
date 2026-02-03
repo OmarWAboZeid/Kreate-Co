@@ -5,11 +5,13 @@ module.exports = defineConfig({
   root: __dirname,
   plugins: [react()],
   server: {
-    port: 5173,
+    host: '0.0.0.0',
+    port: 5000,
     strictPort: true,
+    allowedHosts: 'all',
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:4000',
+        target: 'http://localhost:4000',
         changeOrigin: true,
       },
     },
