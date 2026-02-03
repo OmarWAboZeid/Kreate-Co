@@ -134,6 +134,19 @@ export default function CreatorsPage() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [creatorStatuses, setCreatorStatuses] = useState({});
   const [expandedCreator, setExpandedCreator] = useState(null);
+  const [creatorWorkflowStatus, setCreatorWorkflowStatus] = useState({});
+  const [creatorVideoLinks, setCreatorVideoLinks] = useState({});
+  const [addContentModal, setAddContentModal] = useState({ open: false, creator: null });
+
+  const WORKFLOW_STATUSES = ['Filming', 'Brief Sent', 'Posted', 'Need Alternative'];
+
+  const updateWorkflowStatus = (creatorId, status) => {
+    setCreatorWorkflowStatus(prev => ({ ...prev, [creatorId]: status }));
+  };
+
+  const updateVideoLink = (creatorId, link) => {
+    setCreatorVideoLinks(prev => ({ ...prev, [creatorId]: link }));
+  };
 
   useEffect(() => {
     if (role === 'brand') {
@@ -179,7 +192,7 @@ export default function CreatorsPage() {
       <div className="page-stack">
         <div className="page-header">
           <div>
-            <h2>Recommended Creators</h2>
+            <h2>Creator Network</h2>
             <p>Review creators suggested by our team for your campaigns.</p>
           </div>
         </div>
@@ -242,6 +255,40 @@ export default function CreatorsPage() {
                   
                   {isExpanded && (
                     <div className="brand-creator-content-review">
+                      <div className="creator-workflow-section">
+                        <div className="workflow-row">
+                          <label>
+                            <span>Status</span>
+                            <select
+                              className="creator-status-dropdown"
+                              value={creatorWorkflowStatus[creator.id] || ''}
+                              onChange={(e) => updateWorkflowStatus(creator.id, e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <option value="">Select Status</option>
+                              {WORKFLOW_STATUSES.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            type="button"
+                            className="btn-add-content"
+                            onClick={(e) => { e.stopPropagation(); setAddContentModal({ open: true, creator }); }}
+                          >
+                            + Add Submitted Content
+                          </button>
+                        </div>
+                        <div className="video-link-input">
+                          <input
+                            type="url"
+                            placeholder="Final video link (for analytics)"
+                            value={creatorVideoLinks[creator.id] || ''}
+                            onChange={(e) => updateVideoLink(creator.id, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
                       <h5>Content Review</h5>
                       <div className="content-review-empty">
                         <p>No content submitted yet for review.</p>
@@ -287,6 +334,59 @@ export default function CreatorsPage() {
             </div>
           </div>
         )}
+
+        {addContentModal.open && (
+          <div className="modal-overlay active">
+            <div className="rejection-modal">
+              <h3>Add Submitted Content</h3>
+              <p>Add content submitted by {addContentModal.creator?.name}</p>
+              <label>
+                <span>Content Link</span>
+                <input
+                  className="input"
+                  type="url"
+                  placeholder="Enter content URL (e.g. TikTok, Instagram link)"
+                />
+              </label>
+              <label style={{ marginTop: '12px' }}>
+                <span>Content Type</span>
+                <select className="input">
+                  <option value="">Select type</option>
+                  <option value="Reel">Reel</option>
+                  <option value="Post">Post</option>
+                  <option value="Story">Story</option>
+                  <option value="Video">Video</option>
+                </select>
+              </label>
+              <label style={{ marginTop: '12px' }}>
+                <span>Notes</span>
+                <textarea
+                  className="input textarea"
+                  placeholder="Any additional notes..."
+                  rows={3}
+                />
+              </label>
+              <div className="rejection-modal-actions" style={{ marginTop: '20px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setAddContentModal({ open: false, creator: null })}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setAddContentModal({ open: false, creator: null });
+                  }}
+                >
+                  Add Content
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -296,7 +396,7 @@ export default function CreatorsPage() {
       <div className="page-stack">
         <div className="page-header">
           <div>
-            <h2>Creators</h2>
+            <h2>Creator Network</h2>
             <p>Loading creator profiles...</p>
           </div>
         </div>
@@ -320,7 +420,7 @@ export default function CreatorsPage() {
     <div className="page-stack">
       <div className="page-header">
         <div>
-          <h2>Creators</h2>
+          <h2>Creator Network</h2>
           <p>Review all creator profiles and performance context.</p>
         </div>
       </div>

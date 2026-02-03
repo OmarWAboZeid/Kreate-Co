@@ -5,21 +5,26 @@ import NotificationCenter from '../components/NotificationCenter.jsx';
 
 const roleConfig = {
   admin: {
-    label: 'Admin',
+    label: 'Super Admin',
     nav: [
       { to: 'campaigns', label: 'Campaigns' },
-      { to: 'creators', label: 'Creators' },
-      { to: 'content', label: 'Content Queue' },
+      { to: 'creators', label: 'Creator Network' },
       { to: 'analytics', label: 'Analytics' },
       { to: 'settings', label: 'Settings' },
+    ],
+  },
+  employee: {
+    label: 'Employee',
+    nav: [
+      { to: 'campaigns', label: 'Campaigns' },
+      { to: 'creators', label: 'Creator Network' },
     ],
   },
   brand: {
     label: 'Brand',
     nav: [
       { to: 'campaigns', label: 'Campaigns' },
-      { to: 'creators', label: 'Creators' },
-      { to: 'content', label: 'Saved Content' },
+      { to: 'creators', label: 'Creator Network' },
       { to: 'analytics', label: 'Analytics' },
       { to: 'settings', label: 'Profile' },
     ],
@@ -84,13 +89,20 @@ function ShellInner() {
         </nav>
         <div className="app-sidebar-footer">
           <p>Role</p>
-          <div className="role-switch">
+          <div className="role-switch role-switch-grid">
             <button
               type="button"
               className={role === 'admin' ? 'active' : undefined}
               onClick={() => handleRoleChange('admin')}
             >
-              Admin
+              Super Admin
+            </button>
+            <button
+              type="button"
+              className={role === 'employee' ? 'active' : undefined}
+              onClick={() => handleRoleChange('employee')}
+            >
+              Employee
             </button>
             <button
               type="button"

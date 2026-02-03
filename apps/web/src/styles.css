@@ -5554,3 +5554,177 @@ body.modal-open {
   font-size: 0.8rem;
   padding: 8px 12px;
 }
+
+/* === CAMPAIGN WIZARD PACKAGE STYLES === */
+.package-type-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  width: fit-content;
+}
+
+.package-type-toggle .toggle-btn {
+  padding: 10px 24px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: rgba(42, 42, 42, 0.6);
+}
+
+.package-type-toggle .toggle-btn.active {
+  background: var(--color-white);
+  color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.custom-package-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.package-group {
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 12px;
+}
+
+.package-group h4 {
+  margin: 0 0 16px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.wizard-input-sm {
+  max-width: 200px;
+  margin-top: 12px;
+}
+
+.wizard-input-group {
+  margin-top: 24px;
+}
+
+.wizard-input-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(42, 42, 42, 0.7);
+  margin-bottom: 8px;
+}
+
+.wizard-option-meta {
+  display: block;
+  font-size: 0.75rem;
+  color: rgba(42, 42, 42, 0.5);
+  margin-top: 4px;
+}
+
+.selected-count {
+  margin-top: 16px;
+  font-size: 0.85rem;
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* === CREATOR STATUS DROPDOWN === */
+.creator-status-dropdown {
+  padding: 6px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  background: var(--color-white);
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.creator-status-dropdown:focus {
+  border-color: var(--color-primary);
+  outline: none;
+}
+
+/* === ADD CONTENT BUTTON === */
+.btn-add-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  background: rgba(112, 17, 63, 0.08);
+  color: var(--color-primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-content:hover {
+  background: rgba(112, 17, 63, 0.15);
+}
+
+/* === FINAL VIDEO LINK INPUT === */
+.video-link-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.video-link-input input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.video-link-input input:focus {
+  border-color: var(--color-primary);
+  outline: none;
+}
+
+/* === CREATOR WORKFLOW SECTION === */
+.creator-workflow-section {
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.workflow-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.workflow-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.workflow-row label span {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(42, 42, 42, 0.6);
+  text-transform: uppercase;
+}
+
+/* === ROLE SWITCH GRID === */
+.role-switch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.role-switch-grid button {
+  font-size: 0.75rem;
+  padding: 8px 12px;
+}

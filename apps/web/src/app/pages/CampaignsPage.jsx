@@ -29,12 +29,19 @@ export default function CampaignsPage() {
   const [showModal, setShowModal] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [form, setForm] = useState(defaultForm);
+  const [adminBrandFilter, setAdminBrandFilter] = useState('');
 
   const brandFilter = role === 'brand' ? storage.getBrand() || brands[0] : null;
   const visibleCampaigns = useMemo(() => {
-    if (!brandFilter) return campaigns;
-    return campaigns.filter((campaign) => campaign.brand === brandFilter);
-  }, [brandFilter, campaigns]);
+    let filtered = campaigns;
+    if (brandFilter) {
+      filtered = filtered.filter((campaign) => campaign.brand === brandFilter);
+    }
+    if ((role === 'admin' || role === 'employee') && adminBrandFilter) {
+      filtered = filtered.filter((campaign) => campaign.brand === adminBrandFilter);
+    }
+    return filtered;
+  }, [brandFilter, campaigns, role, adminBrandFilter]);
 
   const openModal = () => {
     if (role === 'brand' && brandFilter) {
@@ -79,14 +86,19 @@ export default function CampaignsPage() {
       id: utils.makeId('camp'),
       name: wizardData.name,
       brand: wizardData.brand,
+      brandType: wizardData.brandType,
       platforms: wizardData.influencer?.platforms || ['Instagram'],
       status: 'Draft',
       description: '',
       objectives: wizardData.objectives,
-      budgetRange: wizardData.influencer?.budget || '',
+      paymentType: wizardData.paymentType,
+      packageType: wizardData.packageType,
+      bundle: wizardData.bundle,
+      ugcCount: wizardData.ugcCount,
+      influencerCount: wizardData.influencerCount,
+      creatorTiers: wizardData.creatorTiers,
       targetAudience: '',
       creatorType: wizardData.campaignType,
-      creatorsNeeded: wizardData.ugc?.videos || '',
       deliverables: '',
       contentFormat: [],
       timeline: { start: wizardData.startDate, end: '' },
@@ -139,7 +151,7 @@ export default function CampaignsPage() {
           <h2>Campaigns</h2>
           <p>Track progress from brief to activation.</p>
         </div>
-        {(role === 'admin' || role === 'brand') && (
+        {(role === 'admin' || role === 'employee' || role === 'brand') && (
           <button 
             type="button" 
             className="btn btn-primary" 
@@ -159,11 +171,18 @@ export default function CampaignsPage() {
           <option>In Review</option>
           <option>Active</option>
         </select>
-        <select className="input">
-          <option>Platform</option>
-          <option>Instagram</option>
-          <option>TikTok</option>
-        </select>
+        {(role === 'admin' || role === 'employee') && (
+          <select 
+            className="input"
+            value={adminBrandFilter}
+            onChange={(e) => setAdminBrandFilter(e.target.value)}
+          >
+            <option value="">All Brands</option>
+            {brands.map((brand) => (
+              <option key={brand} value={brand}>{brand}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {visibleCampaigns.length === 0 ? (
@@ -171,7 +190,7 @@ export default function CampaignsPage() {
           title="No campaigns yet"
           description="Create your first campaign to start building a roster."
           action={
-            (role === 'admin' || role === 'brand') ? (
+            (role === 'admin' || role === 'employee' || role === 'brand') ? (
               <button 
                 type="button" 
                 className="btn btn-primary" 
@@ -253,18 +272,6 @@ export default function CampaignsPage() {
                     </label>
                   )}
 
-                  <label className="campaign-field">
-                    <span>Budget Range</span>
-                    <select className="input" value={form.budget} onChange={(e) => updateForm('budget', e.target.value)}>
-                      <option value="">Select budget</option>
-                      <option value="Under $1,000">Under $1,000</option>
-                      <option value="$1,000 - $5,000">$1,000 - $5,000</option>
-                      <option value="$5,000 - $10,000">$5,000 - $10,000</option>
-                      <option value="$10,000 - $25,000">$10,000 - $25,000</option>
-                      <option value="$25,000+">$25,000+</option>
-                    </select>
-                  </label>
-
                   <label className="campaign-field full-width">
                     <span>Campaign Description</span>
                     <textarea 
@@ -284,7 +291,7 @@ export default function CampaignsPage() {
                   <div className="campaign-field">
                     <span>Platforms *</span>
                     <div className="pill-group">
-                      {['Instagram', 'TikTok', 'YouTube', 'Facebook'].map((platform) => (
+                      {['Instagram', 'TikTok', 'Facebook'].map((platform) => (
                         <button
                           key={platform}
                           type="button"
@@ -300,7 +307,7 @@ export default function CampaignsPage() {
                   <div className="campaign-field">
                     <span>Content Format</span>
                     <div className="pill-group">
-                      {['Reels', 'Stories', 'Posts', 'Videos', 'Live'].map((format) => (
+                      {['Reels', 'Stories', 'Posts', 'Videos'].map((format) => (
                         <button
                           key={format}
                           type="button"
@@ -320,17 +327,6 @@ export default function CampaignsPage() {
                       <option value="UGC Creators">UGC Creators</option>
                       <option value="Influencers">Influencers</option>
                       <option value="Both">Both</option>
-                    </select>
-                  </label>
-
-                  <label className="campaign-field">
-                    <span>Creators Needed</span>
-                    <select className="input" value={form.creatorsNeeded} onChange={(e) => updateForm('creatorsNeeded', e.target.value)}>
-                      <option value="">Select number</option>
-                      <option value="1-5">1-5 creators</option>
-                      <option value="5-10">5-10 creators</option>
-                      <option value="10-20">10-20 creators</option>
-                      <option value="20+">20+ creators</option>
                     </select>
                   </label>
 
@@ -373,11 +369,10 @@ export default function CampaignsPage() {
                     <span>Campaign Objectives</span>
                     <select className="input" value={form.objectives} onChange={(e) => updateForm('objectives', e.target.value)}>
                       <option value="">Select objective</option>
-                      <option value="Brand Awareness">Brand Awareness</option>
-                      <option value="Product Launch">Product Launch</option>
-                      <option value="Sales & Conversions">Sales & Conversions</option>
-                      <option value="Engagement">Engagement</option>
-                      <option value="Content Creation">Content Creation</option>
+                      <option value="Awareness">Awareness</option>
+                      <option value="Sales">Sales</option>
+                      <option value="Launch">Launch</option>
+                      <option value="Content Bank">Content Bank</option>
                     </select>
                   </label>
 
