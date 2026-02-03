@@ -1,14 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-const brandOptions = ['Rabbit', 'Hankology', 'Chez Koukou', 'Minilet'];
-const creatorOptions = [
-  { id: 'cr-001', name: 'Nia Rivers' },
-  { id: 'cr-002', name: 'Sara ElDin' },
-  { id: 'cr-003', name: 'Ari Luna' },
-  { id: 'cr-004', name: 'Maya Kareem' },
-];
-
 const safeStorage = {
   set(key, value) {
     if (typeof window === 'undefined') return;
@@ -20,8 +12,6 @@ export default function AuthPage({ initialMode = 'login' }) {
   const navigate = useNavigate();
   const [mode, setMode] = useState(initialMode);
   const [role, setRole] = useState('brand');
-  const [brand, setBrand] = useState(brandOptions[0]);
-  const [creator, setCreator] = useState(creatorOptions[0].id);
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
 
   const roleLabel = useMemo(() => (role === 'brand' ? 'Brand' : 'Creator'), [role]);
@@ -32,11 +22,6 @@ export default function AuthPage({ initialMode = 'login' }) {
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    if (role === 'brand') {
-      safeStorage.set('kreate_brand', brand);
-    } else {
-      safeStorage.set('kreate_creator', creator);
-    }
     safeStorage.set('kreate_role', role);
     navigate(role === 'brand' ? '/app/brand/campaigns' : '/app/creator/assignments');
   };
@@ -60,7 +45,7 @@ export default function AuthPage({ initialMode = 'login' }) {
 
         <form onSubmit={handleSubmit} className="auth-form">
           <div>
-            <p className="label">Role</p>
+            <p className="label">I am a</p>
             <div className="pill-group">
               <button type="button" className={role === 'brand' ? 'active' : undefined} onClick={() => setRole('brand')}>
                 Brand
@@ -78,7 +63,7 @@ export default function AuthPage({ initialMode = 'login' }) {
                 className="input"
                 value={form.name}
                 onChange={(e) => updateForm('name', e.target.value)}
-                placeholder="Name"
+                placeholder="Your name"
               />
             </label>
           )}
@@ -91,6 +76,7 @@ export default function AuthPage({ initialMode = 'login' }) {
               value={form.email}
               onChange={(e) => updateForm('email', e.target.value)}
               placeholder="you@company.com"
+              autoComplete="email"
               required
             />
           </label>
@@ -103,6 +89,7 @@ export default function AuthPage({ initialMode = 'login' }) {
               value={form.password}
               onChange={(e) => updateForm('password', e.target.value)}
               placeholder="••••••••"
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
               required
             />
           </label>
@@ -116,35 +103,14 @@ export default function AuthPage({ initialMode = 'login' }) {
                 value={form.confirm}
                 onChange={(e) => updateForm('confirm', e.target.value)}
                 placeholder="••••••••"
+                autoComplete="new-password"
                 required
               />
             </label>
           )}
 
-          {role === 'brand' ? (
-            <label>
-              Brand
-              <select className="input" value={brand} onChange={(e) => setBrand(e.target.value)}>
-                {brandOptions.map((option) => (
-                  <option key={option}>{option}</option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <label>
-              Creator profile
-              <select className="input" value={creator} onChange={(e) => setCreator(e.target.value)}>
-                {creatorOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
           <button type="submit" className="btn btn-primary">
-            {mode === 'login' ? `Continue as ${roleLabel}` : `Create ${roleLabel} account`}
+            {mode === 'login' ? `Log in` : `Create account`}
           </button>
           <p className="muted auth-helper">Testing mode: no real authentication yet.</p>
         </form>
