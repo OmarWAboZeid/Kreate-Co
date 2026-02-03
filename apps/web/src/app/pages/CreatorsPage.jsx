@@ -222,7 +222,11 @@ export default function CreatorsPage() {
               filteredUgc.map((creator) => (
                 <div key={creator.id} className="compact-creator-card" onClick={() => openProfile(creator, 'ugc')}>
                   <div className="compact-card-avatar">
-                    {creator.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    {creator.profile_image ? (
+                      <img src={creator.profile_image} alt={creator.name} />
+                    ) : (
+                      <img src="/assets/default-avatar.png" alt={creator.name} />
+                    )}
                   </div>
                   <div className="compact-card-info">
                     <h4>{creator.name}</h4>
@@ -299,7 +303,11 @@ export default function CreatorsPage() {
               filteredInfluencers.map((creator) => (
                 <div key={creator.id} className="compact-creator-card" onClick={() => openProfile(creator, 'influencer')}>
                   <div className="compact-card-avatar">
-                    {creator.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    {creator.profile_image ? (
+                      <img src={creator.profile_image} alt={creator.name} />
+                    ) : (
+                      <img src="/assets/default-avatar.png" alt={creator.name} />
+                    )}
                   </div>
                   <div className="compact-card-info">
                     <h4>{creator.name}</h4>
