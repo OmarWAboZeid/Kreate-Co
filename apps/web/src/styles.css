@@ -4957,3 +4957,25 @@ body.modal-open {
   color: rgba(42, 42, 42, 0.4);
   font-style: italic;
 }
+
+.card-v2-details {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.card-v2-age {
+  font-size: 0.85rem;
+  color: rgba(42, 42, 42, 0.7);
+  font-weight: 500;
+}
+
+.card-v2-niche {
+  font-size: 0.8rem;
+  color: var(--color-crimson);
+  font-weight: 600;
+  padding: 4px 10px;
+  background: rgba(112, 17, 63, 0.08);
+  border-radius: 12px;
+}
