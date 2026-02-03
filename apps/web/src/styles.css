@@ -3844,6 +3844,22 @@ body.modal-open {
   outline: none;
 }
 
+.filters-bar-wrap {
+  flex-wrap: wrap;
+}
+
+.filters-bar-wrap .input {
+  min-width: 140px;
+  flex: 1 1 140px;
+  max-width: 200px;
+}
+
+.filters-bar-wrap input[type="text"],
+.filters-bar-wrap input[placeholder*="Search"] {
+  flex: 2 1 200px;
+  max-width: 280px;
+}
+
 .list {
   list-style: none;
   padding: 0;

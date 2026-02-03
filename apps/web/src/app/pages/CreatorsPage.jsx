@@ -20,16 +20,19 @@ export default function CreatorsPage() {
 
   const [ugcFilters, setUgcFilters] = useState({
     search: '',
-    niche: '',
-    age: '',
     gender: '',
-    language: '',
+    age: '',
+    niche: '',
+    experienceLevel: '',
   });
 
   const [influencerFilters, setInfluencerFilters] = useState({
     search: '',
+    followerCount: '',
+    gender: '',
     niche: '',
-    category: '',
+    platform: '',
+    engagementRate: '',
   });
 
   const [error, setError] = useState(null);
@@ -187,13 +190,33 @@ export default function CreatorsPage() {
 
       {activeTab === 'ugc' && (
         <>
-          <div className="filters-bar">
+          <div className="filters-bar filters-bar-wrap">
             <input
               className="input"
               placeholder="Search UGC creators"
               value={ugcFilters.search}
               onChange={(e) => setUgcFilters({ ...ugcFilters, search: e.target.value })}
             />
+            <select
+              className="input"
+              value={ugcFilters.gender}
+              onChange={(e) => setUgcFilters({ ...ugcFilters, gender: e.target.value })}
+            >
+              <option value="">All Genders</option>
+              <option value="Female">Female</option>
+              <option value="Male">Male</option>
+            </select>
+            <select
+              className="input"
+              value={ugcFilters.age}
+              onChange={(e) => setUgcFilters({ ...ugcFilters, age: e.target.value })}
+            >
+              <option value="">All Ages</option>
+              <option value="18-24">18-24</option>
+              <option value="25-34">25-34</option>
+              <option value="35-44">35-44</option>
+              <option value="45+">45+</option>
+            </select>
             <select
               className="input"
               value={ugcFilters.niche}
@@ -206,12 +229,13 @@ export default function CreatorsPage() {
             </select>
             <select
               className="input"
-              value={ugcFilters.gender}
-              onChange={(e) => setUgcFilters({ ...ugcFilters, gender: e.target.value })}
+              value={ugcFilters.experienceLevel}
+              onChange={(e) => setUgcFilters({ ...ugcFilters, experienceLevel: e.target.value })}
             >
-              <option value="">All Genders</option>
-              <option value="Female">Female</option>
-              <option value="Male">Male</option>
+              <option value="">Experience Level</option>
+              <option value="Beginner">Beginner</option>
+              <option value="Intermediate">Intermediate</option>
+              <option value="Expert">Expert</option>
             </select>
           </div>
 
@@ -267,13 +291,33 @@ export default function CreatorsPage() {
 
       {activeTab === 'influencer' && (
         <>
-          <div className="filters-bar">
+          <div className="filters-bar filters-bar-wrap">
             <input
               className="input"
               placeholder="Search influencers"
               value={influencerFilters.search}
               onChange={(e) => setInfluencerFilters({ ...influencerFilters, search: e.target.value })}
             />
+            <select
+              className="input"
+              value={influencerFilters.followerCount}
+              onChange={(e) => setInfluencerFilters({ ...influencerFilters, followerCount: e.target.value })}
+            >
+              <option value="">Follower Count</option>
+              <option value="nano">Nano (1K-10K)</option>
+              <option value="micro">Micro (10K-100K)</option>
+              <option value="macro">Macro (100K-1M)</option>
+              <option value="mega">Mega (1M+)</option>
+            </select>
+            <select
+              className="input"
+              value={influencerFilters.gender}
+              onChange={(e) => setInfluencerFilters({ ...influencerFilters, gender: e.target.value })}
+            >
+              <option value="">All Genders</option>
+              <option value="Female">Female</option>
+              <option value="Male">Male</option>
+            </select>
             <select
               className="input"
               value={influencerFilters.niche}
@@ -286,13 +330,23 @@ export default function CreatorsPage() {
             </select>
             <select
               className="input"
-              value={influencerFilters.category}
-              onChange={(e) => setInfluencerFilters({ ...influencerFilters, category: e.target.value })}
+              value={influencerFilters.platform}
+              onChange={(e) => setInfluencerFilters({ ...influencerFilters, platform: e.target.value })}
             >
-              <option value="">All Categories</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
+              <option value="">All Platforms</option>
+              <option value="instagram">Instagram</option>
+              <option value="tiktok">TikTok</option>
+            </select>
+            <select
+              className="input"
+              value={influencerFilters.engagementRate}
+              onChange={(e) => setInfluencerFilters({ ...influencerFilters, engagementRate: e.target.value })}
+            >
+              <option value="">Engagement Rate</option>
+              <option value="low">Low (&lt;2%)</option>
+              <option value="medium">Medium (2-5%)</option>
+              <option value="high">High (5-10%)</option>
+              <option value="viral">Viral (10%+)</option>
             </select>
           </div>
 
