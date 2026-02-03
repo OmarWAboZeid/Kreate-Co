@@ -53,7 +53,17 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
   - Enhanced toggle switches and form inputs
   - Modal animations with smooth scaling
 
+## Creator Types
+- **UGC Creators**: Content creators who produce user-generated content
+  - Filters: Niche, Age, Gender, Languages, Experience Level
+  - Fields: name, age, gender, languages, experienceLevel, niche, region, portfolio, notes
+- **Influencers**: Social media personalities with established followings
+  - Filters: Niche, Follower Range, Engagement Rate, Platforms, Gender
+  - Fields: name, handles, followers, engagement, niche, platforms, gender, region, notes
+
 ## Recent Changes
+- **Feb 2026**: Separated Creators page into UGC Creators and Influencers with distinct filter sets
+- **Feb 2026**: Added Create Campaign wizard for brand users with 3-step flow
 - **Feb 2026**: Comprehensive UI/UX enhancement with glassmorphism, gradients, and micro-interactions across all 9 pages
 
 ## Notes
