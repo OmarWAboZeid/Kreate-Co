@@ -44,17 +44,19 @@ export default function AuthPage({ initialMode = 'login' }) {
         </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
-          <div>
-            <p className="label">I am a</p>
-            <div className="pill-group">
-              <button type="button" className={role === 'brand' ? 'active' : undefined} onClick={() => setRole('brand')}>
-                Brand
-              </button>
-              <button type="button" className={role === 'creator' ? 'active' : undefined} onClick={() => setRole('creator')}>
-                Creator
-              </button>
+          {mode === 'signup' && (
+            <div>
+              <p className="label">I am a</p>
+              <div className="pill-group">
+                <button type="button" className={role === 'brand' ? 'active' : undefined} onClick={() => setRole('brand')}>
+                  Brand
+                </button>
+                <button type="button" className={role === 'creator' ? 'active' : undefined} onClick={() => setRole('creator')}>
+                  Creator
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {mode === 'signup' && (
             <label>
