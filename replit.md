@@ -1,30 +1,43 @@
-# kreate & co
-
-UGC & Influencer Marketing platform with a React frontend and Node.js API backend.
+# Kreate & Co - UGC & Influencer Marketing Platform
 
 ## Overview
-- **Frontend**: React app with Vite (apps/web/) running on port 5000
-- **Backend**: Node.js API (apps/api/) running on port 4000
-- **Database**: PostgreSQL (via DATABASE_URL environment variable)
+A workspace application for kreate & co, a UGC and influencer marketing company. The platform allows brands and creators to log in and access workspace features.
 
 ## Project Structure
 ```
-apps/
-  api/         - Node.js API server (port 4000)
-  web/         - React frontend (Vite, port 5000)
-supabase/      - Database migrations
+├── apps/
+│   ├── api/          # Node.js backend API (port 4000)
+│   │   └── index.js  # Main API server with health endpoints
+│   └── web/          # React frontend (Vite, port 5000)
+│       ├── src/      # React components and pages
+│       └── vite.config.cjs
+├── supabase/         # Database migrations and config
+├── package.json      # Root package with dev scripts
+└── .env              # Environment configuration
 ```
 
-## Development
-Run `npm run dev` to start both the API and frontend concurrently.
+## Running the Application
+- **Development**: `npm run dev` - Runs both API and web frontend concurrently
+- **API only**: `npm run dev:api` - Runs backend on port 4000
+- **Web only**: `npm run dev:web` - Runs frontend on port 5000
+
+## API Endpoints
+- `GET /api/health` - Basic health check
+- `GET /api/health/db` - Database connectivity check
+- `GET /api/health/tigerbeetle` - TigerBeetle service check
+- `GET /api/health/all` - Combined health status
 
 ## Environment Variables
-- `DATABASE_URL` - PostgreSQL connection string
+- `DATABASE_URL` - PostgreSQL connection string (auto-configured by Replit)
 - `API_PORT` - API server port (default: 4000)
-- `TIGERBEETLE_ADDRESS` - TigerBeetle address (optional)
+- `TIGERBEETLE_ADDRESS` - TigerBeetle service address (optional)
 
-## Recent Changes
-- 2026-02-03: Configured for Replit environment
-  - Vite configured to use port 5000 with host 0.0.0.0 and allowedHosts: 'all'
-  - Created PostgreSQL database
-  - Set up build and start scripts for deployment
+## Tech Stack
+- **Frontend**: React 18, Vite, React Router, TanStack Query
+- **Backend**: Node.js, Express-like HTTP server
+- **Database**: PostgreSQL (Replit managed)
+- **Styling**: Custom CSS
+
+## Notes
+- The frontend is configured to proxy `/api` requests to the backend
+- TigerBeetle integration requires external service (not available in Replit)
