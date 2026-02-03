@@ -252,7 +252,6 @@ export default function CreatorsPage() {
                     ) : (
                       <img src="/assets/default-avatar.png" alt={creator.name} />
                     )}
-                    <span className="card-v2-badge">{creator.accepts_gifted_collab ? 'GIFTED' : 'PAID'}</span>
                   </div>
                   <div className="card-v2-content">
                     <h4 className="card-v2-name">{creator.name}</h4>
@@ -394,7 +393,6 @@ export default function CreatorsPage() {
                     ) : (
                       <img src="/assets/default-avatar.png" alt={creator.name} />
                     )}
-                    <span className="card-v2-badge influencer">{creator.category || 'Influencer'}</span>
                   </div>
                   <div className="card-v2-content">
                     <h4 className="card-v2-name">{creator.name}</h4>
