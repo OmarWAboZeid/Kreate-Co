@@ -117,6 +117,40 @@ const server = http.createServer(async (req, res) => {
     });
   }
 
+  if (url === '/api/influencers' || url.startsWith('/api/influencers?')) {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    try {
+      const result = await pool.query(`
+        SELECT id, name, tiktok_url, instagram_url, followers, niche, phone, region, notes, category, created_at
+        FROM influencers 
+        ORDER BY name ASC
+      `);
+      return json(res, 200, { ok: true, data: result.rows });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if (url === '/api/ugc-creators' || url.startsWith('/api/ugc-creators?')) {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    try {
+      const result = await pool.query(`
+        SELECT id, name, phone, handle, niche, has_mock_video, portfolio_url, age, gender, 
+               languages, accepts_gifted_collab, turnaround_time, has_equipment, 
+               has_editing_skills, can_voiceover, skills_rating, base_rate, region, notes, created_at
+        FROM ugc_creators 
+        ORDER BY name ASC
+      `);
+      return json(res, 200, { ok: true, data: result.rows });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
   return notFound(res);
 });
 
