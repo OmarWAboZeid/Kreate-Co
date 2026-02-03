@@ -4239,78 +4239,88 @@ body.modal-open {
 
 .compact-creator-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
 }
 
 .compact-creator-card {
   background: var(--color-white);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 16px;
+  padding: 24px;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
+  text-align: center;
+  gap: 16px;
   cursor: pointer;
-  border: 1px solid rgba(112, 17, 63, 0.08);
-  transition: all 0.2s ease;
+  border: 1px solid rgba(112, 17, 63, 0.06);
+  transition: all 0.3s ease;
   position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .compact-creator-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(112, 17, 63, 0.12);
-  border-color: rgba(112, 17, 63, 0.15);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(112, 17, 63, 0.15);
+  border-color: var(--color-crimson);
 }
 
 .compact-card-avatar {
-  width: 44px;
-  height: 44px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--color-crimson) 0%, var(--color-crimson-light) 100%);
   color: var(--color-white);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 1px;
   flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(112, 17, 63, 0.25);
 }
 
 .compact-card-info {
   flex: 1;
   min-width: 0;
+  width: 100%;
 }
 
 .compact-card-info h4 {
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 700;
   color: var(--color-dark);
-  margin: 0 0 2px 0;
+  margin: 0 0 6px 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .compact-card-meta {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: var(--color-crimson);
   margin: 0;
   font-weight: 500;
+  opacity: 0.9;
 }
 
 .compact-card-region {
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   color: rgba(42, 42, 42, 0.5);
-  margin: 2px 0 0 0;
+  margin: 4px 0 0 0;
 }
 
 .compact-card-badge {
-  background: linear-gradient(135deg, rgba(198, 208, 119, 0.4) 0%, rgba(198, 208, 119, 0.6) 100%);
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: linear-gradient(135deg, rgba(198, 208, 119, 0.5) 0%, rgba(198, 208, 119, 0.8) 100%);
   color: #4a5a14;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  padding: 4px 8px;
-  border-radius: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
   flex-shrink: 0;
 }
 
