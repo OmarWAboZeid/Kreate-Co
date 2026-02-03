@@ -108,8 +108,8 @@ export default function ContentPage() {
   if (visibleContentItems.length === 0 && role !== 'creator') {
     return (
       <EmptyState
-        title="No content logged"
-        description="Log creator deliveries to start the review flow."
+        title={role === 'brand' ? 'No saved content yet' : 'No content logged'}
+        description={role === 'brand' ? 'Approved content from your campaigns will appear here.' : 'Log creator deliveries to start the review flow.'}
         action={
           role === 'admin' ? (
             <button type="button" className="btn btn-primary" onClick={() => setShowModal(true)}>
@@ -118,6 +118,54 @@ export default function ContentPage() {
           ) : null
         }
       />
+    );
+  }
+
+  if (role === 'brand') {
+    const approvedContent = visibleContentItems.filter(item => item.status === 'Approved' || item.status === 'Published');
+    return (
+      <div className="page-stack">
+        <div className="page-header">
+          <div>
+            <h2>Saved Content</h2>
+            <p>Your approved content library for download and repurposing.</p>
+          </div>
+        </div>
+
+        {approvedContent.length === 0 ? (
+          <EmptyState
+            title="No saved content yet"
+            description="Content approved from your campaigns will appear here."
+          />
+        ) : (
+          <div className="saved-content-grid">
+            {approvedContent.map((item) => {
+              const campaign = campaigns.find(c => c.id === item.campaignId);
+              const creator = creatorMap.get(item.creatorId);
+              return (
+                <div key={item.id} className="saved-content-card">
+                  <div className="saved-content-preview">
+                    {item.type === 'Reel' ? '🎬' : item.type === 'Post' ? '📷' : item.type === 'Story' ? '📱' : '🎥'}
+                  </div>
+                  <div className="saved-content-info">
+                    <h4>{item.type} - {item.platform}</h4>
+                    <p className="saved-content-meta">
+                      {creator?.name || 'Unknown'} • {campaign?.name || 'Unknown Campaign'}
+                    </p>
+                    <p className="saved-content-meta">
+                      {item.submittedAt}
+                    </p>
+                    <div className="saved-content-actions">
+                      <button type="button" className="btn btn-secondary">Download</button>
+                      <button type="button" className="btn btn-primary">View</button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     );
   }
 

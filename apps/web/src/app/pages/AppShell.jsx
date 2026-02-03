@@ -18,7 +18,8 @@ const roleConfig = {
     label: 'Brand',
     nav: [
       { to: 'campaigns', label: 'Campaigns' },
-      { to: 'content', label: 'Content Review' },
+      { to: 'creators', label: 'Creators' },
+      { to: 'content', label: 'Saved Content' },
       { to: 'analytics', label: 'Analytics' },
       { to: 'settings', label: 'Profile' },
     ],

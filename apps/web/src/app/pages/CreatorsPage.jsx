@@ -129,12 +129,165 @@ export default function CreatorsPage() {
     setCreatorType(null);
   };
 
+  const [recommendedCreators, setRecommendedCreators] = useState([]);
+  const [rejectionModal, setRejectionModal] = useState({ open: false, creator: null });
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [creatorStatuses, setCreatorStatuses] = useState({});
+  const [expandedCreator, setExpandedCreator] = useState(null);
+
+  useEffect(() => {
+    if (role === 'brand') {
+      const mockRecommended = [...ugcCreators.slice(0, 4), ...influencers.slice(0, 4)].map(c => ({
+        ...c,
+        recommendedFor: 'Spring Social Launch',
+        matchScore: Math.floor(Math.random() * 20) + 80,
+      }));
+      setRecommendedCreators(mockRecommended);
+    }
+  }, [role, ugcCreators, influencers]);
+
+  const handleApprove = (creator) => {
+    setCreatorStatuses(prev => ({ ...prev, [creator.id]: 'approved' }));
+  };
+
+  const handleReject = (creator) => {
+    setRejectionModal({ open: true, creator });
+  };
+
+  const submitRejection = () => {
+    if (rejectionModal.creator && rejectionReason.trim()) {
+      setCreatorStatuses(prev => ({ 
+        ...prev, 
+        [rejectionModal.creator.id]: { status: 'rejected', reason: rejectionReason }
+      }));
+      setRejectionModal({ open: false, creator: null });
+      setRejectionReason('');
+    }
+  };
+
   if (role === 'creator') {
     return (
       <EmptyState
         title="Creator directory coming soon"
         description="As a creator, you'll be able to connect with other creators and explore collaboration opportunities."
       />
+    );
+  }
+
+  if (role === 'brand') {
+    return (
+      <div className="page-stack">
+        <div className="page-header">
+          <div>
+            <h2>Recommended Creators</h2>
+            <p>Review creators suggested by our team for your campaigns.</p>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="loading-spinner"></div>
+        ) : recommendedCreators.length === 0 ? (
+          <EmptyState
+            title="No recommendations yet"
+            description="Our team will suggest creators for your active campaigns."
+          />
+        ) : (
+          <div className="brand-creators-list">
+            {recommendedCreators.map((creator) => {
+              const status = creatorStatuses[creator.id];
+              const isApproved = status === 'approved';
+              const isRejected = status?.status === 'rejected';
+              const isExpanded = expandedCreator === creator.id;
+
+              return (
+                <div key={creator.id} className={`brand-creator-card ${isApproved ? 'approved' : ''} ${isRejected ? 'rejected' : ''}`}>
+                  <div className="brand-creator-main" onClick={() => setExpandedCreator(isExpanded ? null : creator.id)}>
+                    <div className="brand-creator-avatar">
+                      <img src={creator.profile_image || '/assets/default-avatar.png'} alt={creator.name} />
+                    </div>
+                    <div className="brand-creator-info">
+                      <h4>{creator.name}</h4>
+                      <p className="brand-creator-meta">
+                        {creator.niche || 'General'} • {creator.followers || '—'} followers
+                      </p>
+                      <p className="brand-creator-campaign">
+                        Recommended for: <strong>{creator.recommendedFor}</strong>
+                      </p>
+                    </div>
+                    <div className="brand-creator-score">
+                      <span className="match-score">{creator.matchScore}%</span>
+                      <span className="match-label">Match</span>
+                    </div>
+                    {!isApproved && !isRejected && (
+                      <div className="brand-creator-actions">
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-success"
+                          onClick={(e) => { e.stopPropagation(); handleApprove(creator); }}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-danger"
+                          onClick={(e) => { e.stopPropagation(); handleReject(creator); }}
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    )}
+                    {isApproved && <span className="status-badge approved">Approved</span>}
+                    {isRejected && <span className="status-badge rejected">Rejected</span>}
+                  </div>
+                  
+                  {isExpanded && (
+                    <div className="brand-creator-content-review">
+                      <h5>Content Review</h5>
+                      <div className="content-review-empty">
+                        <p>No content submitted yet for review.</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {rejectionModal.open && (
+          <div className="modal-overlay active">
+            <div className="rejection-modal">
+              <h3>Reason for Rejection</h3>
+              <p>Please provide feedback for {rejectionModal.creator?.name}</p>
+              <textarea
+                className="input textarea"
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Enter your reason for rejecting this creator..."
+                rows={4}
+                autoFocus
+              />
+              <div className="rejection-modal-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => { setRejectionModal({ open: false, creator: null }); setRejectionReason(''); }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={submitRejection}
+                  disabled={!rejectionReason.trim()}
+                >
+                  Submit Rejection
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     );
   }
 

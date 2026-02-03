@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import StatusPill from '../components/StatusPill.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import CampaignWizard from '../components/CampaignWizard.jsx';
 import { storage, useAppDispatch, useAppState, utils } from '../state.jsx';
 
 const defaultForm = {
@@ -26,6 +27,7 @@ export default function CampaignsPage() {
   const { campaigns, brands } = useAppState();
   const dispatch = useAppDispatch();
   const [showModal, setShowModal] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const [form, setForm] = useState(defaultForm);
 
   const brandFilter = role === 'brand' ? storage.getBrand() || brands[0] : null;
@@ -72,6 +74,34 @@ export default function CampaignsPage() {
     setShowModal(false);
   };
 
+  const handleWizardSubmit = (wizardData) => {
+    const newCampaign = {
+      id: utils.makeId('camp'),
+      name: wizardData.name,
+      brand: wizardData.brand,
+      platforms: wizardData.influencer?.platforms || ['Instagram'],
+      status: 'Draft',
+      description: '',
+      objectives: wizardData.objectives,
+      budgetRange: wizardData.influencer?.budget || '',
+      targetAudience: '',
+      creatorType: wizardData.campaignType,
+      creatorsNeeded: wizardData.ugc?.videos || '',
+      deliverables: '',
+      contentFormat: [],
+      timeline: { start: wizardData.startDate, end: '' },
+      notes: '',
+      criteria: {
+        ugc: wizardData.ugc,
+        influencer: wizardData.influencer,
+      },
+      criteriaVersion: 0,
+      createdAt: new Date().toISOString().slice(0, 10),
+    };
+    dispatch({ type: 'CREATE_CAMPAIGN', payload: newCampaign, actor: 'Brand' });
+    setShowWizard(false);
+  };
+
   const handleCreateCampaign = () => {
     if (!form.name || !form.brand || form.platforms.length === 0) {
       return;
@@ -110,7 +140,11 @@ export default function CampaignsPage() {
           <p>Track progress from brief to activation.</p>
         </div>
         {(role === 'admin' || role === 'brand') && (
-          <button type="button" className="btn btn-primary" onClick={openModal}>
+          <button 
+            type="button" 
+            className="btn btn-primary" 
+            onClick={() => role === 'brand' ? setShowWizard(true) : openModal()}
+          >
             Create Campaign
           </button>
         )}
@@ -138,7 +172,11 @@ export default function CampaignsPage() {
           description="Create your first campaign to start building a roster."
           action={
             (role === 'admin' || role === 'brand') ? (
-              <button type="button" className="btn btn-primary" onClick={openModal}>
+              <button 
+                type="button" 
+                className="btn btn-primary" 
+                onClick={() => role === 'brand' ? setShowWizard(true) : openModal()}
+              >
                 Create Campaign
               </button>
             ) : null
@@ -383,6 +421,14 @@ export default function CampaignsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {showWizard && (
+        <CampaignWizard
+          onClose={() => setShowWizard(false)}
+          onSubmit={handleWizardSubmit}
+          brandName={brandFilter}
+        />
       )}
     </div>
   );
