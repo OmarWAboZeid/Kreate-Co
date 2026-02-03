@@ -38,6 +38,24 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
 - **Database**: PostgreSQL (Replit managed)
 - **Styling**: Custom CSS
 
+## UI/UX Design System
+- **Brand Colors**: Crimson (#70113F), Sand (#C6D077)
+- **Design Features**:
+  - Glassmorphism effects with backdrop blur
+  - Gradient accents on cards and buttons
+  - Micro-interactions and hover animations
+  - Custom scrollbars matching brand colors
+  - Animated page transitions
+- **Component Styles**:
+  - Cards with gradient top accents
+  - Status pills with color-coded states
+  - Navigation with active state indicators
+  - Enhanced toggle switches and form inputs
+  - Modal animations with smooth scaling
+
+## Recent Changes
+- **Feb 2026**: Comprehensive UI/UX enhancement with glassmorphism, gradients, and micro-interactions across all 9 pages
+
 ## Notes
 - The frontend is configured to proxy `/api` requests to the backend
 - TigerBeetle integration requires external service (not available in Replit)
