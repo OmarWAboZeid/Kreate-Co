@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import EmptyState from '../components/EmptyState.jsx';
 
 const ITEMS_PER_PAGE = 12;
+const NICHES = ['Fashion', 'F&B', 'Beauty', 'Lifestyle', 'Tech'];
 
 export default function CreatorsPage() {
   const { role } = useParams();
@@ -223,7 +224,7 @@ export default function CreatorsPage() {
               onChange={(e) => setUgcFilters({ ...ugcFilters, niche: e.target.value })}
             >
               <option value="">All Niches</option>
-              {niches.slice(0, 20).map((n) => (
+              {NICHES.map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>
@@ -324,7 +325,7 @@ export default function CreatorsPage() {
               onChange={(e) => setInfluencerFilters({ ...influencerFilters, niche: e.target.value })}
             >
               <option value="">All Niches</option>
-              {niches.slice(0, 20).map((n) => (
+              {NICHES.map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>
