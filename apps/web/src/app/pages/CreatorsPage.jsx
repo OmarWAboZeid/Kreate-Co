@@ -8,6 +8,8 @@ export default function CreatorsPage() {
   const [ugcCreators, setUgcCreators] = useState([]);
   const [influencers, setInfluencers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedCreator, setSelectedCreator] = useState(null);
+  const [creatorType, setCreatorType] = useState(null);
 
   const [ugcFilters, setUgcFilters] = useState({
     search: '',
@@ -53,15 +55,31 @@ export default function CreatorsPage() {
     fetchCreators();
   }, []);
 
+  const niches = useMemo(() => {
+    const allNiches = [...ugcCreators, ...influencers].map(c => c.niche).filter(Boolean);
+    return [...new Set(allNiches)].sort();
+  }, [ugcCreators, influencers]);
+
+  const languages = useMemo(() => {
+    const allLangs = ugcCreators.flatMap(c => c.languages ? c.languages.split(',').map(l => l.trim()) : []);
+    return [...new Set(allLangs)].sort();
+  }, [ugcCreators]);
+
+  const categories = useMemo(() => {
+    const allCats = influencers.map(c => c.category).filter(Boolean);
+    return [...new Set(allCats)].sort();
+  }, [influencers]);
+
   const filteredUgc = useMemo(() => {
     return ugcCreators.filter((creator) => {
       if (ugcFilters.search && !creator.name.toLowerCase().includes(ugcFilters.search.toLowerCase())) return false;
-      if (ugcFilters.niche && creator.niche && !creator.niche.toLowerCase().includes(ugcFilters.niche.toLowerCase())) return false;
+      if (ugcFilters.niche && creator.niche !== ugcFilters.niche) return false;
       if (ugcFilters.gender && creator.gender !== ugcFilters.gender) return false;
-      if (ugcFilters.language && creator.languages && !creator.languages.toLowerCase().includes(ugcFilters.language.toLowerCase())) return false;
+      if (ugcFilters.language && (!creator.languages || !creator.languages.toLowerCase().includes(ugcFilters.language.toLowerCase()))) return false;
       if (ugcFilters.age) {
         const [min, max] = ugcFilters.age.split('-').map(Number);
-        if (!creator.age || creator.age < min || creator.age > max) return false;
+        const age = parseInt(creator.age);
+        if (isNaN(age) || age < min || age > max) return false;
       }
       return true;
     });
@@ -70,41 +88,27 @@ export default function CreatorsPage() {
   const filteredInfluencers = useMemo(() => {
     return influencers.filter((creator) => {
       if (influencerFilters.search && !creator.name.toLowerCase().includes(influencerFilters.search.toLowerCase())) return false;
-      if (influencerFilters.niche && creator.niche && !creator.niche.toLowerCase().includes(influencerFilters.niche.toLowerCase())) return false;
+      if (influencerFilters.niche && creator.niche !== influencerFilters.niche) return false;
       if (influencerFilters.category && creator.category !== influencerFilters.category) return false;
       return true;
     });
   }, [influencers, influencerFilters]);
 
-  const niches = useMemo(() => {
-    const allNiches = [...ugcCreators, ...influencers]
-      .map(c => c.niche)
-      .filter(Boolean)
-      .flatMap(n => n.split(/[,\/]/))
-      .map(n => n.trim())
-      .filter(Boolean);
-    return [...new Set(allNiches)].sort();
-  }, [ugcCreators, influencers]);
+  const openProfile = (creator, type) => {
+    setSelectedCreator(creator);
+    setCreatorType(type);
+  };
 
-  const categories = useMemo(() => {
-    return [...new Set(influencers.map(c => c.category).filter(Boolean))].sort();
-  }, [influencers]);
+  const closeProfile = () => {
+    setSelectedCreator(null);
+    setCreatorType(null);
+  };
 
-  const languages = useMemo(() => {
-    const allLangs = ugcCreators
-      .map(c => c.languages)
-      .filter(Boolean)
-      .flatMap(l => l.split(/[,\/]/))
-      .map(l => l.trim())
-      .filter(Boolean);
-    return [...new Set(allLangs)].sort();
-  }, [ugcCreators]);
-
-  if (role !== 'admin') {
+  if (role === 'creator') {
     return (
       <EmptyState
-        title="Creators directory"
-        description="Creator profiles are visible to admins only in Phase 1."
+        title="Creator directory coming soon"
+        description="As a creator, you'll be able to connect with other creators and explore collaboration opportunities."
       />
     );
   }
@@ -181,17 +185,6 @@ export default function CreatorsPage() {
             </select>
             <select
               className="input"
-              value={ugcFilters.age}
-              onChange={(e) => setUgcFilters({ ...ugcFilters, age: e.target.value })}
-            >
-              <option value="">All Ages</option>
-              <option value="18-24">18-24</option>
-              <option value="25-34">25-34</option>
-              <option value="35-44">35-44</option>
-              <option value="45-99">45+</option>
-            </select>
-            <select
-              className="input"
               value={ugcFilters.gender}
               onChange={(e) => setUgcFilters({ ...ugcFilters, gender: e.target.value })}
             >
@@ -199,46 +192,24 @@ export default function CreatorsPage() {
               <option value="Female">Female</option>
               <option value="Male">Male</option>
             </select>
-            <select
-              className="input"
-              value={ugcFilters.language}
-              onChange={(e) => setUgcFilters({ ...ugcFilters, language: e.target.value })}
-            >
-              <option value="">All Languages</option>
-              {languages.map((l) => (
-                <option key={l} value={l}>{l}</option>
-              ))}
-            </select>
           </div>
 
-          <div className="creator-directory">
+          <div className="compact-creator-grid">
             {filteredUgc.length === 0 ? (
               <EmptyState title="No UGC creators found" description="Try adjusting your filters." />
             ) : (
               filteredUgc.map((creator) => (
-                <div key={creator.id} className="card creator-card">
-                  <div className="creator-info">
-                    <h3>{creator.name}</h3>
-                    <p className="creator-meta">
-                      {creator.niche || 'General'} · {creator.region || 'Egypt'}
-                      {creator.gender && creator.age && ` · ${creator.gender}, ${creator.age} yrs`}
-                    </p>
-                    <p className="creator-details">
-                      {creator.has_mock_video && <span className="pill">Has Mock Video</span>}
-                      {creator.accepts_gifted_collab && <span className="pill pill-sand">Gifted Collab</span>}
-                      {creator.languages && creator.languages.split(',').map((lang) => (
-                        <span key={lang.trim()} className="pill pill-outline">{lang.trim()}</span>
-                      ))}
-                    </p>
-                    {creator.notes && <p className="muted">{creator.notes}</p>}
+                <div key={creator.id} className="compact-creator-card" onClick={() => openProfile(creator, 'ugc')}>
+                  <div className="compact-card-avatar">
+                    {creator.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                   </div>
-                  <div className="creator-contact">
-                    {creator.phone && <span className="contact-item"><i className="fas fa-phone"></i> {creator.phone}</span>}
-                    {creator.portfolio_url && (
-                      <a href={creator.portfolio_url} target="_blank" rel="noopener noreferrer" className="btn-view-profile">
-                        View Portfolio
-                      </a>
-                    )}
+                  <div className="compact-card-info">
+                    <h4>{creator.name}</h4>
+                    <p className="compact-card-meta">{creator.niche || 'General'}</p>
+                    <p className="compact-card-region">{creator.region || 'Egypt'}</p>
+                  </div>
+                  <div className="compact-card-badge">
+                    {creator.accepts_gifted_collab ? 'Gifted' : 'Paid'}
                   </div>
                 </div>
               ))
@@ -278,66 +249,160 @@ export default function CreatorsPage() {
             </select>
           </div>
 
-          <div className="influencer-grid">
+          <div className="compact-creator-grid">
             {filteredInfluencers.length === 0 ? (
               <EmptyState title="No influencers found" description="Try adjusting your filters." />
             ) : (
-              filteredInfluencers.map((creator) => {
-                const tiktokHandle = creator.tiktok_url ? 
-                  creator.tiktok_url.match(/@([^?/]+)/)?.[1] || 'TikTok' : null;
-                return (
-                  <div key={creator.id} className="influencer-card">
-                    <div className="influencer-card-header">
-                      <div className="influencer-avatar">
-                        <div className="avatar-placeholder">
-                          {creator.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                        </div>
-                      </div>
-                      <div className="influencer-niche-badge">{creator.category || 'General'}</div>
-                    </div>
-                    <div className="influencer-card-body">
-                      <h3 className="influencer-name">{creator.name}</h3>
-                      {tiktokHandle && <p className="influencer-handle">@{tiktokHandle}</p>}
-                      <p className="influencer-region">
-                        <i className="fas fa-map-marker-alt"></i> {creator.region || 'Egypt'}
-                      </p>
-                      {creator.followers && (
-                        <div className="influencer-stats-row">
-                          <div className="influencer-stat">
-                            <span className="stat-value">{creator.followers}</span>
-                            <span className="stat-label">Followers</span>
-                          </div>
-                        </div>
-                      )}
-                      <div className="influencer-platforms">
-                        {creator.tiktok_url && (
-                          <a href={creator.tiktok_url} target="_blank" rel="noopener noreferrer" className="platform-icon" title="TikTok">
-                            <i className="fab fa-tiktok"></i>
-                          </a>
-                        )}
-                        {creator.instagram_url && (
-                          <a href={creator.instagram_url} target="_blank" rel="noopener noreferrer" className="platform-icon" title="Instagram">
-                            <i className="fab fa-instagram"></i>
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                    <div className="influencer-card-footer">
-                      <span className="campaign-count available">
-                        {creator.niche || 'Available'}
-                      </span>
-                      {creator.phone && (
-                        <a href={`tel:${creator.phone}`} className="btn-view-profile">
-                          <i className="fas fa-phone"></i> Contact
-                        </a>
-                      )}
-                    </div>
+              filteredInfluencers.map((creator) => (
+                <div key={creator.id} className="compact-creator-card" onClick={() => openProfile(creator, 'influencer')}>
+                  <div className="compact-card-avatar">
+                    {creator.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                   </div>
-                );
-              })
+                  <div className="compact-card-info">
+                    <h4>{creator.name}</h4>
+                    <p className="compact-card-meta">{creator.niche || 'General'}</p>
+                    <p className="compact-card-region">{creator.region || 'Egypt'}</p>
+                  </div>
+                  <div className="compact-card-badge">
+                    {creator.followers || '—'}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </>
+      )}
+
+      {selectedCreator && (
+        <div className="profile-modal-overlay" onClick={closeProfile}>
+          <div className="profile-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="profile-modal-close" onClick={closeProfile}>×</button>
+            
+            <div className="profile-modal-header">
+              <div className="profile-modal-avatar">
+                {selectedCreator.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+              </div>
+              <div className="profile-modal-title">
+                <h2>{selectedCreator.name}</h2>
+                <p className="profile-modal-type">{creatorType === 'ugc' ? 'UGC Creator' : 'Influencer'}</p>
+              </div>
+            </div>
+
+            <div className="profile-modal-stats">
+              {creatorType === 'influencer' && selectedCreator.followers && (
+                <div className="profile-stat">
+                  <span className="profile-stat-value">{selectedCreator.followers}</span>
+                  <span className="profile-stat-label">Followers</span>
+                </div>
+              )}
+              {creatorType === 'ugc' && selectedCreator.base_rate && (
+                <div className="profile-stat">
+                  <span className="profile-stat-value">${selectedCreator.base_rate}</span>
+                  <span className="profile-stat-label">Base Rate</span>
+                </div>
+              )}
+              {creatorType === 'ugc' && selectedCreator.skills_rating && (
+                <div className="profile-stat">
+                  <span className="profile-stat-value">{selectedCreator.skills_rating}/5</span>
+                  <span className="profile-stat-label">Skills Rating</span>
+                </div>
+              )}
+              <div className="profile-stat">
+                <span className="profile-stat-value">{selectedCreator.region || 'Egypt'}</span>
+                <span className="profile-stat-label">Region</span>
+              </div>
+            </div>
+
+            <div className="profile-modal-section">
+              <h3>Details</h3>
+              <div className="profile-details-grid">
+                <div className="profile-detail">
+                  <span className="detail-label">Niche</span>
+                  <span className="detail-value">{selectedCreator.niche || 'General'}</span>
+                </div>
+                {creatorType === 'influencer' && (
+                  <>
+                    <div className="profile-detail">
+                      <span className="detail-label">Category</span>
+                      <span className="detail-value">{selectedCreator.category || '—'}</span>
+                    </div>
+                  </>
+                )}
+                {creatorType === 'ugc' && (
+                  <>
+                    <div className="profile-detail">
+                      <span className="detail-label">Age</span>
+                      <span className="detail-value">{selectedCreator.age || '—'}</span>
+                    </div>
+                    <div className="profile-detail">
+                      <span className="detail-label">Gender</span>
+                      <span className="detail-value">{selectedCreator.gender || '—'}</span>
+                    </div>
+                    <div className="profile-detail">
+                      <span className="detail-label">Languages</span>
+                      <span className="detail-value">{selectedCreator.languages || '—'}</span>
+                    </div>
+                    <div className="profile-detail">
+                      <span className="detail-label">Turnaround</span>
+                      <span className="detail-value">{selectedCreator.turnaround_time || '—'}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {creatorType === 'ugc' && (
+              <div className="profile-modal-section">
+                <h3>Capabilities</h3>
+                <div className="profile-capabilities">
+                  {selectedCreator.has_mock_video && <span className="capability-pill">Has Mock Video</span>}
+                  {selectedCreator.accepts_gifted_collab && <span className="capability-pill">Accepts Gifted</span>}
+                  {selectedCreator.has_equipment && <span className="capability-pill">Has Equipment</span>}
+                  {selectedCreator.has_editing_skills && <span className="capability-pill">Can Edit</span>}
+                  {selectedCreator.can_voiceover && <span className="capability-pill">Voiceover</span>}
+                </div>
+              </div>
+            )}
+
+            {creatorType === 'influencer' && (
+              <div className="profile-modal-section">
+                <h3>Social Profiles</h3>
+                <div className="profile-social-links">
+                  {selectedCreator.tiktok_url && (
+                    <a href={selectedCreator.tiktok_url} target="_blank" rel="noopener noreferrer" className="social-link">
+                      <i className="fab fa-tiktok"></i> TikTok
+                    </a>
+                  )}
+                  {selectedCreator.instagram_url && (
+                    <a href={selectedCreator.instagram_url} target="_blank" rel="noopener noreferrer" className="social-link">
+                      <i className="fab fa-instagram"></i> Instagram
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {selectedCreator.notes && (
+              <div className="profile-modal-section">
+                <h3>Notes</h3>
+                <p className="profile-notes">{selectedCreator.notes}</p>
+              </div>
+            )}
+
+            <div className="profile-modal-actions">
+              {selectedCreator.phone && (
+                <a href={`tel:${selectedCreator.phone}`} className="btn btn-primary">
+                  <i className="fas fa-phone"></i> Call {selectedCreator.phone}
+                </a>
+              )}
+              {creatorType === 'ugc' && selectedCreator.portfolio_url && (
+                <a href={selectedCreator.portfolio_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary">
+                  View Portfolio
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
