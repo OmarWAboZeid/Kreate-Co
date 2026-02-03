@@ -10,6 +10,15 @@ const defaultForm = {
   platforms: [],
   startDate: '',
   endDate: '',
+  description: '',
+  objectives: '',
+  budget: '',
+  targetAudience: '',
+  creatorType: '',
+  creatorsNeeded: '',
+  deliverables: '',
+  contentFormat: [],
+  notes: '',
 };
 
 export default function CampaignsPage() {
@@ -48,6 +57,16 @@ export default function CampaignsPage() {
     });
   };
 
+  const toggleContentFormat = (format) => {
+    setForm((prev) => {
+      const exists = prev.contentFormat.includes(format);
+      return {
+        ...prev,
+        contentFormat: exists ? prev.contentFormat.filter((item) => item !== format) : [...prev.contentFormat, format],
+      };
+    });
+  };
+
   const closeModal = () => {
     setForm(defaultForm);
     setShowModal(false);
@@ -64,10 +83,16 @@ export default function CampaignsPage() {
       brand: form.brand,
       platforms: form.platforms,
       status: 'Draft',
-      objectives: '',
-      budgetRange: '',
+      description: form.description,
+      objectives: form.objectives,
+      budgetRange: form.budget,
+      targetAudience: form.targetAudience,
+      creatorType: form.creatorType,
+      creatorsNeeded: form.creatorsNeeded,
+      deliverables: form.deliverables,
+      contentFormat: form.contentFormat,
       timeline: { start: form.startDate, end: form.endDate },
-      notes: '',
+      notes: form.notes,
       criteria: {},
       criteriaVersion: 0,
       createdAt: new Date().toISOString().slice(0, 10),
@@ -145,84 +170,205 @@ export default function CampaignsPage() {
 
       {showModal && (
         <div className="modal-overlay active">
-          <div className="modal-content" style={{ maxWidth: '480px' }}>
-            <div className="modal-header">
-              <h3>New Campaign</h3>
-              <button type="button" className="link-button" onClick={closeModal}>
-                Cancel
+          <div className="campaign-modal">
+            <div className="campaign-modal-header">
+              <div>
+                <h2>Create New Campaign</h2>
+                <p>Fill in the details to launch your campaign</p>
+              </div>
+              <button type="button" className="campaign-modal-close" onClick={closeModal}>
+                &times;
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '0.5rem 0' }}>
-              <label>
-                Campaign name
-                <input 
-                  className="input" 
-                  value={form.name} 
-                  onChange={(e) => updateForm('name', e.target.value)} 
-                  placeholder="e.g. Summer Collection Launch"
-                  autoFocus
-                />
-              </label>
+            <div className="campaign-modal-body">
+              <div className="campaign-form-section">
+                <h4>Basic Information</h4>
+                <div className="campaign-form-grid">
+                  <label className="campaign-field full-width">
+                    <span>Campaign Name *</span>
+                    <input 
+                      className="input" 
+                      value={form.name} 
+                      onChange={(e) => updateForm('name', e.target.value)} 
+                      placeholder="e.g. Summer Collection Launch"
+                      autoFocus
+                    />
+                  </label>
 
-              {role === 'brand' ? (
-                <div>
-                  <p className="label">Brand</p>
-                  <p style={{ fontWeight: 600, color: 'var(--color-crimson)' }}>{form.brand}</p>
-                </div>
-              ) : (
-                <label>
-                  Brand
-                  <select className="input" value={form.brand} onChange={(e) => updateForm('brand', e.target.value)}>
-                    <option value="">Select brand</option>
-                    {brands.map((brand) => (
-                      <option key={brand} value={brand}>
-                        {brand}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+                  {role === 'brand' ? (
+                    <div className="campaign-field">
+                      <span>Brand</span>
+                      <p className="brand-display">{form.brand}</p>
+                    </div>
+                  ) : (
+                    <label className="campaign-field">
+                      <span>Brand *</span>
+                      <select className="input" value={form.brand} onChange={(e) => updateForm('brand', e.target.value)}>
+                        <option value="">Select brand</option>
+                        {brands.map((brand) => (
+                          <option key={brand} value={brand}>
+                            {brand}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
 
-              <div>
-                <p className="label">Platforms</p>
-                <div className="pill-group">
-                  {['Instagram', 'TikTok'].map((platform) => (
-                    <button
-                      key={platform}
-                      type="button"
-                      className={form.platforms.includes(platform) ? 'active' : undefined}
-                      onClick={() => togglePlatform(platform)}
-                    >
-                      {platform}
-                    </button>
-                  ))}
+                  <label className="campaign-field">
+                    <span>Budget Range</span>
+                    <select className="input" value={form.budget} onChange={(e) => updateForm('budget', e.target.value)}>
+                      <option value="">Select budget</option>
+                      <option value="Under $1,000">Under $1,000</option>
+                      <option value="$1,000 - $5,000">$1,000 - $5,000</option>
+                      <option value="$5,000 - $10,000">$5,000 - $10,000</option>
+                      <option value="$10,000 - $25,000">$10,000 - $25,000</option>
+                      <option value="$25,000+">$25,000+</option>
+                    </select>
+                  </label>
+
+                  <label className="campaign-field full-width">
+                    <span>Campaign Description</span>
+                    <textarea 
+                      className="input textarea" 
+                      value={form.description} 
+                      onChange={(e) => updateForm('description', e.target.value)} 
+                      placeholder="Describe your campaign goals and vision..."
+                      rows={3}
+                    />
+                  </label>
                 </div>
               </div>
 
-              <div className="field-row">
-                <label>
-                  Start date
-                  <input
-                    className="input"
-                    type="date"
-                    value={form.startDate}
-                    onChange={(e) => updateForm('startDate', e.target.value)}
-                  />
-                </label>
-                <label>
-                  End date
-                  <input
-                    className="input"
-                    type="date"
-                    value={form.endDate}
-                    onChange={(e) => updateForm('endDate', e.target.value)}
-                  />
-                </label>
+              <div className="campaign-form-section">
+                <h4>Campaign Details</h4>
+                <div className="campaign-form-grid">
+                  <div className="campaign-field">
+                    <span>Platforms *</span>
+                    <div className="pill-group">
+                      {['Instagram', 'TikTok', 'YouTube', 'Facebook'].map((platform) => (
+                        <button
+                          key={platform}
+                          type="button"
+                          className={form.platforms.includes(platform) ? 'active' : undefined}
+                          onClick={() => togglePlatform(platform)}
+                        >
+                          {platform}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="campaign-field">
+                    <span>Content Format</span>
+                    <div className="pill-group">
+                      {['Reels', 'Stories', 'Posts', 'Videos', 'Live'].map((format) => (
+                        <button
+                          key={format}
+                          type="button"
+                          className={form.contentFormat.includes(format) ? 'active' : undefined}
+                          onClick={() => toggleContentFormat(format)}
+                        >
+                          {format}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <label className="campaign-field">
+                    <span>Creator Type</span>
+                    <select className="input" value={form.creatorType} onChange={(e) => updateForm('creatorType', e.target.value)}>
+                      <option value="">Select type</option>
+                      <option value="UGC Creators">UGC Creators</option>
+                      <option value="Influencers">Influencers</option>
+                      <option value="Both">Both</option>
+                    </select>
+                  </label>
+
+                  <label className="campaign-field">
+                    <span>Creators Needed</span>
+                    <select className="input" value={form.creatorsNeeded} onChange={(e) => updateForm('creatorsNeeded', e.target.value)}>
+                      <option value="">Select number</option>
+                      <option value="1-5">1-5 creators</option>
+                      <option value="5-10">5-10 creators</option>
+                      <option value="10-20">10-20 creators</option>
+                      <option value="20+">20+ creators</option>
+                    </select>
+                  </label>
+
+                  <label className="campaign-field">
+                    <span>Start Date</span>
+                    <input
+                      className="input"
+                      type="date"
+                      value={form.startDate}
+                      onChange={(e) => updateForm('startDate', e.target.value)}
+                    />
+                  </label>
+
+                  <label className="campaign-field">
+                    <span>End Date</span>
+                    <input
+                      className="input"
+                      type="date"
+                      value={form.endDate}
+                      onChange={(e) => updateForm('endDate', e.target.value)}
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="campaign-form-section">
+                <h4>Target & Objectives</h4>
+                <div className="campaign-form-grid">
+                  <label className="campaign-field">
+                    <span>Target Audience</span>
+                    <input 
+                      className="input" 
+                      value={form.targetAudience} 
+                      onChange={(e) => updateForm('targetAudience', e.target.value)} 
+                      placeholder="e.g. Women 18-35, Fashion enthusiasts"
+                    />
+                  </label>
+
+                  <label className="campaign-field">
+                    <span>Campaign Objectives</span>
+                    <select className="input" value={form.objectives} onChange={(e) => updateForm('objectives', e.target.value)}>
+                      <option value="">Select objective</option>
+                      <option value="Brand Awareness">Brand Awareness</option>
+                      <option value="Product Launch">Product Launch</option>
+                      <option value="Sales & Conversions">Sales & Conversions</option>
+                      <option value="Engagement">Engagement</option>
+                      <option value="Content Creation">Content Creation</option>
+                    </select>
+                  </label>
+
+                  <label className="campaign-field full-width">
+                    <span>Deliverables</span>
+                    <textarea 
+                      className="input textarea" 
+                      value={form.deliverables} 
+                      onChange={(e) => updateForm('deliverables', e.target.value)} 
+                      placeholder="e.g. 3 Reels, 5 Stories, 1 static post per creator"
+                      rows={2}
+                    />
+                  </label>
+
+                  <label className="campaign-field full-width">
+                    <span>Additional Notes</span>
+                    <textarea 
+                      className="input textarea" 
+                      value={form.notes} 
+                      onChange={(e) => updateForm('notes', e.target.value)} 
+                      placeholder="Any other requirements or special instructions..."
+                      rows={2}
+                    />
+                  </label>
+                </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <div className="campaign-modal-footer">
               <button type="button" className="btn btn-secondary" onClick={closeModal}>
                 Cancel
               </button>
