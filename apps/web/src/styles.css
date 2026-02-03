@@ -4325,6 +4325,34 @@ body.modal-open {
 }
 
 /* ============================================
+   PAGINATION CONTROLS
+   ============================================ */
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 32px;
+  padding: 16px 0;
+}
+
+.pagination-controls .btn {
+  min-width: 100px;
+}
+
+.pagination-controls .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-info {
+  font-size: 0.9rem;
+  color: var(--color-dark);
+  font-weight: 500;
+}
+
+/* ============================================
    PROFILE MODAL
    ============================================ */
 

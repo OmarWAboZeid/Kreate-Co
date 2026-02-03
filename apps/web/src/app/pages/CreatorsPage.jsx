@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import EmptyState from '../components/EmptyState.jsx';
 
+const ITEMS_PER_PAGE = 12;
+
 export default function CreatorsPage() {
   const { role } = useParams();
   const [activeTab, setActiveTab] = useState('ugc');
@@ -10,6 +12,11 @@ export default function CreatorsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedCreator, setSelectedCreator] = useState(null);
   const [creatorType, setCreatorType] = useState(null);
+  
+  const [ugcPage, setUgcPage] = useState(1);
+  const [influencerPage, setInfluencerPage] = useState(1);
+  const [ugcPagination, setUgcPagination] = useState({ total: 0, totalPages: 1 });
+  const [influencerPagination, setInfluencerPagination] = useState({ total: 0, totalPages: 1 });
 
   const [ugcFilters, setUgcFilters] = useState({
     search: '',
@@ -28,32 +35,46 @@ export default function CreatorsPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchCreators = async () => {
+    const fetchUgc = async () => {
       try {
-        const [ugcRes, influencerRes] = await Promise.all([
-          fetch('/api/ugc-creators'),
-          fetch('/api/influencers'),
-        ]);
-        
-        if (!ugcRes.ok || !influencerRes.ok) {
-          throw new Error('Failed to fetch creator data');
+        setLoading(true);
+        const res = await fetch(`/api/ugc-creators?page=${ugcPage}&limit=${ITEMS_PER_PAGE}`);
+        if (!res.ok) throw new Error('Failed to fetch UGC creators');
+        const data = await res.json();
+        if (data.ok) {
+          setUgcCreators(data.data || []);
+          setUgcPagination(data.pagination || { total: 0, totalPages: 1 });
         }
-        
-        const ugcData = await ugcRes.json();
-        const influencerData = await influencerRes.json();
-        
-        if (ugcData.ok) setUgcCreators(ugcData.data || []);
-        if (influencerData.ok) setInfluencers(influencerData.data || []);
       } catch (err) {
-        console.error('Failed to fetch creators:', err);
-        setError('Unable to load creators. Please try again later.');
+        console.error('Failed to fetch UGC creators:', err);
+        setError('Unable to load creators.');
       } finally {
         setLoading(false);
       }
     };
-    
-    fetchCreators();
-  }, []);
+    fetchUgc();
+  }, [ugcPage]);
+
+  useEffect(() => {
+    const fetchInfluencers = async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/influencers?page=${influencerPage}&limit=${ITEMS_PER_PAGE}`);
+        if (!res.ok) throw new Error('Failed to fetch influencers');
+        const data = await res.json();
+        if (data.ok) {
+          setInfluencers(data.data || []);
+          setInfluencerPagination(data.pagination || { total: 0, totalPages: 1 });
+        }
+      } catch (err) {
+        console.error('Failed to fetch influencers:', err);
+        setError('Unable to load creators.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchInfluencers();
+  }, [influencerPage]);
 
   const niches = useMemo(() => {
     const allNiches = [...ugcCreators, ...influencers].map(c => c.niche).filter(Boolean);
@@ -153,14 +174,14 @@ export default function CreatorsPage() {
           className={`tab-btn ${activeTab === 'ugc' ? 'active' : ''}`}
           onClick={() => setActiveTab('ugc')}
         >
-          UGC Creators ({ugcCreators.length})
+          UGC Creators ({ugcPagination.total || ugcCreators.length})
         </button>
         <button
           type="button"
           className={`tab-btn ${activeTab === 'influencer' ? 'active' : ''}`}
           onClick={() => setActiveTab('influencer')}
         >
-          Influencers ({influencers.length})
+          Influencers ({influencerPagination.total || influencers.length})
         </button>
       </div>
 
@@ -215,6 +236,28 @@ export default function CreatorsPage() {
               ))
             )}
           </div>
+          
+          {ugcPagination.totalPages > 1 && (
+            <div className="pagination-controls">
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setUgcPage(p => Math.max(1, p - 1))}
+                disabled={ugcPage === 1}
+              >
+                Previous
+              </button>
+              <span className="pagination-info">
+                Page {ugcPage} of {ugcPagination.totalPages}
+              </span>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setUgcPage(p => Math.min(ugcPagination.totalPages, p + 1))}
+                disabled={ugcPage === ugcPagination.totalPages}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -270,6 +313,28 @@ export default function CreatorsPage() {
               ))
             )}
           </div>
+          
+          {influencerPagination.totalPages > 1 && (
+            <div className="pagination-controls">
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setInfluencerPage(p => Math.max(1, p - 1))}
+                disabled={influencerPage === 1}
+              >
+                Previous
+              </button>
+              <span className="pagination-info">
+                Page {influencerPage} of {influencerPagination.totalPages}
+              </span>
+              <button 
+                className="btn btn-secondary" 
+                onClick={() => setInfluencerPage(p => Math.min(influencerPagination.totalPages, p + 1))}
+                disabled={influencerPage === influencerPagination.totalPages}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </>
       )}
 

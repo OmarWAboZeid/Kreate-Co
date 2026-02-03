@@ -122,12 +122,26 @@ const server = http.createServer(async (req, res) => {
       return json(res, 503, { ok: false, error: 'Database not configured' });
     }
     try {
+      const urlObj = new URL(url, `http://localhost:${PORT}`);
+      const page = parseInt(urlObj.searchParams.get('page')) || 1;
+      const limit = parseInt(urlObj.searchParams.get('limit')) || 20;
+      const offset = (page - 1) * limit;
+      
+      const countResult = await pool.query('SELECT COUNT(*) FROM influencers');
+      const total = parseInt(countResult.rows[0].count);
+      
       const result = await pool.query(`
         SELECT id, name, tiktok_url, instagram_url, followers, niche, phone, region, notes, category, created_at
         FROM influencers 
         ORDER BY name ASC
-      `);
-      return json(res, 200, { ok: true, data: result.rows });
+        LIMIT $1 OFFSET $2
+      `, [limit, offset]);
+      
+      return json(res, 200, { 
+        ok: true, 
+        data: result.rows,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+      });
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });
     }
@@ -138,14 +152,28 @@ const server = http.createServer(async (req, res) => {
       return json(res, 503, { ok: false, error: 'Database not configured' });
     }
     try {
+      const urlObj = new URL(url, `http://localhost:${PORT}`);
+      const page = parseInt(urlObj.searchParams.get('page')) || 1;
+      const limit = parseInt(urlObj.searchParams.get('limit')) || 20;
+      const offset = (page - 1) * limit;
+      
+      const countResult = await pool.query('SELECT COUNT(*) FROM ugc_creators');
+      const total = parseInt(countResult.rows[0].count);
+      
       const result = await pool.query(`
         SELECT id, name, phone, handle, niche, has_mock_video, portfolio_url, age, gender, 
                languages, accepts_gifted_collab, turnaround_time, has_equipment, 
                has_editing_skills, can_voiceover, skills_rating, base_rate, region, notes, created_at
         FROM ugc_creators 
         ORDER BY name ASC
-      `);
-      return json(res, 200, { ok: true, data: result.rows });
+        LIMIT $1 OFFSET $2
+      `, [limit, offset]);
+      
+      return json(res, 200, { 
+        ok: true, 
+        data: result.rows,
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+      });
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });
     }
