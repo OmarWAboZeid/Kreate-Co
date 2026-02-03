@@ -4807,3 +4807,153 @@ body.modal-open {
   min-width: 140px;
   justify-content: center;
 }
+
+/* === CREATOR CARD V2 - Tumblr Style === */
+.creator-card-v2 {
+  background: var(--color-white);
+  border-radius: 16px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+}
+
+.creator-card-v2:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 16px 40px rgba(112, 17, 63, 0.18);
+  border-color: var(--color-crimson);
+}
+
+.card-v2-image {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: linear-gradient(135deg, #E8D5DC 0%, #D4C4A8 50%, #C9B896 100%);
+}
+
+.card-v2-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.creator-card-v2:hover .card-v2-image img {
+  transform: scale(1.05);
+}
+
+.card-v2-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: rgba(42, 42, 42, 0.85);
+  color: var(--color-white);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  backdrop-filter: blur(8px);
+}
+
+.card-v2-badge.influencer {
+  background: rgba(112, 17, 63, 0.9);
+}
+
+.card-v2-content {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card-v2-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-dark);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-v2-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.card-v2-tag {
+  font-size: 0.75rem;
+  color: var(--color-crimson);
+  font-weight: 500;
+}
+
+.card-v2-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.card-v2-followers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--color-dark);
+  font-weight: 600;
+}
+
+.card-v2-followers svg {
+  color: var(--color-crimson);
+}
+
+.card-v2-socials {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.card-v2-social {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+}
+
+.card-v2-social.instagram {
+  color: #E4405F;
+}
+
+.card-v2-social.instagram:hover {
+  background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888);
+  color: white;
+}
+
+.card-v2-social.tiktok {
+  color: #000000;
+}
+
+.card-v2-social.tiktok:hover {
+  background: #000000;
+  color: #00f2ea;
+}
+
+.card-v2-social-none {
+  font-size: 0.75rem;
+  color: rgba(42, 42, 42, 0.4);
+  font-style: italic;
+}
