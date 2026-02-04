@@ -2466,25 +2466,6 @@ body.modal-open {
   box-shadow: var(--shadow-sm);
 }
 
-.table {
-  display: grid;
-  gap: 12px;
-}
-
-.table-row {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(112, 17, 63, 0.1);
-  align-items: center;
-}
-
-.table-row.header {
-  font-weight: 700;
-  color: var(--color-crimson);
-}
-
 .activity-log {
   list-style: none;
   padding: 0;
@@ -3498,6 +3479,8 @@ body.modal-open {
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid rgba(112, 17, 63, 0.06);
+  position: relative;
+  contain: layout;
 }
 
 .table-row {
@@ -3526,6 +3509,7 @@ body.modal-open {
   color: var(--color-crimson);
   background: linear-gradient(135deg, rgba(112, 17, 63, 0.04) 0%, rgba(198, 208, 119, 0.06) 100%);
   border-bottom: 2px solid rgba(112, 17, 63, 0.1);
+  position: relative;
 }
 
 /* ============================================
