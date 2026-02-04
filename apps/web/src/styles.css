@@ -1855,19 +1855,24 @@ body.modal-open {
   display: flex;
   min-height: 100vh;
   background: var(--color-smoke);
+  overflow: hidden;
 }
 
 .app-sidebar {
-  width: 260px;
+  width: 280px;
   background: var(--color-white);
   border-right: 1px solid rgba(112, 17, 63, 0.1);
   padding: 24px 20px;
   display: flex;
   flex-direction: column;
   gap: 32px;
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
   height: 100vh;
+  overflow-y: auto;
+  z-index: 100;
+  flex-shrink: 0;
 }
 
 .app-brand img {
@@ -1935,6 +1940,9 @@ body.modal-open {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  margin-left: 280px;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .not-found-main {
@@ -2678,6 +2686,7 @@ body.modal-open {
 @media (max-width: 1100px) {
   .app-shell {
     flex-direction: column;
+    overflow: visible;
   }
 
   .app-sidebar {
@@ -2687,6 +2696,7 @@ body.modal-open {
     flex-wrap: wrap;
     gap: 16px;
     position: relative;
+    overflow-y: visible;
   }
 
   .app-nav {
@@ -2696,6 +2706,9 @@ body.modal-open {
 
   .app-main {
     width: 100%;
+    margin-left: 0;
+    height: auto;
+    overflow-y: visible;
   }
 }
 
@@ -3073,9 +3086,12 @@ body.modal-open {
   display: flex;
   flex-direction: column;
   gap: 36px;
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
   height: 100vh;
+  overflow-y: auto;
+  z-index: 100;
   box-shadow: 2px 0 20px rgba(112, 17, 63, 0.04);
 }
 
