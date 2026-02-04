@@ -6,7 +6,7 @@ module.exports = defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    port: 54321,
+    port: 5000,
     strictPort: true,
     allowedHosts: true,
     proxy: {
