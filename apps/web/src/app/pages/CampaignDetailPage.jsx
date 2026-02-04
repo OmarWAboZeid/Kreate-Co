@@ -182,138 +182,101 @@ export default function CampaignDetailPage() {
         )}
       </div>
 
-      <div className="campaign-details-grid">
-        <section className="detail-card">
-          <div className="detail-card-header">
-            <h3>Overview</h3>
+      <section className="campaign-section">
+        <h3 className="section-title">Campaign Overview</h3>
+        <div className="section-stats-row">
+          <div className="stat-item">
+            <span className="stat-label">Campaign Type</span>
+            <span className="stat-value">{campaign.campaignType || 'Hybrid'}</span>
           </div>
-          <div className="detail-card-content">
-            <div className="detail-row">
-              <span className="detail-label">Campaign Type</span>
-              <span className="detail-value">{campaign.campaignType || 'Hybrid'}</span>
-            </div>
-            <div className="detail-row">
-              <span className="detail-label">Deal Type</span>
-              <span className="detail-value">{campaign.paymentType || 'Paid'}</span>
-            </div>
-            <div className="detail-row">
-              <span className="detail-label">Start Date</span>
-              <span className="detail-value">{campaign.timeline?.start || campaign.startDate || 'TBD'}</span>
-            </div>
-            <div className="detail-row">
-              <span className="detail-label">Objectives</span>
-              <div className="detail-chips">
-                {Array.isArray(campaign.objectives) 
-                  ? campaign.objectives.map((obj) => (
-                      <span key={obj} className="chip">{obj}</span>
-                    ))
-                  : <span className="chip">{campaign.objectives || 'Awareness'}</span>
-                }
-              </div>
-            </div>
+          <div className="stat-item">
+            <span className="stat-label">Deal Type</span>
+            <span className="stat-value">{campaign.paymentType || 'Paid'}</span>
           </div>
-        </section>
+          <div className="stat-item">
+            <span className="stat-label">Start Date</span>
+            <span className="stat-value">{campaign.timeline?.start || campaign.startDate || 'TBD'}</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-label">Package</span>
+            <span className="stat-value">{campaign.packageType || 'Custom'}{campaign.bundle ? ` · ${campaign.bundle}` : ''}</span>
+          </div>
+        </div>
+      </section>
 
-        <section className="detail-card">
-          <div className="detail-card-header">
-            <h3>Package</h3>
-          </div>
-          <div className="detail-card-content">
-            <div className="detail-row">
-              <span className="detail-label">Package Type</span>
-              <span className="detail-value">{campaign.packageType || 'Custom'}</span>
-            </div>
-            {campaign.bundle && (
-              <div className="detail-row">
-                <span className="detail-label">Bundle</span>
-                <span className="detail-value">{campaign.bundle}</span>
-              </div>
-            )}
-            {campaign.ugcCount && (
-              <div className="detail-row">
-                <span className="detail-label">UGC Videos</span>
-                <span className="detail-value">{campaign.ugcCount}</span>
-              </div>
-            )}
-            {campaign.influencerCount && (
-              <div className="detail-row">
-                <span className="detail-label">Influencer Videos</span>
-                <span className="detail-value">{campaign.influencerCount}</span>
-              </div>
-            )}
-            {campaign.customPackage && (
-              <div className="detail-row">
-                <span className="detail-label">Custom Details</span>
-                <span className="detail-value">{campaign.customPackage}</span>
-              </div>
-            )}
-          </div>
-        </section>
+      <section className="campaign-section">
+        <h3 className="section-title">Objectives</h3>
+        <div className="objectives-display">
+          {Array.isArray(campaign.objectives) 
+            ? campaign.objectives.map((obj) => (
+                <span key={obj} className="objective-tag">{obj}</span>
+              ))
+            : <span className="objective-tag">{campaign.objectives || 'Awareness'}</span>
+          }
+        </div>
+      </section>
 
+      <div className="requirements-columns">
         {showUGC && (
-          <section className="detail-card">
-            <div className="detail-card-header">
-              <h3>UGC Requirements</h3>
-            </div>
-            <div className="detail-card-content">
-              <div className="detail-row">
-                <span className="detail-label">Persona</span>
-                <span className="detail-value">{campaign.ugc?.persona || 'Any'}</span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Gender</span>
-                <span className="detail-value">{campaign.ugc?.gender || 'Any'}</span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Age Range</span>
-                <span className="detail-value">{campaign.ugc?.ageRange || '18-35'}</span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Videos</span>
-                <span className="detail-value">{campaign.ugcCount || 'TBD'}</span>
-              </div>
-            </div>
+          <section className="campaign-section requirements-section">
+            <h3 className="section-title">UGC Requirements</h3>
+            <ul className="requirements-list">
+              <li className="requirement-item">
+                <span className="requirement-label">Persona</span>
+                <span className="requirement-value">{campaign.ugc?.persona || 'Any'}</span>
+              </li>
+              <li className="requirement-item">
+                <span className="requirement-label">Gender</span>
+                <span className="requirement-value">{campaign.ugc?.gender || 'Any'}</span>
+              </li>
+              <li className="requirement-item">
+                <span className="requirement-label">Age Range</span>
+                <span className="requirement-value">{campaign.ugc?.ageRange || '18-35'}</span>
+              </li>
+              <li className="requirement-item">
+                <span className="requirement-label">Videos</span>
+                <span className="requirement-value">{campaign.ugcCount || 'TBD'}</span>
+              </li>
+            </ul>
           </section>
         )}
 
         {showInfluencer && (
-          <section className="detail-card">
-            <div className="detail-card-header">
-              <h3>Influencer Requirements</h3>
-            </div>
-            <div className="detail-card-content">
-              <div className="detail-row">
-                <span className="detail-label">Creator Tiers</span>
-                <div className="detail-chips">
+          <section className="campaign-section requirements-section">
+            <h3 className="section-title">Influencer Requirements</h3>
+            <ul className="requirements-list">
+              <li className="requirement-item">
+                <span className="requirement-label">Creator Tiers</span>
+                <span className="requirement-badges">
                   {Array.isArray(campaign.creatorTiers) && campaign.creatorTiers.length > 0
                     ? campaign.creatorTiers.map((tier) => (
-                        <span key={tier} className="chip">{tier}</span>
+                        <span key={tier} className="requirement-badge">{tier}</span>
                       ))
-                    : <span className="chip">Micro</span>
+                    : <span className="requirement-badge">Micro</span>
                   }
-                </div>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Niche</span>
-                <span className="detail-value">{campaign.influencer?.niche || campaign.criteria?.niche || 'Lifestyle'}</span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Platforms</span>
-                <div className="detail-chips">
+                </span>
+              </li>
+              <li className="requirement-item">
+                <span className="requirement-label">Niche</span>
+                <span className="requirement-value">{campaign.influencer?.niche || campaign.criteria?.niche || 'Lifestyle'}</span>
+              </li>
+              <li className="requirement-item">
+                <span className="requirement-label">Platforms</span>
+                <span className="requirement-badges">
                   {campaign.platforms?.filter(p => p !== 'YouTube').map((platform) => (
-                    <span key={platform} className="chip">{platform}</span>
+                    <span key={platform} className="requirement-badge platform-badge">{platform}</span>
                   ))}
-                </div>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Content Formats</span>
-                <div className="detail-chips">
+                </span>
+              </li>
+              <li className="requirement-item">
+                <span className="requirement-label">Content Formats</span>
+                <span className="requirement-badges">
                   {campaign.contentFormat?.filter(f => f !== 'Live').map((format) => (
-                    <span key={format} className="chip">{format}</span>
+                    <span key={format} className="requirement-badge">{format}</span>
                   ))}
-                </div>
-              </div>
-            </div>
+                </span>
+              </li>
+            </ul>
           </section>
         )}
       </div>
