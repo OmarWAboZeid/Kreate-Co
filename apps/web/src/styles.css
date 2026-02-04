@@ -1992,6 +1992,174 @@ body.modal-open {
   gap: 20px;
 }
 
+/* === CAMPAIGNS TABLE === */
+.campaigns-table-wrapper {
+  background: var(--color-white);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(112, 17, 63, 0.06);
+}
+
+.campaigns-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.campaigns-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: linear-gradient(135deg, rgba(112, 17, 63, 0.04) 0%, rgba(198, 208, 119, 0.04) 100%);
+}
+
+.campaigns-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(42, 42, 42, 0.6);
+  border-bottom: 1px solid rgba(112, 17, 63, 0.1);
+  white-space: nowrap;
+}
+
+.campaigns-table td {
+  padding: 16px;
+  border-bottom: 1px solid rgba(112, 17, 63, 0.06);
+  vertical-align: middle;
+}
+
+.campaigns-table-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.campaigns-table-row:hover {
+  background: linear-gradient(135deg, rgba(112, 17, 63, 0.02) 0%, rgba(198, 208, 119, 0.02) 100%);
+}
+
+.campaigns-table-row:last-child td {
+  border-bottom: none;
+}
+
+.campaign-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.campaign-name {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.campaign-mobile-meta {
+  display: none;
+  font-size: 0.8rem;
+  color: rgba(42, 42, 42, 0.6);
+}
+
+.kind-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(112, 17, 63, 0.08);
+  color: var(--color-primary);
+}
+
+.package-cell {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions-col {
+  width: 48px;
+  text-align: center;
+}
+
+/* Kebab Menu */
+.kebab-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.kebab-trigger {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 8px;
+  color: rgba(42, 42, 42, 0.5);
+  border-radius: var(--radius-sm);
+  transition: all 0.15s ease;
+}
+
+.kebab-trigger:hover {
+  background: rgba(112, 17, 63, 0.08);
+  color: var(--color-primary);
+}
+
+.kebab-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+.kebab-dropdown {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 100;
+  background: var(--color-white);
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.kebab-dropdown button {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.15s ease;
+}
+
+.kebab-dropdown button:hover {
+  background: rgba(112, 17, 63, 0.06);
+}
+
+.empty-state-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .campaigns-table .hide-mobile {
+    display: none;
+  }
+  
+  .campaign-mobile-meta {
+    display: block;
+  }
+  
+  .campaigns-table th,
+  .campaigns-table td {
+    padding: 12px;
+  }
+}
+
 .campaign-card {
   display: flex;
   flex-direction: column;
