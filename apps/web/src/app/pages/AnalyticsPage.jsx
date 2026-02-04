@@ -87,7 +87,9 @@ export default function AnalyticsPage() {
                 <span>{campaign.name}</span>
                 <StatusPill status={campaign.status} />
                 <span>{campaignContent.length}</span>
-                <span>{campaignContent.filter((item) => item.status === 'Published').length} published</span>
+                <span>
+                  {campaignContent.filter((item) => item.status === 'Published').length} published
+                </span>
                 <span className="muted">↗ 12%</span>
               </div>
             );
@@ -120,26 +122,34 @@ export default function AnalyticsPage() {
                   }
                   return true;
                 });
-                const metrics = creatorContent.reduce((acc, item) => {
-                  if (!item.metrics) return acc;
-                  acc.views += item.metrics.views || 0;
-                  acc.likes += item.metrics.likes || 0;
-                  acc.comments += item.metrics.comments || 0;
-                  acc.saves += item.metrics.saves || 0;
-                  acc.shares += item.metrics.shares || 0;
-                  return acc;
-                }, { views: 0, likes: 0, comments: 0, saves: 0, shares: 0 });
-                
-                const engagementRate = metrics.views > 0 
-                  ? (((metrics.likes + metrics.comments + metrics.saves + metrics.shares) / metrics.views) * 100).toFixed(2)
-                  : '0.00';
+                const metrics = creatorContent.reduce(
+                  (acc, item) => {
+                    if (!item.metrics) return acc;
+                    acc.views += item.metrics.views || 0;
+                    acc.likes += item.metrics.likes || 0;
+                    acc.comments += item.metrics.comments || 0;
+                    acc.saves += item.metrics.saves || 0;
+                    acc.shares += item.metrics.shares || 0;
+                    return acc;
+                  },
+                  { views: 0, likes: 0, comments: 0, saves: 0, shares: 0 }
+                );
+
+                const engagementRate =
+                  metrics.views > 0
+                    ? (
+                        ((metrics.likes + metrics.comments + metrics.saves + metrics.shares) /
+                          metrics.views) *
+                        100
+                      ).toFixed(2)
+                    : '0.00';
 
                 return (
                   <tr key={creator.id}>
                     <td>
                       <div className="creator-cell">
-                        <img 
-                          src={creator.profile_image || '/assets/default-avatar.png'} 
+                        <img
+                          src={creator.profile_image || '/assets/default-avatar.png'}
                           alt={creator.name}
                           className="creator-avatar-sm"
                         />
@@ -152,7 +162,9 @@ export default function AnalyticsPage() {
                     <td>{metrics.saves.toLocaleString()}</td>
                     <td>{metrics.shares.toLocaleString()}</td>
                     <td>
-                      <span className={`engagement-badge ${parseFloat(engagementRate) >= 5 ? 'high' : parseFloat(engagementRate) >= 2 ? 'medium' : 'low'}`}>
+                      <span
+                        className={`engagement-badge ${parseFloat(engagementRate) >= 5 ? 'high' : parseFloat(engagementRate) >= 2 ? 'medium' : 'low'}`}
+                      >
                         {engagementRate}%
                       </span>
                     </td>

@@ -33,7 +33,11 @@ export default function ContentPage() {
   });
 
   useEffect(() => {
-    if ((role === 'brand' || role === 'creator') && !selectedContentId && visibleContentItems.length > 0) {
+    if (
+      (role === 'brand' || role === 'creator') &&
+      !selectedContentId &&
+      visibleContentItems.length > 0
+    ) {
       setSelectedContentId(visibleContentItems[0].id);
     }
   }, [role, selectedContentId, visibleContentItems]);
@@ -95,7 +99,9 @@ export default function ContentPage() {
       revisionCount: 0,
       caption: creatorForm.caption,
       hashtags: creatorForm.hashtags,
-      assets: creatorForm.link ? [{ type: 'link', label: 'Delivery link', url: creatorForm.link }] : [],
+      assets: creatorForm.link
+        ? [{ type: 'link', label: 'Delivery link', url: creatorForm.link }]
+        : [],
       submittedAt: new Date().toISOString().slice(0, 10),
       notes: 'Submitted by creator (test flow).',
       feedback: [],
@@ -109,7 +115,11 @@ export default function ContentPage() {
     return (
       <EmptyState
         title={role === 'brand' ? 'No saved content yet' : 'No content logged'}
-        description={role === 'brand' ? 'Approved content from your campaigns will appear here.' : 'Log creator deliveries to start the review flow.'}
+        description={
+          role === 'brand'
+            ? 'Approved content from your campaigns will appear here.'
+            : 'Log creator deliveries to start the review flow.'
+        }
         action={
           role === 'admin' ? (
             <button type="button" className="btn btn-primary" onClick={() => setShowModal(true)}>
@@ -122,7 +132,9 @@ export default function ContentPage() {
   }
 
   if (role === 'brand') {
-    const approvedContent = visibleContentItems.filter(item => item.status === 'Approved' || item.status === 'Published');
+    const approvedContent = visibleContentItems.filter(
+      (item) => item.status === 'Approved' || item.status === 'Published'
+    );
     return (
       <div className="page-stack">
         <div className="page-header">
@@ -140,24 +152,34 @@ export default function ContentPage() {
         ) : (
           <div className="saved-content-grid">
             {approvedContent.map((item) => {
-              const campaign = campaigns.find(c => c.id === item.campaignId);
+              const campaign = campaigns.find((c) => c.id === item.campaignId);
               const creator = creatorMap.get(item.creatorId);
               return (
                 <div key={item.id} className="saved-content-card">
                   <div className="saved-content-preview">
-                    {item.type === 'Reel' ? '🎬' : item.type === 'Post' ? '📷' : item.type === 'Story' ? '📱' : '🎥'}
+                    {item.type === 'Reel'
+                      ? '🎬'
+                      : item.type === 'Post'
+                        ? '📷'
+                        : item.type === 'Story'
+                          ? '📱'
+                          : '🎥'}
                   </div>
                   <div className="saved-content-info">
-                    <h4>{item.type} - {item.platform}</h4>
+                    <h4>
+                      {item.type} - {item.platform}
+                    </h4>
                     <p className="saved-content-meta">
                       {creator?.name || 'Unknown'} • {campaign?.name || 'Unknown Campaign'}
                     </p>
-                    <p className="saved-content-meta">
-                      {item.submittedAt}
-                    </p>
+                    <p className="saved-content-meta">{item.submittedAt}</p>
                     <div className="saved-content-actions">
-                      <button type="button" className="btn btn-secondary">Download</button>
-                      <button type="button" className="btn btn-primary">View</button>
+                      <button type="button" className="btn btn-secondary">
+                        Download
+                      </button>
+                      <button type="button" className="btn btn-primary">
+                        View
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -193,7 +215,9 @@ export default function ContentPage() {
                 <select
                   className="input"
                   value={creatorForm.campaignId}
-                  onChange={(e) => setCreatorForm((prev) => ({ ...prev, campaignId: e.target.value }))}
+                  onChange={(e) =>
+                    setCreatorForm((prev) => ({ ...prev, campaignId: e.target.value }))
+                  }
                 >
                   {campaigns.map((campaign) => (
                     <option key={campaign.id} value={campaign.id}>
@@ -208,7 +232,9 @@ export default function ContentPage() {
                   <select
                     className="input"
                     value={creatorForm.platform}
-                    onChange={(e) => setCreatorForm((prev) => ({ ...prev, platform: e.target.value }))}
+                    onChange={(e) =>
+                      setCreatorForm((prev) => ({ ...prev, platform: e.target.value }))
+                    }
                   >
                     <option>Instagram</option>
                     <option>TikTok</option>
@@ -251,7 +277,9 @@ export default function ContentPage() {
                 <input
                   className="input"
                   value={creatorForm.hashtags}
-                  onChange={(e) => setCreatorForm((prev) => ({ ...prev, hashtags: e.target.value }))}
+                  onChange={(e) =>
+                    setCreatorForm((prev) => ({ ...prev, hashtags: e.target.value }))
+                  }
                 />
               </label>
             </div>
@@ -261,7 +289,10 @@ export default function ContentPage() {
           </div>
 
           {visibleContentItems.length === 0 ? (
-            <EmptyState title="No deliveries yet" description="Submit your first delivery to begin review." />
+            <EmptyState
+              title="No deliveries yet"
+              description="Submit your first delivery to begin review."
+            />
           ) : (
             <div className="content-grid">
               <div className="content-list">
@@ -271,7 +302,9 @@ export default function ContentPage() {
                     <button
                       key={content.id}
                       type="button"
-                      className={selectedContentId === content.id ? 'content-row active' : 'content-row'}
+                      className={
+                        selectedContentId === content.id ? 'content-row active' : 'content-row'
+                      }
                       onClick={() => setSelectedContentId(content.id)}
                     >
                       <div>
@@ -297,7 +330,13 @@ export default function ContentPage() {
                     {selectedContent.assets?.length > 0 && (
                       <div className="asset-list">
                         {selectedContent.assets.map((asset) => (
-                          <a key={asset.url} href={asset.url} className="link-button" target="_blank" rel="noreferrer">
+                          <a
+                            key={asset.url}
+                            href={asset.url}
+                            className="link-button"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
                             {asset.label || asset.url}
                           </a>
                         ))}
@@ -338,7 +377,11 @@ export default function ContentPage() {
                 </span>
                 <StatusPill status={content.status} />
                 {content.status === 'Approved' ? (
-                  <button type="button" className="link-button" onClick={() => handlePublish(content.id)}>
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={() => handlePublish(content.id)}
+                  >
                     Mark published
                   </button>
                 ) : (
@@ -357,7 +400,9 @@ export default function ContentPage() {
                 <button
                   key={content.id}
                   type="button"
-                  className={selectedContentId === content.id ? 'content-row active' : 'content-row'}
+                  className={
+                    selectedContentId === content.id ? 'content-row active' : 'content-row'
+                  }
                   onClick={() => setSelectedContentId(content.id)}
                 >
                   <div>
@@ -383,7 +428,13 @@ export default function ContentPage() {
                 {selectedContent.assets?.length > 0 && (
                   <div className="asset-list">
                     {selectedContent.assets.map((asset) => (
-                      <a key={asset.url} href={asset.url} className="link-button" target="_blank" rel="noreferrer">
+                      <a
+                        key={asset.url}
+                        href={asset.url}
+                        className="link-button"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
                         {asset.label || asset.url}
                       </a>
                     ))}
@@ -395,16 +446,18 @@ export default function ContentPage() {
                 <div className="review-panel">
                   <p className="label">Feedback tags</p>
                   <div className="pill-group">
-                    {['Change hook', 'Adjust tone', 'Fix branding mention', 'Update CTA'].map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        className={feedbackForm.tags.includes(tag) ? 'active' : undefined}
-                        onClick={() => handleFeedbackTag(tag)}
-                      >
-                        {tag}
-                      </button>
-                    ))}
+                    {['Change hook', 'Adjust tone', 'Fix branding mention', 'Update CTA'].map(
+                      (tag) => (
+                        <button
+                          key={tag}
+                          type="button"
+                          className={feedbackForm.tags.includes(tag) ? 'active' : undefined}
+                          onClick={() => handleFeedbackTag(tag)}
+                        >
+                          {tag}
+                        </button>
+                      )
+                    )}
                   </div>
                   <textarea
                     className="input"
@@ -414,10 +467,16 @@ export default function ContentPage() {
                     onChange={(e) => setFeedbackForm((prev) => ({ ...prev, note: e.target.value }))}
                   />
                   {selectedContent.revisionCount >= 3 && (
-                    <p className="warning-text">Maximum revisions reached. Manual escalation required.</p>
+                    <p className="warning-text">
+                      Maximum revisions reached. Manual escalation required.
+                    </p>
                   )}
                   <div className="button-row">
-                    <button type="button" className="btn btn-secondary" onClick={() => handleContentDecision('Approved')}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => handleContentDecision('Approved')}
+                    >
                       Approve
                     </button>
                     <button

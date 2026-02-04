@@ -39,10 +39,18 @@ export default function AuthPage({ initialMode = 'login' }) {
         </div>
 
         <div className="auth-toggle">
-          <button type="button" className={mode === 'login' ? 'active' : undefined} onClick={() => setMode('login')}>
+          <button
+            type="button"
+            className={mode === 'login' ? 'active' : undefined}
+            onClick={() => setMode('login')}
+          >
             Log in
           </button>
-          <button type="button" className={mode === 'signup' ? 'active' : undefined} onClick={() => setMode('signup')}>
+          <button
+            type="button"
+            className={mode === 'signup' ? 'active' : undefined}
+            onClick={() => setMode('signup')}
+          >
             Sign up
           </button>
         </div>
@@ -52,10 +60,18 @@ export default function AuthPage({ initialMode = 'login' }) {
             <div>
               <p className="label">I am a</p>
               <div className="pill-group">
-                <button type="button" className={role === 'brand' ? 'active' : undefined} onClick={() => setRole('brand')}>
+                <button
+                  type="button"
+                  className={role === 'brand' ? 'active' : undefined}
+                  onClick={() => setRole('brand')}
+                >
                   Brand
                 </button>
-                <button type="button" className={role === 'creator' ? 'active' : undefined} onClick={() => setRole('creator')}>
+                <button
+                  type="button"
+                  className={role === 'creator' ? 'active' : undefined}
+                  onClick={() => setRole('creator')}
+                >
                   Creator
                 </button>
               </div>

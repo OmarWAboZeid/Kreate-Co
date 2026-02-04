@@ -143,16 +143,21 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
 
   const canProceed = () => {
     switch (currentStep) {
-      case STEPS.NAME: return form.name.trim().length > 0;
+      case STEPS.NAME:
+        return form.name.trim().length > 0;
       case STEPS.BRAND_TYPE: {
         if (!form.brandType) return false;
         if (form.brandType === 'existing') return true;
         return form.newBrandName.trim().length > 0;
       }
-      case STEPS.OBJECTIVES: return form.objectives.length > 0;
-      case STEPS.START_DATE: return form.startDate.length > 0;
-      case STEPS.CAMPAIGN_TYPE: return form.campaignType.length > 0;
-      case STEPS.PAYMENT_TYPE: return form.paymentType.length > 0;
+      case STEPS.OBJECTIVES:
+        return form.objectives.length > 0;
+      case STEPS.START_DATE:
+        return form.startDate.length > 0;
+      case STEPS.CAMPAIGN_TYPE:
+        return form.campaignType.length > 0;
+      case STEPS.PAYMENT_TYPE:
+        return form.paymentType.length > 0;
       case STEPS.PACKAGE_SELECTION: {
         if (form.packageType === 'bundle') return form.bundle.length > 0;
         if (form.campaignType === 'UGC') {
@@ -160,23 +165,37 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
           return form.ugcPackage.length > 0;
         }
         if (form.campaignType === 'Influencer') {
-          if (form.influencerPackage === 'other') return form.influencerPackageOther.trim().length > 0;
+          if (form.influencerPackage === 'other')
+            return form.influencerPackageOther.trim().length > 0;
           return form.influencerPackage.length > 0;
         }
         if (form.campaignType === 'Hybrid') {
-          const ugcValid = form.ugcPackage === 'other' ? form.ugcPackageOther.trim().length > 0 : form.ugcPackage.length > 0;
-          const infValid = form.influencerPackage === 'other' ? form.influencerPackageOther.trim().length > 0 : form.influencerPackage.length > 0;
+          const ugcValid =
+            form.ugcPackage === 'other'
+              ? form.ugcPackageOther.trim().length > 0
+              : form.ugcPackage.length > 0;
+          const infValid =
+            form.influencerPackage === 'other'
+              ? form.influencerPackageOther.trim().length > 0
+              : form.influencerPackage.length > 0;
           return ugcValid && infValid;
         }
         return false;
       }
-      case STEPS.CREATOR_TIERS: return form.creatorTiers.length > 0;
-      case STEPS.UGC_PERSONA: return form.ugcPersona.trim().length > 0;
-      case STEPS.UGC_GENDER: return form.ugcGender.length > 0;
-      case STEPS.UGC_AGE: return form.ugcAgeRange.length > 0;
-      case STEPS.INFLUENCER_NICHE: return form.influencerNiche.length > 0;
-      case STEPS.INFLUENCER_PLATFORMS: return form.influencerPlatforms.length > 0;
-      default: return true;
+      case STEPS.CREATOR_TIERS:
+        return form.creatorTiers.length > 0;
+      case STEPS.UGC_PERSONA:
+        return form.ugcPersona.trim().length > 0;
+      case STEPS.UGC_GENDER:
+        return form.ugcGender.length > 0;
+      case STEPS.UGC_AGE:
+        return form.ugcAgeRange.length > 0;
+      case STEPS.INFLUENCER_NICHE:
+        return form.influencerNiche.length > 0;
+      case STEPS.INFLUENCER_PLATFORMS:
+        return form.influencerPlatforms.length > 0;
+      default:
+        return true;
     }
   };
 
@@ -199,12 +218,13 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
 
   const getPackageDetails = () => {
     if (form.packageType === 'bundle') {
-      const bundle = BUNDLES.find(b => b.value === form.bundle);
+      const bundle = BUNDLES.find((b) => b.value === form.bundle);
       return { ugcCount: bundle?.ugc || 0, influencerCount: bundle?.influencer || 0 };
     }
     return {
       ugcCount: form.ugcPackage === 'other' ? form.ugcPackageOther : form.ugcPackage,
-      influencerCount: form.influencerPackage === 'other' ? form.influencerPackageOther : form.influencerPackage,
+      influencerCount:
+        form.influencerPackage === 'other' ? form.influencerPackageOther : form.influencerPackage,
     };
   };
 
@@ -223,16 +243,22 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
       ugcCount: packageDetails.ugcCount,
       influencerCount: packageDetails.influencerCount,
       creatorTiers: form.creatorTiers,
-      ugc: form.campaignType === 'UGC' || form.campaignType === 'Hybrid' ? {
-        persona: form.ugcPersona,
-        gender: form.ugcGender,
-        ageRange: form.ugcAgeRange,
-      } : null,
-      influencer: form.campaignType === 'Influencer' || form.campaignType === 'Hybrid' ? {
-        niche: form.influencerNiche,
-        platforms: form.influencerPlatforms,
-        tiers: form.creatorTiers,
-      } : null,
+      ugc:
+        form.campaignType === 'UGC' || form.campaignType === 'Hybrid'
+          ? {
+              persona: form.ugcPersona,
+              gender: form.ugcGender,
+              ageRange: form.ugcAgeRange,
+            }
+          : null,
+      influencer:
+        form.campaignType === 'Influencer' || form.campaignType === 'Hybrid'
+          ? {
+              niche: form.influencerNiche,
+              platforms: form.influencerPlatforms,
+              tiers: form.creatorTiers,
+            }
+          : null,
     });
   };
 
@@ -277,7 +303,9 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                 onClick={() => updateForm('brandType', 'existing')}
               >
                 <span className="wizard-option-title">Existing Brand</span>
-                <span className="wizard-option-desc">{form.existingBrandName || 'Your current brand'}</span>
+                <span className="wizard-option-desc">
+                  {form.existingBrandName || 'Your current brand'}
+                </span>
               </button>
               <button
                 type="button"
@@ -409,7 +437,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
           <div className="wizard-step">
             <h3>Choose your package</h3>
             <p>Select a bundle or customize your package</p>
-            
+
             <div className="package-type-toggle">
               <button
                 type="button"
@@ -437,7 +465,9 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                     onClick={() => updateForm('bundle', bundle.value)}
                   >
                     <span className="wizard-option-title">{bundle.label}</span>
-                    <span className="wizard-option-desc">{bundle.ugc} UGC + {bundle.influencer} Influencers</span>
+                    <span className="wizard-option-desc">
+                      {bundle.ugc} UGC + {bundle.influencer} Influencers
+                    </span>
                     <span className="wizard-option-meta">{bundle.desc}</span>
                   </button>
                 ))}
@@ -523,7 +553,12 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
               ))}
             </div>
             {form.creatorTiers.length > 0 && (
-              <p className="selected-count">Selected: {form.creatorTiers.map(t => CREATOR_TIERS.find(ct => ct.value === t)?.label).join(', ')}</p>
+              <p className="selected-count">
+                Selected:{' '}
+                {form.creatorTiers
+                  .map((t) => CREATOR_TIERS.find((ct) => ct.value === t)?.label)
+                  .join(', ')}
+              </p>
             )}
           </div>
         );
@@ -636,7 +671,9 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
               </div>
               <div className="review-item">
                 <span className="review-label">Brand</span>
-                <span className="review-value">{getBrandName()} ({form.brandType})</span>
+                <span className="review-value">
+                  {getBrandName()} ({form.brandType})
+                </span>
               </div>
               <div className="review-item">
                 <span className="review-label">Objective</span>
@@ -657,7 +694,9 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
               {form.packageType === 'bundle' && (
                 <div className="review-item">
                   <span className="review-label">Bundle</span>
-                  <span className="review-value">{BUNDLES.find(b => b.value === form.bundle)?.label}</span>
+                  <span className="review-value">
+                    {BUNDLES.find((b) => b.value === form.bundle)?.label}
+                  </span>
                 </div>
               )}
               {(form.campaignType === 'UGC' || form.campaignType === 'Hybrid') && (
@@ -707,9 +746,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
           </button>
         </div>
 
-        <div className="wizard-content">
-          {renderStepContent()}
-        </div>
+        <div className="wizard-content">{renderStepContent()}</div>
 
         <div className="wizard-footer">
           {currentStep > STEPS.NAME && (
