@@ -1,0 +1,192 @@
+You are a senior full-stack engineer working on the Kreate&Co codebase (Brand Portal + Admin). Implement the following changes end-to-end (frontend, backend APIs, database/schema if needed). Keep existing behavior unless explicitly removed. Ensure authorization is enforced server-side.
+
+Global engineering requirements
+	•	Maintain consistent UI patterns with existing components.
+	•	Add loading, empty, and error states.
+	•	Add validation for required fields and enums.
+	•	Update TypeScript types across FE/BE.
+	•	If DB migrations are needed, include SQL migrations and update any Supabase schema definitions.
+	•	Do not break auth, routing, or existing dashboards.
+
+⸻
+
+1) Brand Portal → Campaigns list filters
+
+Remove
+	•	Remove the “platform” filter from the campaigns list UI and query logic.
+
+Add
+	•	Add a “Brand” filter:
+	•	Dropdown of brands the user can access.
+	•	When selected, campaigns list shows only campaigns for that brand.
+	•	Update API query to accept brandId (or equivalent) and filter server-side.
+
+⸻
+
+2) Create Campaign wizard updates
+
+Add a step: Brand is New or Existing
+	•	Step: “Is this brand new or existing?”
+	•	Existing → select brand from dropdown (required).
+	•	New → inline create brand (minimum: brand name required). Create brand first, then create campaign associated to it.
+	•	Ensure campaign cannot be created without a brand association.
+
+Remove budget range
+	•	Remove any “budget range” fields from UI, payload, validation, and DB.
+	•	If there is a single budget field already used elsewhere, keep only if still required; otherwise remove budget entirely.
+
+Add “Deal Type” field
+	•	Field: dealType enum: collab, paid, mix (required).
+
+Add “Campaign Package” field (conditional)
+
+Add packageType and packageValue:
+
+If Influencer campaign:
+	•	10 videos / 15 videos / 20 videos / 40 videos / Other (+ required textbox)
+
+If UGC campaign:
+	•	4 videos / 8 videos / 12 videos / 20 videos / Other (+ required textbox)
+
+If Hybrid campaign:
+	•	Buzz bundle (4 UGC, 10 influencer)
+	•	Hype bundle (8 UGC, 15 influencer)
+	•	Impact bundle (12 UGC, 25 influencer)
+	•	Viral campaign (20 UGC, 40 influencer)
+
+Validate:
+	•	If “Other” selected, textbox required.
+
+Creator types update (only influencer/hybrid)
+	•	Remove “creators needed” everywhere (UI/API/DB).
+	•	Replace “creator type” with multi-select:
+	•	nano influencers
+	•	micro influencers
+	•	mid tier
+	•	macro
+	•	Do NOT show creator type if campaign is UGC only.
+	•	Persist as array of enums.
+
+Campaign objectives update
+
+Replace objectives with multi-select enum:
+	•	awareness
+	•	sales
+	•	launch
+	•	content bank
+Persist as array of enums.
+
+Platforms update
+	•	Remove YouTube from platforms everywhere (constants, UI, API validation, DB enums).
+	•	Ensure legacy YouTube values do not crash UI.
+
+Content format update
+	•	Remove “live” from content format options.
+	•	Handle legacy “live” gracefully.
+
+⸻
+
+3) Campaign Details: “fancy normal” full page showing all information
+
+Replace the current tabbed/fragmented view
+
+When a user clicks a campaign, open a normal full details page (not a tab-only experience). The page should present all campaign information in a visually “fancy” but clean layout using cards/sections.
+
+Layout requirements
+	•	Page header:
+	•	Campaign name
+	•	Brand name
+	•	Status pill (if exists)
+	•	Quick actions (Edit, Archive, etc. only if already supported)
+	•	Below header: content in sections/cards with clear grouping.
+
+Sections to show (all available fields)
+	1.	Overview
+	•	Campaign type (UGC / Influencer / Hybrid)
+	•	Deal type (collab / paid / mix)
+	•	Start date
+	•	Objectives (chips)
+	2.	Package
+	•	Package selection (Influencer/UGC/Bundle)
+	•	If “Other”, show the custom text
+	3.	UGC Requirements (only if campaign includes UGC)
+	•	Persona
+	•	Gender
+	•	Age range
+	•	Number of videos (or derived from package if you chose to derive)
+	4.	Influencer Requirements (only if campaign includes influencer)
+	•	Creator types (multi-select chips)
+	•	Niche
+	•	Platforms (no YouTube)
+	•	Any budget field ONLY if still present
+	5.	Creator Network (embedded as a section on the same details page)
+	•	Rename “Creators” → “Creator Network”
+	•	Show recommended creators list/grid with:
+	•	approve/reject + rejection reason (if still part of spec)
+	•	creator status field (brief sent / filming / posted / need alternative)
+	•	“Add submitted content” button per creator
+	•	Submitted content list per creator
+	•	Final uploaded link per creator/content item (used for analytics)
+	•	Include filters (Pending/Approved/Rejected + search) if already requested earlier.
+
+UX: left panel should NOT be affected by scrolling
+	•	The app’s left sidebar/navigation must remain fixed/sticky and not scroll with the page content.
+	•	Only the main content area scrolls.
+	•	Implement using CSS layout:
+	•	Sidebar: position: sticky or fixed container with its own height, top: 0, overflow: hidden (or auto only if sidebar items exceed height)
+	•	Main content: scroll container
+
+Routing
+	•	Campaign list → click campaign → /campaigns/:id renders this full details page.
+	•	If old tab routes exist, redirect to the new details page anchor sections if needed.
+
+Acceptance:
+	•	Campaign details page shows all information in a clean “executive summary” style.
+	•	Creator Network appears as a section on the details page.
+	•	Sidebar stays fixed while user scrolls campaign details.
+
+⸻
+
+4) Creator Network naming + content submission
+
+Rename
+	•	Rename “Creators” to “Creator Network” across UI, routes, components.
+
+Submitted content + status
+
+For each campaign creator:
+	•	Editable status: brief sent / filming / posted / need alternative
+	•	Button: “Add submitted content” (modal):
+	•	content link (required URL)
+	•	platform (enum, no YouTube)
+	•	content format/type (without live)
+	•	optional notes
+	•	“Final uploaded link” field for analytics (store on submission or creator-campaign join).
+
+Unify creator search filters:
+	•	Creator search must reuse the same filter component/query logic as Creator Network.
+
+⸻
+
+5) Signup gating: remove content queue review
+	•	Remove logic that blocks new users due to “content queue review”.
+
+⸻
+
+6) Admin roles and access control
+
+Implement two admin roles:
+	1.	Super Admin: full access.
+	2.	Employee Admin: only Campaigns + Creator Network.
+
+Enforce in frontend navigation + backend authorization.
+
+⸻
+
+7) Deliverables
+	•	FE + BE + DB updates.
+	•	Update enums/constants/types.
+	•	Add minimal tests or smoke checks if the repo supports it.
+	•	Ensure no console errors and legacy data doesn’t crash UI.
+
+Proceed to implement now.

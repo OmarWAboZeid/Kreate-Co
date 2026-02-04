@@ -354,6 +354,29 @@ function appReducer(state, action) {
         ),
       };
     }
+    case 'SET_CREATOR_WORKFLOW_STATUS': {
+      const { campaignId, creatorId, status, finalVideoLink } = action.payload;
+      const existing = state.campaignCreators[campaignId];
+      if (!existing) return state;
+      const existingOutreach = existing.outreach[creatorId] || {};
+      return {
+        ...state,
+        campaignCreators: {
+          ...state.campaignCreators,
+          [campaignId]: {
+            ...existing,
+            outreach: {
+              ...existing.outreach,
+              [creatorId]: {
+                ...existingOutreach,
+                workflowStatus: status || existingOutreach.workflowStatus,
+                finalVideoLink: finalVideoLink !== undefined ? finalVideoLink : existingOutreach.finalVideoLink,
+              },
+            },
+          },
+        },
+      };
+    }
     case 'LOG_OUTREACH': {
       const { campaignId, creatorId, method, status, note } = action.payload;
       const existing = state.campaignCreators[campaignId];

@@ -1,27 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import ActivityLog from '../components/ActivityLog.jsx';
-import ContentLogModal from '../components/ContentLogModal.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import StatusPill from '../components/StatusPill.jsx';
 import { useAppDispatch, useAppState } from '../state.jsx';
 
-const tabs = ['Overview', 'Creators', 'Content', 'Analytics', 'Activity'];
+const makeId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 
 export default function CampaignDetailPage() {
   const { role, campaignId } = useParams();
   const navigate = useNavigate();
-  const { campaigns, creators, campaignCreators, contentItems, activity } = useAppState();
+  const { campaigns, creators, campaignCreators, contentItems } = useAppState();
   const dispatch = useAppDispatch();
-  const [activeTab, setActiveTab] = useState('Overview');
-  const [processingSearch, setProcessingSearch] = useState(false);
-  const [searchComplete, setSearchComplete] = useState(false);
-  const [showContentModal, setShowContentModal] = useState(false);
-  const [decisionNotes, setDecisionNotes] = useState({});
-  const [decisionErrors, setDecisionErrors] = useState({});
-  const [outreachDrafts, setOutreachDrafts] = useState({});
-  const [selectedContentId, setSelectedContentId] = useState(null);
-  const [feedbackForm, setFeedbackForm] = useState({ note: '', tags: [] });
+  const [creatorFilter, setCreatorFilter] = useState('all');
+  const [creatorSearch, setCreatorSearch] = useState('');
+  const [addContentModal, setAddContentModal] = useState({ open: false, creator: null });
+  const [contentForm, setContentForm] = useState({ link: '', platform: '', type: '', notes: '' });
 
   const campaign = campaigns.find((item) => item.id === campaignId);
 
@@ -44,625 +37,442 @@ export default function CampaignDetailPage() {
 
   const creatorState = campaignCreators[campaign.id] || { shortlist: [], approvals: {}, outreach: {} };
   const shortlistCreators = creatorState.shortlist.map((id) => creatorMap.get(id)).filter(Boolean);
-  const approvedCreators = shortlistCreators.filter(
-    (creator) => creatorState.approvals[creator.id] === 'Brand Approved'
-  );
-  const confirmedCreators = approvedCreators.filter(
-    (creator) => creatorState.outreach[creator.id]?.status === 'Confirmed'
-  );
 
-  const campaignContent = contentItems.filter((content) => content.campaignId === campaign.id);
-  useEffect(() => {
-    if (!selectedContentId && campaignContent.length > 0) {
-      setSelectedContentId(campaignContent[0].id);
+  const filteredCreators = useMemo(() => {
+    let result = shortlistCreators;
+    if (creatorFilter === 'approved') {
+      result = result.filter((c) => creatorState.approvals[c.id] === 'Brand Approved');
+    } else if (creatorFilter === 'rejected') {
+      result = result.filter((c) => creatorState.approvals[c.id] === 'Brand Rejected');
+    } else if (creatorFilter === 'pending') {
+      result = result.filter((c) => !creatorState.approvals[c.id] || creatorState.approvals[c.id] === 'Suggested');
     }
-  }, [campaignContent, selectedContentId]);
+    if (creatorSearch) {
+      const search = creatorSearch.toLowerCase();
+      result = result.filter((c) => c.name.toLowerCase().includes(search));
+    }
+    return result;
+  }, [shortlistCreators, creatorFilter, creatorSearch, creatorState.approvals]);
 
-  useEffect(() => {
-    setFeedbackForm({ note: '', tags: [] });
-  }, [selectedContentId]);
-
-  const selectedContent = campaignContent.find((content) => content.id === selectedContentId) || null;
-
-  const handleRunSearch = () => {
-    setProcessingSearch(true);
-    setTimeout(() => {
-      setProcessingSearch(false);
-      setSearchComplete(true);
-    }, 700);
+  const handleStatusChange = (creatorId, status) => {
+    dispatch({
+      type: 'SET_CREATOR_WORKFLOW_STATUS',
+      payload: { campaignId: campaign.id, creatorId, status },
+    });
   };
 
-  const handleShortlist = (creatorId) => {
-    dispatch({ type: 'SHORTLIST_CREATOR', payload: { campaignId: campaign.id, creatorId } });
-  };
-
-  const handleRemoveShortlist = (creatorId) => {
-    dispatch({ type: 'REMOVE_SHORTLIST', payload: { campaignId: campaign.id, creatorId } });
-  };
-
-  const handleMoveShortlist = (from, to) => {
-    dispatch({ type: 'MOVE_SHORTLIST', payload: { campaignId: campaign.id, from, to } });
-  };
-
-  const handleSendShortlist = () => {
-    dispatch({ type: 'SEND_SHORTLIST', payload: { campaignId: campaign.id } });
+  const handleFinalLinkChange = (creatorId, link) => {
+    dispatch({
+      type: 'SET_CREATOR_WORKFLOW_STATUS',
+      payload: { campaignId: campaign.id, creatorId, finalVideoLink: link },
+    });
   };
 
   const handleDecision = (creatorId, decision) => {
-    if (decision === 'Brand Rejected' && !decisionNotes[creatorId]) {
-      setDecisionErrors((prev) => ({ ...prev, [creatorId]: 'Rejection reason required.' }));
-      return;
-    }
-    setDecisionErrors((prev) => ({ ...prev, [creatorId]: '' }));
     dispatch({
       type: 'SET_CREATOR_DECISION',
       payload: {
         campaignId: campaign.id,
         creatorId,
         decision,
-        actor: 'Brand',
-        note: decisionNotes[creatorId] || '',
+        actor: role === 'brand' ? 'Brand' : 'Admin',
+        note: '',
       },
     });
   };
 
-  const handleOutreachUpdate = (creatorId, field, value) => {
-    setOutreachDrafts((prev) => ({
-      ...prev,
-      [creatorId]: {
-        ...prev[creatorId],
-        [field]: value,
-      },
-    }));
+  const handleAddContent = () => {
+    if (!contentForm.link || !addContentModal.creator) return;
+    
+    const newContent = {
+      id: makeId('content'),
+      campaignId: campaign.id,
+      creatorId: addContentModal.creator.id,
+      platform: contentForm.platform || 'TikTok',
+      type: contentForm.type || 'Reel',
+      caption: contentForm.notes || '',
+      hashtags: '',
+      assets: [{ url: contentForm.link, label: 'Submitted content' }],
+      status: 'Pending Review',
+      revisionCount: 0,
+      feedback: [],
+      createdAt: new Date().toISOString(),
+    };
+    
+    dispatch({ type: 'LOG_CONTENT_DELIVERY', payload: { content: newContent } });
+    setAddContentModal({ open: false, creator: null });
+    setContentForm({ link: '', platform: '', type: '', notes: '' });
   };
 
-  const handleLogOutreach = (creatorId) => {
-    const draft = outreachDrafts[creatorId];
-    if (!draft?.method || !draft?.status) return;
-    dispatch({
-      type: 'LOG_OUTREACH',
-      payload: {
-        campaignId: campaign.id,
-        creatorId,
-        method: draft.method,
-        status: draft.status,
-        note: draft.note || '',
-      },
-    });
-  };
+  const campaignContent = contentItems.filter((c) => c.campaignId === campaignId);
 
-  const handleActivateCampaign = () => {
-    dispatch({ type: 'ACTIVATE_CAMPAIGN', payload: { campaignId: campaign.id } });
-  };
-
-  const handleFeedbackTag = (tag) => {
-    setFeedbackForm((prev) => {
-      const tags = prev.tags.includes(tag)
-        ? prev.tags.filter((item) => item !== tag)
-        : [...prev.tags, tag];
-      return { ...prev, tags };
-    });
-  };
-
-  const handleContentDecision = (status) => {
-    if (!selectedContent) return;
-    if (status === 'Revision Requested' && !feedbackForm.note) {
-      return;
-    }
-    dispatch({
-      type: 'REVIEW_CONTENT',
-      payload: {
-        contentId: selectedContent.id,
-        status,
-        actor: 'Brand',
-        feedback: {
-          note: feedbackForm.note,
-          tags: feedbackForm.tags,
-        },
-      },
-    });
-    setFeedbackForm({ note: '', tags: [] });
-  };
-
-  const handlePublish = (contentId) => {
-    const url = window.prompt('Enter published URL');
-    if (!url) return;
-    dispatch({ type: 'MARK_PUBLISHED', payload: { contentId, url } });
-  };
-
-  const canActivate = confirmedCreators.length > 0 && approvedCreators.length > 0;
+  const campaignType = campaign.campaignType || 'Hybrid';
+  const isHybrid = campaignType === 'Hybrid';
+  const isUGC = campaignType === 'UGC';
+  const isInfluencer = campaignType === 'Influencer';
+  const showUGC = isUGC || isHybrid || !campaignType;
+  const showInfluencer = isInfluencer || isHybrid || !campaignType;
 
   return (
-    <div className="page-stack">
-      <div className="page-header">
-        <div>
-          <button type="button" className="link-button" onClick={() => navigate(-1)}>
-            ← Back to campaigns
-          </button>
-          <h2>{campaign.name}</h2>
-          <p>{campaign.brand}</p>
+    <div className="campaign-details-page">
+      <div className="campaign-details-header">
+        <button type="button" className="link-button" onClick={() => navigate(-1)}>
+          ← Back to campaigns
+        </button>
+        <div className="campaign-details-title">
+          <div className="campaign-title-row">
+            <h1>{campaign.name}</h1>
+            <StatusPill status={campaign.status} />
+          </div>
+          <p className="campaign-brand-name">{campaign.brand}</p>
         </div>
-        <div className="page-header-actions">
-          <StatusPill status={campaign.status} />
-          {role === 'admin' && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleActivateCampaign}
-              disabled={!canActivate}
+        {role === 'admin' && (
+          <div className="campaign-details-actions">
+            <button type="button" className="btn btn-secondary">Edit</button>
+            <button type="button" className="btn btn-secondary">Archive</button>
+          </div>
+        )}
+      </div>
+
+      <div className="campaign-details-grid">
+        <section className="detail-card">
+          <div className="detail-card-header">
+            <h3>Overview</h3>
+          </div>
+          <div className="detail-card-content">
+            <div className="detail-row">
+              <span className="detail-label">Campaign Type</span>
+              <span className="detail-value">{campaign.campaignType || 'Hybrid'}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Deal Type</span>
+              <span className="detail-value">{campaign.paymentType || 'Paid'}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Start Date</span>
+              <span className="detail-value">{campaign.timeline?.start || campaign.startDate || 'TBD'}</span>
+            </div>
+            <div className="detail-row">
+              <span className="detail-label">Objectives</span>
+              <div className="detail-chips">
+                {Array.isArray(campaign.objectives) 
+                  ? campaign.objectives.map((obj) => (
+                      <span key={obj} className="chip">{obj}</span>
+                    ))
+                  : <span className="chip">{campaign.objectives || 'Awareness'}</span>
+                }
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="detail-card">
+          <div className="detail-card-header">
+            <h3>Package</h3>
+          </div>
+          <div className="detail-card-content">
+            <div className="detail-row">
+              <span className="detail-label">Package Type</span>
+              <span className="detail-value">{campaign.packageType || 'Custom'}</span>
+            </div>
+            {campaign.bundle && (
+              <div className="detail-row">
+                <span className="detail-label">Bundle</span>
+                <span className="detail-value">{campaign.bundle}</span>
+              </div>
+            )}
+            {campaign.ugcCount && (
+              <div className="detail-row">
+                <span className="detail-label">UGC Videos</span>
+                <span className="detail-value">{campaign.ugcCount}</span>
+              </div>
+            )}
+            {campaign.influencerCount && (
+              <div className="detail-row">
+                <span className="detail-label">Influencer Videos</span>
+                <span className="detail-value">{campaign.influencerCount}</span>
+              </div>
+            )}
+            {campaign.customPackage && (
+              <div className="detail-row">
+                <span className="detail-label">Custom Details</span>
+                <span className="detail-value">{campaign.customPackage}</span>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {showUGC && (
+          <section className="detail-card">
+            <div className="detail-card-header">
+              <h3>UGC Requirements</h3>
+            </div>
+            <div className="detail-card-content">
+              <div className="detail-row">
+                <span className="detail-label">Persona</span>
+                <span className="detail-value">{campaign.ugc?.persona || 'Any'}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Gender</span>
+                <span className="detail-value">{campaign.ugc?.gender || 'Any'}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Age Range</span>
+                <span className="detail-value">{campaign.ugc?.ageRange || '18-35'}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Videos</span>
+                <span className="detail-value">{campaign.ugcCount || 'TBD'}</span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {showInfluencer && (
+          <section className="detail-card">
+            <div className="detail-card-header">
+              <h3>Influencer Requirements</h3>
+            </div>
+            <div className="detail-card-content">
+              <div className="detail-row">
+                <span className="detail-label">Creator Tiers</span>
+                <div className="detail-chips">
+                  {Array.isArray(campaign.creatorTiers) && campaign.creatorTiers.length > 0
+                    ? campaign.creatorTiers.map((tier) => (
+                        <span key={tier} className="chip">{tier}</span>
+                      ))
+                    : <span className="chip">Micro</span>
+                  }
+                </div>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Niche</span>
+                <span className="detail-value">{campaign.influencer?.niche || campaign.criteria?.niche || 'Lifestyle'}</span>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Platforms</span>
+                <div className="detail-chips">
+                  {campaign.platforms?.filter(p => p !== 'YouTube').map((platform) => (
+                    <span key={platform} className="chip">{platform}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="detail-row">
+                <span className="detail-label">Content Formats</span>
+                <div className="detail-chips">
+                  {campaign.contentFormat?.filter(f => f !== 'Live').map((format) => (
+                    <span key={format} className="chip">{format}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+      </div>
+
+      <section className="detail-card creator-network-section">
+        <div className="detail-card-header">
+          <h3>Creator Network</h3>
+          <div className="creator-network-filters">
+            <input
+              type="text"
+              className="input"
+              placeholder="Search creators..."
+              value={creatorSearch}
+              onChange={(e) => setCreatorSearch(e.target.value)}
+            />
+            <select
+              className="input"
+              value={creatorFilter}
+              onChange={(e) => setCreatorFilter(e.target.value)}
             >
-              Activate Campaign
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="tab-row">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            className={activeTab === tab ? 'active' : undefined}
-            onClick={() => setActiveTab(tab)}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
-
-      {activeTab === 'Overview' && (
-        <div className="overview-grid">
-          <div className="card">
-            <h3>Campaign Summary</h3>
-            <p>Status: {campaign.status}</p>
-            <p>Platforms: {campaign.platforms.join(' / ')}</p>
-            <p>Budget: {campaign.budgetRange}</p>
-            <p>
-              Timeline: {campaign.timeline.start || 'TBD'} → {campaign.timeline.end || 'TBD'}
-            </p>
-          </div>
-          <div className="card">
-            <h3>Criteria v{campaign.criteriaVersion || 0}</h3>
-            <ul className="list">
-              <li>Followers: {campaign.criteria.followersMin} - {campaign.criteria.followersMax}</li>
-              <li>Niche: {campaign.criteria.niche}</li>
-              <li>Region: {campaign.criteria.region}</li>
-              <li>Engagement: {campaign.criteria.engagement}</li>
-              <li>Language: {campaign.criteria.language}</li>
-            </ul>
-          </div>
-          <div className="card">
-            <h3>Objectives</h3>
-            <p>{campaign.objectives}</p>
-            <h4>Notes</h4>
-            <p>{campaign.notes}</p>
-          </div>
-          <div className="card">
-            <h3>Activity Snapshot</h3>
-            <ActivityLog entries={(activity.campaigns[campaign.id] || []).slice(0, 3)} />
+              <option value="all">All Creators</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
           </div>
         </div>
-      )}
-
-      {activeTab === 'Creators' && role === 'admin' && (
-        <div className="page-stack">
-          <div className="card">
-            <div className="card-header">
-              <div>
-                <h3>Creator Search</h3>
-                <p>Criteria v{campaign.criteriaVersion || 0}</p>
-              </div>
-              <button type="button" className="btn btn-secondary" onClick={handleRunSearch}>
-                {processingSearch ? 'Processing...' : 'Run Search'}
-              </button>
-            </div>
-            <div className="filters-bar">
-              <input
-                className="input"
-                placeholder="Follower min"
-                defaultValue={campaign.criteria.followersMin}
-                disabled={campaign.status !== 'Draft'}
-              />
-              <input
-                className="input"
-                placeholder="Follower max"
-                defaultValue={campaign.criteria.followersMax}
-                disabled={campaign.status !== 'Draft'}
-              />
-              <input
-                className="input"
-                placeholder="Niche"
-                defaultValue={campaign.criteria.niche}
-                disabled={campaign.status !== 'Draft'}
-              />
-              <input
-                className="input"
-                placeholder="Region"
-                defaultValue={campaign.criteria.region}
-                disabled={campaign.status !== 'Draft'}
-              />
-            </div>
-
-            {processingSearch && <p className="muted">Processing creator recommendations...</p>}
-            {searchComplete && (
-              <div className="split-grid">
-                <div>
-                  <h4>Results</h4>
-                  <div className="creator-list">
-                    {creators.map((creator) => (
-                      <div key={creator.id} className="creator-card">
-                        <div>
-                          <h5>{creator.name}</h5>
-                          <p>
-                            {creator.handles.instagram} · {creator.niche}
-                          </p>
-                          <p>Engagement {creator.engagement}%</p>
-                        </div>
-                        <button
-                          type="button"
-                          className="btn btn-secondary"
-                          onClick={() => handleShortlist(creator.id)}
-                        >
-                          Shortlist
-                        </button>
+        <div className="detail-card-content">
+          {filteredCreators.length === 0 ? (
+            <EmptyState
+              title="No creators assigned"
+              description="Creators will appear here once they are shortlisted for this campaign."
+            />
+          ) : (
+            <div className="creator-network-list">
+              {filteredCreators.map((creator) => {
+                const decision = creatorState.approvals[creator.id] || 'Suggested';
+                const outreach = creatorState.outreach[creator.id] || {};
+                const status = outreach.workflowStatus || 'Filming';
+                const finalLink = outreach.finalVideoLink || '';
+                const creatorContent = campaignContent.filter((c) => c.creatorId === creator.id);
+                return (
+                  <div key={creator.id} className="creator-network-card">
+                    <div className="creator-info">
+                      <div className="creator-avatar">
+                        {creator.name.charAt(0).toUpperCase()}
                       </div>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <h4>Shortlist</h4>
-                  {shortlistCreators.length === 0 ? (
-                    <p className="muted">No creators shortlisted yet.</p>
-                  ) : (
-                    <div className="shortlist">
-                      {shortlistCreators.map((creator, index) => (
-                        <div key={creator.id} className="shortlist-item">
-                          <div>
-                            <strong>{creator.name}</strong>
-                            <span>{creator.handles.instagram}</span>
-                          </div>
-                          <div className="shortlist-actions">
-                            <button
-                              type="button"
-                              className="link-button"
-                              onClick={() => handleMoveShortlist(index, Math.max(0, index - 1))}
-                              disabled={index === 0}
-                            >
-                              ↑
-                            </button>
-                            <button
-                              type="button"
-                              className="link-button"
-                              onClick={() => handleMoveShortlist(index, Math.min(shortlistCreators.length - 1, index + 1))}
-                              disabled={index === shortlistCreators.length - 1}
-                            >
-                              ↓
-                            </button>
-                            <button
-                              type="button"
-                              className="link-button"
-                              onClick={() => handleRemoveShortlist(creator.id)}
-                            >
-                              Remove
-                            </button>
-                          </div>
+                      <div className="creator-details">
+                        <h4>{creator.name}</h4>
+                        <p>{creator.handles?.instagram || creator.handle || '@creator'} · {creator.niche}</p>
+                        <div className="creator-status-row">
+                          <StatusPill status={decision} />
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  )}
-                  <button type="button" className="btn btn-primary" onClick={handleSendShortlist}>
-                    Send shortlist to Brand for review
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="card">
-            <h3>Approved Creators & Outreach</h3>
-            {approvedCreators.length === 0 ? (
-              <p className="muted">No approved creators yet.</p>
-            ) : (
-              <div className="creator-list">
-                {approvedCreators.map((creator) => {
-                  const outreach = creatorState.outreach[creator.id] || {};
-                  const draft = outreachDrafts[creator.id] || outreach;
-                  return (
-                    <div key={creator.id} className="creator-card">
-                      <div>
-                        <h5>{creator.name}</h5>
-                        <p>{creator.handles.instagram}</p>
-                        <StatusPill status={outreach.status || 'Outreach Pending'} />
+                    
+                    <div className="creator-workflow">
+                      <div className="workflow-field">
+                        <label>Status</label>
+                        <select
+                          className="input"
+                          value={status}
+                          onChange={(e) => handleStatusChange(creator.id, e.target.value)}
+                        >
+                          <option value="Filming">Filming</option>
+                          <option value="Brief Sent">Brief Sent</option>
+                          <option value="Posted">Posted</option>
+                          <option value="Need Alternative">Need Alternative</option>
+                        </select>
                       </div>
-                      <div className="outreach-controls">
-                        <select
-                          className="input"
-                          value={draft.method || ''}
-                          onChange={(e) => handleOutreachUpdate(creator.id, 'method', e.target.value)}
-                        >
-                          <option value="">Method</option>
-                          <option>WhatsApp</option>
-                          <option>Email</option>
-                          <option>Other</option>
-                        </select>
-                        <select
-                          className="input"
-                          value={draft.status || ''}
-                          onChange={(e) => handleOutreachUpdate(creator.id, 'status', e.target.value)}
-                        >
-                          <option value="">Status</option>
-                          <option>Outreach Pending</option>
-                          <option>Awaiting Creator Confirmation</option>
-                          <option>Confirmed</option>
-                          <option>Need Alternative</option>
-                        </select>
+                      <div className="workflow-field">
+                        <label>Final Video Link</label>
                         <input
+                          type="url"
                           className="input"
-                          placeholder="Note"
-                          value={draft.note || ''}
-                          onChange={(e) => handleOutreachUpdate(creator.id, 'note', e.target.value)}
+                          placeholder="Enter video URL"
+                          value={finalLink}
+                          onChange={(e) => handleFinalLinkChange(creator.id, e.target.value)}
                         />
-                        <button type="button" className="btn btn-secondary" onClick={() => handleLogOutreach(creator.id)}>
-                          Log
-                        </button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
-      {activeTab === 'Creators' && role === 'brand' && (
-        <div className="page-stack">
-          <div className="card">
-            <h3>Creators Awaiting Review</h3>
-            {shortlistCreators.length === 0 ? (
-              <p className="muted">No creators to review yet.</p>
-            ) : (
-              <div className="creator-list">
-                {shortlistCreators.map((creator) => {
-                  const decision = creatorState.approvals[creator.id] || 'Suggested';
-                  return (
-                    <div key={creator.id} className="creator-card">
-                      <div>
-                        <h5>{creator.name}</h5>
-                        <p>
-                          {creator.handles.instagram} · {creator.niche} · {creator.region}
-                        </p>
-                        <p>Engagement {creator.engagement}%</p>
-                        <StatusPill status={decision} />
-                        <button type="button" className="link-button">
-                          View full profile
-                        </button>
+                    {creatorContent.length > 0 && (
+                      <div className="creator-submitted-content">
+                        <h5>Submitted Content ({creatorContent.length})</h5>
+                        <div className="submitted-content-list">
+                          {creatorContent.map((content) => (
+                            <div key={content.id} className="submitted-content-item">
+                              <a href={content.assets?.[0]?.url} target="_blank" rel="noreferrer" className="link-button">
+                                {content.platform} {content.type}
+                              </a>
+                              <StatusPill status={content.status} />
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <div className="creator-actions">
-                        <textarea
-                          className="input"
-                          rows="2"
-                          placeholder="Reason if rejecting"
-                          value={decisionNotes[creator.id] || ''}
-                          onChange={(e) =>
-                            setDecisionNotes((prev) => ({ ...prev, [creator.id]: e.target.value }))
-                          }
-                        />
-                        {decisionErrors[creator.id] && <p className="error-text">{decisionErrors[creator.id]}</p>}
-                        <div className="button-row">
+                    )}
+
+                    <div className="creator-actions-row">
+                      {(role === 'brand' || role === 'admin') && decision === 'Suggested' && (
+                        <>
                           <button
                             type="button"
-                            className="btn btn-secondary"
+                            className="btn btn-success"
                             onClick={() => handleDecision(creator.id, 'Brand Approved')}
                           >
                             Approve
                           </button>
                           <button
                             type="button"
-                            className="btn btn-primary"
+                            className="btn btn-danger"
                             onClick={() => handleDecision(creator.id, 'Brand Rejected')}
                           >
                             Reject
                           </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'Content' && (
-        <div className="page-stack">
-          <div className="page-header">
-            <div>
-              <h3>Content Queue</h3>
-              <p>Track every deliverable and its review state.</p>
-            </div>
-            {role === 'admin' && (
-              <button type="button" className="btn btn-primary" onClick={() => setShowContentModal(true)}>
-                Log new content delivery
-              </button>
-            )}
-          </div>
-          {campaignContent.length === 0 ? (
-            <EmptyState
-              title="No content yet"
-              description="Log creator deliveries to start the review flow."
-              action={
-                role === 'admin' ? (
-                  <button type="button" className="btn btn-primary" onClick={() => setShowContentModal(true)}>
-                    Log content
-                  </button>
-                ) : null
-              }
-            />
-          ) : (
-            <div className="content-grid">
-              <div className="content-list">
-                {campaignContent.map((content) => {
-                  const creator = creatorMap.get(content.creatorId);
-                  return (
-                    <button
-                      key={content.id}
-                      type="button"
-                      className={selectedContentId === content.id ? 'content-row active' : 'content-row'}
-                      onClick={() => setSelectedContentId(content.id)}
-                    >
-                      <div>
-                        <strong>{creator?.name || 'Creator'}</strong>
-                        <span>
-                          {content.platform} · {content.type}
-                        </span>
-                      </div>
-                      <StatusPill status={content.status} />
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="content-detail">
-                {selectedContent ? (
-                  <div>
-                    <div className="content-preview">
-                      <p>Media preview</p>
-                    </div>
-                    <h4>{creatorMap.get(selectedContent.creatorId)?.name}</h4>
-                    <p>{selectedContent.caption}</p>
-                    <p className="muted">{selectedContent.hashtags}</p>
-                    {selectedContent.assets?.length > 0 && (
-                      <div className="asset-list">
-                        {selectedContent.assets.map((asset) => (
-                          <a key={asset.url} href={asset.url} className="link-button" target="_blank" rel="noreferrer">
-                            {asset.label || asset.url}
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                    <StatusPill status={selectedContent.status} />
-                    <p className="muted">Revisions: {selectedContent.revisionCount}</p>
-
-                    {role === 'brand' && (
-                      <div className="review-panel">
-                        <p className="label">Feedback tags</p>
-                        <div className="pill-group">
-                          {['Change hook', 'Adjust tone', 'Fix branding mention', 'Update CTA'].map((tag) => (
-                            <button
-                              key={tag}
-                              type="button"
-                              className={feedbackForm.tags.includes(tag) ? 'active' : undefined}
-                              onClick={() => handleFeedbackTag(tag)}
-                            >
-                              {tag}
-                            </button>
-                          ))}
-                        </div>
-                        <textarea
-                          className="input"
-                          rows="3"
-                          placeholder="Add feedback (required for revision request)"
-                          value={feedbackForm.note}
-                          onChange={(e) => setFeedbackForm((prev) => ({ ...prev, note: e.target.value }))}
-                        />
-                        {selectedContent.revisionCount >= 3 && (
-                          <p className="warning-text">Maximum revisions reached. Manual escalation required.</p>
-                        )}
-                        <div className="button-row">
-                          <button type="button" className="btn btn-secondary" onClick={() => handleContentDecision('Approved')}>
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            onClick={() => handleContentDecision('Revision Requested')}
-                            disabled={selectedContent.revisionCount >= 3}
-                          >
-                            Request Revision
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {role === 'admin' && selectedContent.status === 'Approved' && (
-                      <button type="button" className="btn btn-primary" onClick={() => handlePublish(selectedContent.id)}>
-                        Mark as Published
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => setAddContentModal({ open: true, creator })}
+                      >
+                        Add Submitted Content
                       </button>
-                    )}
-
-                    <div className="content-activity">
-                      <h4>Activity</h4>
-                      <ActivityLog entries={activity.content[selectedContent.id] || []} />
                     </div>
-                  </div>
-                ) : (
-                  <p className="muted">Select a content item to review.</p>
-                )}
-              </div>
-            </div>
-          )}
-          <ContentLogModal
-            open={showContentModal}
-            onClose={() => setShowContentModal(false)}
-            initialCampaignId={campaign.id}
-          />
-        </div>
-      )}
-
-      {activeTab === 'Analytics' && (
-        <div className="page-stack">
-          <div className="card">
-            <h3>Analytics Snapshot</h3>
-            <p>Daily refresh (first 7 days), weekly thereafter.</p>
-            <div className="metrics-grid">
-              <div>
-                <span>Views</span>
-                <strong>82k</strong>
-              </div>
-              <div>
-                <span>Likes</span>
-                <strong>7.4k</strong>
-              </div>
-              <div>
-                <span>Shares</span>
-                <strong>210</strong>
-              </div>
-              <div>
-                <span>Engagement</span>
-                <strong>10.5%</strong>
-              </div>
-            </div>
-          </div>
-          <div className="card">
-            <h3>Creator Breakdown</h3>
-            <div className="table">
-              <div className="table-row header">
-                <span>Creator</span>
-                <span>Content</span>
-                <span>Status</span>
-                <span>Views</span>
-              </div>
-              {campaignContent.map((content) => {
-                const creator = creatorMap.get(content.creatorId);
-                return (
-                  <div key={content.id} className="table-row">
-                    <span>{creator?.name}</span>
-                    <span>{content.type}</span>
-                    <span>{content.status}</span>
-                    <span>{content.metrics?.views || '—'}</span>
                   </div>
                 );
               })}
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </section>
 
-      {activeTab === 'Activity' && (
-        <div className="card">
-          <h3>Activity Log</h3>
-          <ActivityLog entries={activity.campaigns[campaign.id] || []} />
+      {addContentModal.open && (
+        <div className="modal-overlay active">
+          <div className="modal-content">
+            <h3>Add Submitted Content</h3>
+            <p>Add content submitted by {addContentModal.creator?.name}</p>
+            <div className="modal-form">
+              <label>
+                <span>Content Link *</span>
+                <input
+                  type="url"
+                  className="input"
+                  placeholder="https://..."
+                  value={contentForm.link}
+                  onChange={(e) => setContentForm(prev => ({ ...prev, link: e.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                <span>Platform</span>
+                <select
+                  className="input"
+                  value={contentForm.platform}
+                  onChange={(e) => setContentForm(prev => ({ ...prev, platform: e.target.value }))}
+                >
+                  <option value="">Select platform</option>
+                  <option value="TikTok">TikTok</option>
+                  <option value="Instagram">Instagram</option>
+                </select>
+              </label>
+              <label>
+                <span>Content Type</span>
+                <select
+                  className="input"
+                  value={contentForm.type}
+                  onChange={(e) => setContentForm(prev => ({ ...prev, type: e.target.value }))}
+                >
+                  <option value="">Select type</option>
+                  <option value="Reel">Reel</option>
+                  <option value="Post">Post</option>
+                  <option value="Story">Story</option>
+                </select>
+              </label>
+              <label>
+                <span>Notes</span>
+                <textarea
+                  className="input"
+                  placeholder="Optional notes..."
+                  rows={3}
+                  value={contentForm.notes}
+                  onChange={(e) => setContentForm(prev => ({ ...prev, notes: e.target.value }))}
+                />
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setAddContentModal({ open: false, creator: null });
+                  setContentForm({ link: '', platform: '', type: '', notes: '' });
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleAddContent}
+                disabled={!contentForm.link}
+              >
+                Add Content
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
