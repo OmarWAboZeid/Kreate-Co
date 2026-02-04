@@ -1,0 +1,59 @@
+You are a senior frontend/full-stack engineer working on the Kreate&Co Brand Portal. Update the Campaigns page to be a list view (not cards), with a clean “fancy but normal” table-like layout. Keep existing functionality unless explicitly removed.
+
+1) Campaigns page layout = List View
+	•	Replace card/grid layout with a single list/table view:
+	•	Each campaign is one row.
+	•	Rows are clickable to open /campaigns/:id (campaign details page).
+	•	Keep a top toolbar area for actions + filters.
+
+2) Columns (left → right)
+
+Each row should display:
+	1.	Campaign Name (primary text)
+	2.	Brand (brand name)
+	3.	Campaign Kind (UGC / Influencer / Hybrid)
+	4.	Deal Type (collab / paid / mix)
+	5.	Start Date (formatted)
+	6.	Package (label, e.g. “Buzz bundle” / “10 videos” / “Other: …” truncated)
+	7.	Status (pill/badge if status exists; otherwise hide column)
+	8.	Last Updated (optional if you track it; otherwise hide)
+
+Row actions (right side):
+	•	Kebab menu or inline buttons (only actions that already exist, e.g., Edit / Archive / Delete). If actions don’t exist, don’t invent them.
+
+3) Filters + toolbar behavior
+	•	Remove platform filter completely.
+	•	Add Brand filter dropdown:
+	•	Shows brands user can access.
+	•	Filtering must be applied server-side via brandId query param.
+	•	Add Search input (if you already have search; otherwise implement simple client search on loaded rows).
+	•	Add “Create campaign” button on the right (opens the existing create campaign wizard modal).
+
+4) Sorting + pagination
+	•	Default sort: Start date (newest first) or Last updated (newest first) depending on what the system already supports.
+	•	If API supports pagination, keep it and render table pagination controls.
+	•	If no pagination exists, implement “Load more” or basic pagination only if easy—otherwise keep current behavior.
+
+5) UX polish
+	•	Sticky header row for the list (optional but preferred).
+	•	Hover state on rows.
+	•	Empty state:
+	•	“No campaigns found” + suggestion to clear filters + Create button.
+	•	Loading skeleton rows while fetching.
+	•	Keep responsive behavior:
+	•	On mobile: collapse less important columns into a secondary line under the campaign name.
+
+6) API / types
+	•	Ensure the list query returns the fields needed for the columns:
+	•	campaign name, brand name/id, type (ugc/influencer/hybrid), dealType, startDate, package, status, updatedAt.
+	•	If missing, extend the API response and update types accordingly.
+
+Acceptance criteria
+	•	Campaigns page is clearly a list/table view.
+	•	Platform filter is gone.
+	•	Brand filter works.
+	•	Clicking a row opens campaign details.
+	•	Create campaign still works from this page.
+	•	No UI regressions, console errors, or broken routes.
+
+Implement now.
