@@ -6,6 +6,54 @@ import { useAppDispatch, useAppState } from '../state.jsx';
 
 const makeId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 
+function CreatorKebabMenu({ creator, decision, role, onApprove, onReject, onAddContent }) {
+  const [open, setOpen] = useState(false);
+  const showApprovalActions = (role === 'brand' || role === 'admin') && decision === 'Suggested';
+  
+  return (
+    <div className="kebab-menu">
+      <button 
+        type="button" 
+        className="kebab-trigger"
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+      >
+        ⋮
+      </button>
+      {open && (
+        <>
+          <div className="kebab-backdrop" onClick={() => setOpen(false)} />
+          <div className="kebab-dropdown">
+            {showApprovalActions && (
+              <>
+                <button 
+                  type="button" 
+                  className="kebab-approve"
+                  onClick={(e) => { e.stopPropagation(); onApprove(); setOpen(false); }}
+                >
+                  Approve
+                </button>
+                <button 
+                  type="button" 
+                  className="kebab-reject"
+                  onClick={(e) => { e.stopPropagation(); onReject(); setOpen(false); }}
+                >
+                  Reject
+                </button>
+              </>
+            )}
+            <button 
+              type="button" 
+              onClick={(e) => { e.stopPropagation(); onAddContent(); setOpen(false); }}
+            >
+              Add Content
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function CampaignDetailPage() {
   const { role, campaignId } = useParams();
   const navigate = useNavigate();
@@ -293,107 +341,135 @@ export default function CampaignDetailPage() {
             </select>
           </div>
         </div>
-        <div className="detail-card-content">
+        <div className="detail-card-content creator-table-content">
           {filteredCreators.length === 0 ? (
             <EmptyState
               title="No creators assigned"
               description="Creators will appear here once they are shortlisted for this campaign."
             />
           ) : (
-            <div className="creator-network-list">
-              {filteredCreators.map((creator) => {
-                const decision = creatorState.approvals[creator.id] || 'Suggested';
-                const outreach = creatorState.outreach[creator.id] || {};
-                const status = outreach.workflowStatus || 'Filming';
-                const finalLink = outreach.finalVideoLink || '';
-                const creatorContent = campaignContent.filter((c) => c.creatorId === creator.id);
-                return (
-                  <div key={creator.id} className="creator-network-card">
-                    <div className="creator-info">
-                      <div className="creator-avatar">
-                        {creator.name.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="creator-details">
-                        <h4>{creator.name}</h4>
-                        <p>{creator.handles?.instagram || creator.handle || '@creator'} · {creator.niche}</p>
-                        <div className="creator-status-row">
-                          <StatusPill status={decision} />
-                        </div>
-                      </div>
-                    </div>
+            <div className="creators-table-wrapper">
+              <table className="creators-table">
+                <thead>
+                  <tr>
+                    <th>Creator</th>
+                    <th className="hide-mobile">Niche</th>
+                    <th>Workflow Status</th>
+                    <th className="hide-mobile">Final Video</th>
+                    <th>Decision</th>
+                    <th className="hide-mobile">Content</th>
+                    <th className="actions-col"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCreators.map((creator) => {
+                    const decision = creatorState.approvals[creator.id] || 'Suggested';
+                    const outreach = creatorState.outreach[creator.id] || {};
+                    const status = outreach.workflowStatus || 'Filming';
+                    const finalLink = outreach.finalVideoLink || '';
+                    const creatorContent = campaignContent.filter((c) => c.creatorId === creator.id);
                     
-                    <div className="creator-workflow">
-                      <div className="workflow-field">
-                        <label>Status</label>
-                        <select
-                          className="input"
-                          value={status}
-                          onChange={(e) => handleStatusChange(creator.id, e.target.value)}
-                        >
-                          <option value="Filming">Filming</option>
-                          <option value="Brief Sent">Brief Sent</option>
-                          <option value="Posted">Posted</option>
-                          <option value="Need Alternative">Need Alternative</option>
-                        </select>
-                      </div>
-                      <div className="workflow-field">
-                        <label>Final Video Link</label>
-                        <input
-                          type="url"
-                          className="input"
-                          placeholder="Enter video URL"
-                          value={finalLink}
-                          onChange={(e) => handleFinalLinkChange(creator.id, e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    {creatorContent.length > 0 && (
-                      <div className="creator-submitted-content">
-                        <h5>Submitted Content ({creatorContent.length})</h5>
-                        <div className="submitted-content-list">
-                          {creatorContent.map((content) => (
-                            <div key={content.id} className="submitted-content-item">
-                              <a href={content.assets?.[0]?.url} target="_blank" rel="noreferrer" className="link-button">
-                                {content.platform} {content.type}
-                              </a>
-                              <StatusPill status={content.status} />
+                    return (
+                      <tr key={creator.id} className="creators-table-row">
+                        <td className="creator-name-cell">
+                          <div className="creator-cell-info">
+                            <div className="creator-avatar-sm">
+                              {creator.name.charAt(0).toUpperCase()}
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="creator-actions-row">
-                      {(role === 'brand' || role === 'admin') && decision === 'Suggested' && (
-                        <>
-                          <button
-                            type="button"
-                            className="btn btn-success"
-                            onClick={() => handleDecision(creator.id, 'Brand Approved')}
+                            <div>
+                              <span className="creator-name">{creator.name}</span>
+                              <span className="creator-handle">
+                                {creator.handles?.instagram || creator.handle || '@creator'}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="creator-mobile-meta">
+                            {creator.niche} · {status} · {creatorContent.length} content
+                          </span>
+                        </td>
+                        <td className="hide-mobile">
+                          <span className="niche-badge">{creator.niche || '—'}</span>
+                        </td>
+                        <td>
+                          <select
+                            className="input input-sm"
+                            value={status}
+                            onChange={(e) => handleStatusChange(creator.id, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            Approve
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-danger"
-                            onClick={() => handleDecision(creator.id, 'Brand Rejected')}
-                          >
-                            Reject
-                          </button>
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => setAddContentModal({ open: true, creator })}
-                      >
-                        Add Submitted Content
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                            <option value="Filming">Filming</option>
+                            <option value="Brief Sent">Brief Sent</option>
+                            <option value="Posted">Posted</option>
+                            <option value="Need Alternative">Need Alternative</option>
+                          </select>
+                        </td>
+                        <td className="hide-mobile final-link-cell">
+                          <div className="final-link-wrapper">
+                            <input
+                              type="url"
+                              className="input input-sm"
+                              placeholder="Add video link..."
+                              value={finalLink}
+                              onChange={(e) => handleFinalLinkChange(creator.id, e.target.value)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            {finalLink && (
+                              <a 
+                                href={finalLink} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="view-link-icon"
+                                onClick={(e) => e.stopPropagation()}
+                                title="Open video"
+                              >
+                                ↗
+                              </a>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <StatusPill status={decision} />
+                        </td>
+                        <td className="hide-mobile content-count-cell">
+                          {creatorContent.length > 0 ? (
+                            <div className="content-items-list">
+                              {creatorContent.slice(0, 3).map((content) => (
+                                <div key={content.id} className="content-item-inline">
+                                  <a 
+                                    href={content.assets?.[0]?.url} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="link-button link-sm"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {content.platform} {content.type}
+                                  </a>
+                                  <StatusPill status={content.status} size="sm" />
+                                </div>
+                              ))}
+                              {creatorContent.length > 3 && (
+                                <span className="content-more">+{creatorContent.length - 3} more</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="content-count empty">—</span>
+                          )}
+                        </td>
+                        <td className="actions-col">
+                          <CreatorKebabMenu 
+                            creator={creator}
+                            decision={decision}
+                            role={role}
+                            onApprove={() => handleDecision(creator.id, 'Brand Approved')}
+                            onReject={() => handleDecision(creator.id, 'Brand Rejected')}
+                            onAddContent={() => setAddContentModal({ open: true, creator })}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

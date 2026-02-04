@@ -6194,36 +6194,214 @@ body.modal-open {
   border-top: 1px solid rgba(112, 17, 63, 0.1);
 }
 
-/* === SUBMITTED CONTENT === */
-.creator-submitted-content {
-  padding-top: 12px;
-  border-top: 1px solid rgba(112, 17, 63, 0.08);
+/* === CREATORS TABLE (Campaign Details) === */
+.creator-table-content {
+  padding: 0 !important;
 }
 
-.creator-submitted-content h5 {
-  font-size: 0.85rem;
+.creators-table-wrapper {
+  overflow-x: auto;
+}
+
+.creators-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.creators-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: linear-gradient(135deg, rgba(112, 17, 63, 0.04) 0%, rgba(198, 208, 119, 0.04) 100%);
+}
+
+.creators-table th {
+  padding: 12px 16px;
+  text-align: left;
   font-weight: 600;
-  margin: 0 0 8px;
-  color: rgba(42, 42, 42, 0.7);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(42, 42, 42, 0.6);
+  border-bottom: 1px solid rgba(112, 17, 63, 0.1);
+  white-space: nowrap;
 }
 
-.submitted-content-list {
+.creators-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(112, 17, 63, 0.06);
+  vertical-align: middle;
+}
+
+.creators-table-row {
+  transition: background 0.15s ease;
+}
+
+.creators-table-row:hover {
+  background: linear-gradient(135deg, rgba(112, 17, 63, 0.02) 0%, rgba(198, 208, 119, 0.02) 100%);
+}
+
+.creators-table-row:last-child td {
+  border-bottom: none;
+}
+
+.creator-cell-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.creator-avatar-sm {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.creator-name-cell .creator-name {
+  display: block;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.creator-name-cell .creator-handle {
+  display: block;
+  font-size: 0.8rem;
+  color: rgba(42, 42, 42, 0.6);
+}
+
+.creator-name-cell .creator-mobile-meta {
+  display: none;
+  font-size: 0.75rem;
+  color: rgba(42, 42, 42, 0.5);
+  margin-top: 4px;
+}
+
+.niche-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(198, 208, 119, 0.2);
+  color: #5a6600;
+}
+
+.input-sm {
+  padding: 6px 10px !important;
+  font-size: 0.8rem !important;
+  min-width: 100px;
+}
+
+.final-link-cell {
+  min-width: 180px;
+}
+
+.final-link-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.final-link-wrapper .input-sm {
+  flex: 1;
+  min-width: 120px;
+}
+
+.view-link-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: rgba(112, 17, 63, 0.08);
+  color: var(--color-primary);
+  font-size: 0.9rem;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.view-link-icon:hover {
+  background: var(--color-primary);
+  color: white;
+}
+
+.content-count {
+  font-size: 0.85rem;
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.content-count.empty {
+  color: rgba(42, 42, 42, 0.4);
+}
+
+.content-items-list {
   display: flex;
   flex-direction: column;
+  gap: 6px;
+}
+
+.content-item-inline {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.submitted-content-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--color-white);
-  border-radius: var(--radius-sm);
+.link-sm {
+  font-size: 0.75rem !important;
 }
 
-.submitted-content-item .link-button {
-  font-size: 0.85rem;
+.content-more {
+  font-size: 0.75rem;
+  color: rgba(42, 42, 42, 0.5);
+}
+
+.content-count-cell {
+  min-width: 160px;
+}
+
+.kebab-approve {
+  color: #0a8043 !important;
+}
+
+.kebab-reject {
+  color: #d93025 !important;
+}
+
+@media (max-width: 768px) {
+  .creators-table .hide-mobile {
+    display: none;
+  }
+  
+  .creator-name-cell .creator-mobile-meta {
+    display: block;
+  }
+  
+  .creators-table th,
+  .creators-table td {
+    padding: 10px 12px;
+  }
+  
+  .creator-cell-info {
+    gap: 8px;
+  }
+  
+  .creator-avatar-sm {
+    width: 32px;
+    height: 32px;
+    font-size: 0.75rem;
+  }
 }
 
 @media (max-width: 768px) {
