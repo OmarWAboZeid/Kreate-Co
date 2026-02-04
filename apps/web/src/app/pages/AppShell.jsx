@@ -2,42 +2,7 @@ import { useEffect } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AppStateProvider } from '../state.jsx';
 import NotificationCenter from '../components/NotificationCenter.jsx';
-
-const roleConfig = {
-  admin: {
-    label: 'Super Admin',
-    nav: [
-      { to: 'campaigns', label: 'Campaigns' },
-      { to: 'creators', label: 'Creator Network' },
-      { to: 'analytics', label: 'Analytics' },
-      { to: 'settings', label: 'Settings' },
-    ],
-  },
-  employee: {
-    label: 'Employee',
-    nav: [
-      { to: 'campaigns', label: 'Campaigns' },
-      { to: 'creators', label: 'Creator Network' },
-    ],
-  },
-  brand: {
-    label: 'Brand',
-    nav: [
-      { to: 'campaigns', label: 'Campaigns' },
-      { to: 'creators', label: 'Creator Network' },
-      { to: 'analytics', label: 'Analytics' },
-      { to: 'settings', label: 'Profile' },
-    ],
-  },
-  creator: {
-    label: 'Creator',
-    nav: [
-      { to: 'assignments', label: 'Assignments' },
-      { to: 'content', label: 'Content Delivery' },
-      { to: 'settings', label: 'Profile' },
-    ],
-  },
-};
+import { roleConfig } from '../config/roles.js';
 
 function ShellInner() {
   const { role } = useParams();

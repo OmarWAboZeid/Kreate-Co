@@ -6,7 +6,11 @@
     "dev:web": "vite --config apps/web/vite.config.cjs",
     "dev": "concurrently -k \"npm:dev:api\" \"npm:dev:web\"",
     "build": "vite build --config apps/web/vite.config.cjs",
-    "start": "concurrently -k \"npm:dev:api\" \"vite preview --config apps/web/vite.config.cjs --host 0.0.0.0 --port 5000\""
+    "start": "concurrently -k \"npm:dev:api\" \"vite preview --config apps/web/vite.config.cjs --host 0.0.0.0 --port 54321\"",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "format": "prettier . --check",
+    "format:write": "prettier . --write"
   },
   "dependencies": {
     "@dbos-inc/dbos-sdk": "^4.7.9",
@@ -21,6 +25,11 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.37.4",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "prettier": "^3.5.1",
     "vite": "^5.4.14"
   }
 }

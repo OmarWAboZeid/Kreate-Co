@@ -12,7 +12,7 @@ import SettingsPage from './app/pages/SettingsPage.jsx';
 function NotFound() {
   return (
     <div className="app-shell">
-      <div className="app-main" style={{ padding: '120px 24px' }}>
+      <div className="app-main not-found-main">
         <h1>Page not found</h1>
         <p>We couldn't find that page.</p>
       </div>

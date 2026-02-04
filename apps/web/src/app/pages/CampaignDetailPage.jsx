@@ -35,7 +35,11 @@ export default function CampaignDetailPage() {
     );
   }
 
-  const creatorState = campaignCreators[campaign.id] || { shortlist: [], approvals: {}, outreach: {} };
+  const creatorState = campaignCreators[campaign.id] || {
+    shortlist: [],
+    approvals: {},
+    outreach: {},
+  };
   const shortlistCreators = creatorState.shortlist.map((id) => creatorMap.get(id)).filter(Boolean);
 
   const filteredCreators = useMemo(() => {
@@ -45,7 +49,9 @@ export default function CampaignDetailPage() {
     } else if (creatorFilter === 'rejected') {
       result = result.filter((c) => creatorState.approvals[c.id] === 'Brand Rejected');
     } else if (creatorFilter === 'pending') {
-      result = result.filter((c) => !creatorState.approvals[c.id] || creatorState.approvals[c.id] === 'Suggested');
+      result = result.filter(
+        (c) => !creatorState.approvals[c.id] || creatorState.approvals[c.id] === 'Suggested'
+      );
     }
     if (creatorSearch) {
       const search = creatorSearch.toLowerCase();
@@ -83,7 +89,7 @@ export default function CampaignDetailPage() {
 
   const handleAddContent = () => {
     if (!contentForm.link || !addContentModal.creator) return;
-    
+
     const newContent = {
       id: makeId('content'),
       campaignId: campaign.id,
@@ -98,7 +104,7 @@ export default function CampaignDetailPage() {
       feedback: [],
       createdAt: new Date().toISOString(),
     };
-    
+
     dispatch({ type: 'LOG_CONTENT_DELIVERY', payload: { content: newContent } });
     setAddContentModal({ open: false, creator: null });
     setContentForm({ link: '', platform: '', type: '', notes: '' });
@@ -128,8 +134,12 @@ export default function CampaignDetailPage() {
         </div>
         {role === 'admin' && (
           <div className="campaign-details-actions">
-            <button type="button" className="btn btn-secondary">Edit</button>
-            <button type="button" className="btn btn-secondary">Archive</button>
+            <button type="button" className="btn btn-secondary">
+              Edit
+            </button>
+            <button type="button" className="btn btn-secondary">
+              Archive
+            </button>
           </div>
         )}
       </div>
@@ -150,17 +160,22 @@ export default function CampaignDetailPage() {
             </div>
             <div className="detail-row">
               <span className="detail-label">Start Date</span>
-              <span className="detail-value">{campaign.timeline?.start || campaign.startDate || 'TBD'}</span>
+              <span className="detail-value">
+                {campaign.timeline?.start || campaign.startDate || 'TBD'}
+              </span>
             </div>
             <div className="detail-row">
               <span className="detail-label">Objectives</span>
               <div className="detail-chips">
-                {Array.isArray(campaign.objectives) 
-                  ? campaign.objectives.map((obj) => (
-                      <span key={obj} className="chip">{obj}</span>
-                    ))
-                  : <span className="chip">{campaign.objectives || 'Awareness'}</span>
-                }
+                {Array.isArray(campaign.objectives) ? (
+                  campaign.objectives.map((obj) => (
+                    <span key={obj} className="chip">
+                      {obj}
+                    </span>
+                  ))
+                ) : (
+                  <span className="chip">{campaign.objectives || 'Awareness'}</span>
+                )}
               </div>
             </div>
           </div>
@@ -237,32 +252,45 @@ export default function CampaignDetailPage() {
               <div className="detail-row">
                 <span className="detail-label">Creator Tiers</span>
                 <div className="detail-chips">
-                  {Array.isArray(campaign.creatorTiers) && campaign.creatorTiers.length > 0
-                    ? campaign.creatorTiers.map((tier) => (
-                        <span key={tier} className="chip">{tier}</span>
-                      ))
-                    : <span className="chip">Micro</span>
-                  }
+                  {Array.isArray(campaign.creatorTiers) && campaign.creatorTiers.length > 0 ? (
+                    campaign.creatorTiers.map((tier) => (
+                      <span key={tier} className="chip">
+                        {tier}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="chip">Micro</span>
+                  )}
                 </div>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Niche</span>
-                <span className="detail-value">{campaign.influencer?.niche || campaign.criteria?.niche || 'Lifestyle'}</span>
+                <span className="detail-value">
+                  {campaign.influencer?.niche || campaign.criteria?.niche || 'Lifestyle'}
+                </span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Platforms</span>
                 <div className="detail-chips">
-                  {campaign.platforms?.filter(p => p !== 'YouTube').map((platform) => (
-                    <span key={platform} className="chip">{platform}</span>
-                  ))}
+                  {campaign.platforms
+                    ?.filter((p) => p !== 'YouTube')
+                    .map((platform) => (
+                      <span key={platform} className="chip">
+                        {platform}
+                      </span>
+                    ))}
                 </div>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Content Formats</span>
                 <div className="detail-chips">
-                  {campaign.contentFormat?.filter(f => f !== 'Live').map((format) => (
-                    <span key={format} className="chip">{format}</span>
-                  ))}
+                  {campaign.contentFormat
+                    ?.filter((f) => f !== 'Live')
+                    .map((format) => (
+                      <span key={format} className="chip">
+                        {format}
+                      </span>
+                    ))}
                 </div>
               </div>
             </div>
@@ -310,18 +338,19 @@ export default function CampaignDetailPage() {
                 return (
                   <div key={creator.id} className="creator-network-card">
                     <div className="creator-info">
-                      <div className="creator-avatar">
-                        {creator.name.charAt(0).toUpperCase()}
-                      </div>
+                      <div className="creator-avatar">{creator.name.charAt(0).toUpperCase()}</div>
                       <div className="creator-details">
                         <h4>{creator.name}</h4>
-                        <p>{creator.handles?.instagram || creator.handle || '@creator'} · {creator.niche}</p>
+                        <p>
+                          {creator.handles?.instagram || creator.handle || '@creator'} ·{' '}
+                          {creator.niche}
+                        </p>
                         <div className="creator-status-row">
                           <StatusPill status={decision} />
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="creator-workflow">
                       <div className="workflow-field">
                         <label>Status</label>
@@ -354,7 +383,12 @@ export default function CampaignDetailPage() {
                         <div className="submitted-content-list">
                           {creatorContent.map((content) => (
                             <div key={content.id} className="submitted-content-item">
-                              <a href={content.assets?.[0]?.url} target="_blank" rel="noreferrer" className="link-button">
+                              <a
+                                href={content.assets?.[0]?.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="link-button"
+                              >
                                 {content.platform} {content.type}
                               </a>
                               <StatusPill status={content.status} />
@@ -412,7 +446,7 @@ export default function CampaignDetailPage() {
                   className="input"
                   placeholder="https://..."
                   value={contentForm.link}
-                  onChange={(e) => setContentForm(prev => ({ ...prev, link: e.target.value }))}
+                  onChange={(e) => setContentForm((prev) => ({ ...prev, link: e.target.value }))}
                   required
                 />
               </label>
@@ -421,7 +455,9 @@ export default function CampaignDetailPage() {
                 <select
                   className="input"
                   value={contentForm.platform}
-                  onChange={(e) => setContentForm(prev => ({ ...prev, platform: e.target.value }))}
+                  onChange={(e) =>
+                    setContentForm((prev) => ({ ...prev, platform: e.target.value }))
+                  }
                 >
                   <option value="">Select platform</option>
                   <option value="TikTok">TikTok</option>
@@ -433,7 +469,7 @@ export default function CampaignDetailPage() {
                 <select
                   className="input"
                   value={contentForm.type}
-                  onChange={(e) => setContentForm(prev => ({ ...prev, type: e.target.value }))}
+                  onChange={(e) => setContentForm((prev) => ({ ...prev, type: e.target.value }))}
                 >
                   <option value="">Select type</option>
                   <option value="Reel">Reel</option>
@@ -448,7 +484,7 @@ export default function CampaignDetailPage() {
                   placeholder="Optional notes..."
                   rows={3}
                   value={contentForm.notes}
-                  onChange={(e) => setContentForm(prev => ({ ...prev, notes: e.target.value }))}
+                  onChange={(e) => setContentForm((prev) => ({ ...prev, notes: e.target.value }))}
                 />
               </label>
             </div>

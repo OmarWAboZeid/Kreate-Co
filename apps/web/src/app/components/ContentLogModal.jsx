@@ -119,7 +119,11 @@ export default function ContentLogModal({ open, onClose, initialCampaignId }) {
           </div>
           <label>
             Asset link
-            <input className="input" value={form.link} onChange={(e) => updateField('link', e.target.value)} />
+            <input
+              className="input"
+              value={form.link}
+              onChange={(e) => updateField('link', e.target.value)}
+            />
           </label>
           <label>
             Caption
@@ -132,11 +136,20 @@ export default function ContentLogModal({ open, onClose, initialCampaignId }) {
           </label>
           <label>
             Hashtags
-            <input className="input" value={form.hashtags} onChange={(e) => updateField('hashtags', e.target.value)} />
+            <input
+              className="input"
+              value={form.hashtags}
+              onChange={(e) => updateField('hashtags', e.target.value)}
+            />
           </label>
           <label>
             Notes
-            <textarea className="input" rows="2" value={form.notes} onChange={(e) => updateField('notes', e.target.value)} />
+            <textarea
+              className="input"
+              rows="2"
+              value={form.notes}
+              onChange={(e) => updateField('notes', e.target.value)}
+            />
           </label>
         </div>
         <div className="wizard-actions">

@@ -1,9 +1,10 @@
 const http = require('node:http');
-const net = require('node:net');
 const path = require('node:path');
 
 const { Pool } = require('pg');
 const dotenv = require('dotenv');
+const { json, notFound } = require('./lib/http');
+const { checkDatabase, checkTigerbeetle } = require('./lib/health');
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
@@ -13,60 +14,8 @@ const TIGERBEETLE_ADDRESS = process.env.TIGERBEETLE_ADDRESS || 'localhost:3000';
 
 const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
 
-const json = (res, statusCode, payload) => {
-  const body = JSON.stringify(payload, null, 2);
-  res.writeHead(statusCode, {
-    'Content-Type': 'application/json; charset=utf-8',
-    'Content-Length': Buffer.byteLength(body),
-    'Access-Control-Allow-Origin': '*',
-  });
-  res.end(body);
-};
-
-const notFound = (res) => {
-  json(res, 404, { ok: false, error: 'Not found' });
-};
-
-const checkDatabase = async () => {
-  if (!pool) {
-    return { ok: false, error: 'DATABASE_URL is not set' };
-  }
-
-  try {
-    await pool.query('select 1 as ok');
-    return { ok: true };
-  } catch (error) {
-    return { ok: false, error: error.message };
-  }
-};
-
-const checkTigerbeetle = () => {
-  const [hostRaw, portRaw] = TIGERBEETLE_ADDRESS.split(':');
-  let host = hostRaw || 'localhost';
-  if (host === 'localhost') {
-    host = '127.0.0.1';
-  }
-  const port = Number(portRaw || 3000);
-
-  return new Promise((resolve) => {
-    const socket = net.createConnection({ host, port });
-    const timeout = setTimeout(() => {
-      socket.destroy();
-      resolve({ ok: false, error: 'Connection timed out', host, port });
-    }, 1000);
-
-    socket.on('connect', () => {
-      clearTimeout(timeout);
-      socket.end();
-      resolve({ ok: true, host, port });
-    });
-
-    socket.on('error', (error) => {
-      clearTimeout(timeout);
-      resolve({ ok: false, error: error.message, host, port });
-    });
-  });
-};
+const checkDatabaseStatus = () => checkDatabase(pool);
+const checkTigerbeetleStatus = () => checkTigerbeetle(TIGERBEETLE_ADDRESS);
 
 const server = http.createServer(async (req, res) => {
   const { method, url } = req;
@@ -85,7 +34,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/health/db') {
-    const db = await checkDatabase();
+    const db = await checkDatabaseStatus();
     return json(res, db.ok ? 200 : 503, {
       ok: db.ok,
       timestamp: new Date().toISOString(),
@@ -94,7 +43,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/health/tigerbeetle') {
-    const tigerbeetle = await checkTigerbeetle();
+    const tigerbeetle = await checkTigerbeetleStatus();
     return json(res, tigerbeetle.ok ? 200 : 503, {
       ok: tigerbeetle.ok,
       timestamp: new Date().toISOString(),
@@ -103,10 +52,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/health/all') {
-    const [db, tigerbeetle] = await Promise.all([
-      checkDatabase(),
-      checkTigerbeetle(),
-    ]);
+    const [db, tigerbeetle] = await Promise.all([checkDatabaseStatus(), checkTigerbeetleStatus()]);
     const api = { ok: true, port: PORT };
     const ok = api.ok && db.ok && tigerbeetle.ok;
 
@@ -126,21 +72,24 @@ const server = http.createServer(async (req, res) => {
       const page = parseInt(urlObj.searchParams.get('page')) || 1;
       const limit = parseInt(urlObj.searchParams.get('limit')) || 20;
       const offset = (page - 1) * limit;
-      
+
       const countResult = await pool.query('SELECT COUNT(*) FROM influencers');
       const total = parseInt(countResult.rows[0].count);
-      
-      const result = await pool.query(`
+
+      const result = await pool.query(
+        `
         SELECT id, name, tiktok_url, instagram_url, followers, niche, phone, region, notes, category, created_at
         FROM influencers 
         ORDER BY name ASC
         LIMIT $1 OFFSET $2
-      `, [limit, offset]);
-      
-      return json(res, 200, { 
-        ok: true, 
+      `,
+        [limit, offset]
+      );
+
+      return json(res, 200, {
+        ok: true,
         data: result.rows,
-        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
       });
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });
@@ -156,23 +105,26 @@ const server = http.createServer(async (req, res) => {
       const page = parseInt(urlObj.searchParams.get('page')) || 1;
       const limit = parseInt(urlObj.searchParams.get('limit')) || 20;
       const offset = (page - 1) * limit;
-      
+
       const countResult = await pool.query('SELECT COUNT(*) FROM ugc_creators');
       const total = parseInt(countResult.rows[0].count);
-      
-      const result = await pool.query(`
+
+      const result = await pool.query(
+        `
         SELECT id, name, phone, handle, niche, has_mock_video, portfolio_url, age, gender, 
                languages, accepts_gifted_collab, turnaround_time, has_equipment, 
                has_editing_skills, can_voiceover, skills_rating, base_rate, region, notes, created_at
         FROM ugc_creators 
         ORDER BY name ASC
         LIMIT $1 OFFSET $2
-      `, [limit, offset]);
-      
-      return json(res, 200, { 
-        ok: true, 
+      `,
+        [limit, offset]
+      );
+
+      return json(res, 200, {
+        ok: true,
         data: result.rows,
-        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
       });
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });

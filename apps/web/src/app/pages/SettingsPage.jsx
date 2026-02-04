@@ -16,11 +16,15 @@ export default function SettingsPage() {
         <h3>Notification Channels</h3>
         <div className="toggle-row">
           <span>Email summaries</span>
-          <button type="button" className="toggle">On</button>
+          <button type="button" className="toggle">
+            On
+          </button>
         </div>
         <div className="toggle-row">
           <span>WhatsApp alerts</span>
-          <button type="button" className="toggle">Paused</button>
+          <button type="button" className="toggle">
+            Paused
+          </button>
         </div>
       </div>
 

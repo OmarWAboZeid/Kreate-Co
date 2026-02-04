@@ -76,7 +76,9 @@ export default function LandingPage() {
     fadeIns.forEach((element) => observer.observe(element));
 
     let cursor = document.querySelector('.custom-cursor');
-    const hoverTargets = Array.from(document.querySelectorAll('a, button, .card, .service-card, .btn'));
+    const hoverTargets = Array.from(
+      document.querySelectorAll('a, button, .card, .service-card, .btn')
+    );
 
     const handleMouseMove = (event) => {
       if (!cursor) return;
@@ -180,7 +182,7 @@ export default function LandingPage() {
             <div className="hero-content">
               <div className="hero-text fade-in visible">
                 <h1>
-                  <span style={{ color: '#70113F', display: 'block' }}>BUILT BY BRANDS.</span>
+                  <span className="hero-title-accent">BUILT BY BRANDS.</span>
                   <span>POWERED BY CREATORS.</span>
                 </h1>
                 <p className="hero-subtitle">Stop chasing creators and start seeing results.</p>
@@ -206,24 +208,16 @@ export default function LandingPage() {
           <div className="container">
             <div className="about-content">
               <div className="about-text fade-in">
-                <p
-                  style={{
-                    fontSize: '0.875rem',
-                    letterSpacing: '2px',
-                    textTransform: 'uppercase',
-                    color: 'var(--color-sage)',
-                  }}
-                >
-                  Who We Are
-                </p>
+                <p className="section-eyebrow">Who We Are</p>
                 <h2>About Kreate&Co</h2>
 
                 <p className="about-description">
-                  Kreate&Co was built on a simple idea: good content doesn't need to feel forced to perform. We sit at
-                  the intersection of brands and creators, helping both sides collaborate in a way that feels clear,
-                  intentional, and effective. No overcomplication, no mismatched partnerships, just content that makes
-                  sense. We focus on quality, alignment, and execution, making sure every piece of content has a purpose
-                  and a place to live.
+                  Kreate&Co was built on a simple idea: good content doesn't need to feel forced to
+                  perform. We sit at the intersection of brands and creators, helping both sides
+                  collaborate in a way that feels clear, intentional, and effective. No
+                  overcomplication, no mismatched partnerships, just content that makes sense. We
+                  focus on quality, alignment, and execution, making sure every piece of content has
+                  a purpose and a place to live.
                 </p>
               </div>
 
@@ -237,48 +231,48 @@ export default function LandingPage() {
         <section className="services section scalloped-top scalloped-bottom" id="services">
           <div className="container">
             <div className="section-title fade-in">
-              <h2 className="section-heading" style={{ fontWeight: 800, color: '#70113F' }}>
-                Our Services
-              </h2>
+              <h2 className="section-heading section-heading-accent">Our Services</h2>
             </div>
 
             <div className="services-grid">
-              <div className="service-card pink fade-in" style={{ color: 'white' }}>
+              <div className="service-card pink fade-in text-white">
                 <div className="service-icon">
                   <img src="/assets/star.svg" alt="star icon" />
                 </div>
-                <h3 style={{ color: 'white' }}>UGC Content Production</h3>
-                <p style={{ marginTop: '1rem', color: 'white' }}>
+                <h3 className="service-title text-white">UGC Content Production</h3>
+                <p className="service-description text-white">
                   Authentic, creator-led videos and visuals for ads, websites and social platforms.
                 </p>
               </div>
 
-              <div className="service-card lavender fade-in" style={{ color: '#70113F' }}>
+              <div className="service-card lavender fade-in text-crimson">
                 <div className="service-icon">
                   <img src="/assets/star.svg" alt="star icon" />
                 </div>
                 <h3>Influencer Campaigns</h3>
-                <p style={{ marginTop: '1rem' }}>
-                  End-to-end management, from creator selection and briefing to delivery and coordination.
+                <p className="service-description">
+                  End-to-end management, from creator selection and briefing to delivery and
+                  coordination.
                 </p>
               </div>
 
-              <div className="service-card lime fade-in" style={{ color: 'white' }}>
+              <div className="service-card lime fade-in text-white">
                 <div className="service-icon">
                   <div className="star-icon-green"></div>
                 </div>
                 <h3>Creator Sourcing</h3>
-                <p style={{ marginTop: '1rem' }}>
-                  We connect you with the right creators, ones who actually fit your brand and audience.
+                <p className="service-description text-white">
+                  We connect you with the right creators, ones who actually fit your brand and
+                  audience.
                 </p>
               </div>
 
-              <div className="service-card pink fade-in" style={{ color: '#70113F' }}>
+              <div className="service-card pink fade-in text-crimson">
                 <div className="service-icon">
                   <img src="/assets/star.svg" alt="star icon" />
                 </div>
                 <h3>Campaign Strategy</h3>
-                <p style={{ marginTop: '1rem' }}>
+                <p className="service-description">
                   Guidance on what content to create, how to use it, and where it performs best.
                 </p>
               </div>
@@ -286,7 +280,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="brands" style={{ padding: 0, overflow: 'hidden' }}>
+        <section className="brands">
           <div className="brands-title-strip">
             <h3 className="brands-heading">Our Clients</h3>
           </div>
@@ -348,7 +342,7 @@ export default function LandingPage() {
             <div className="footer-section">
               <h3>Kreate&Co</h3>
               <p>Built By Brands, Powered By Creators</p>
-              <div className="social-links" style={{ marginTop: '1rem' }}>
+              <div className="social-links">
                 <a
                   href="https://www.instagram.com/thekreateandco?igsh=MW51c2ZjeGNwdXFqcQ=="
                   className="social-icon"
