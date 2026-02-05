@@ -404,7 +404,7 @@ export default function CampaignDetailPage() {
                 const status = outreach.workflowStatus || 'Filming';
                 const finalLink = outreach.finalVideoLink || '';
                 const creatorContent = campaignContent.filter((c) => c.creatorId === creator.id);
-                const canApprove = (role === 'brand' || role === 'admin') && decision === 'Suggested';
+                const canApprove = role === 'brand' && decision === 'Suggested';
 
                 return (
                   <div key={creator.id} className="creator-network-card">
