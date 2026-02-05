@@ -1,0 +1,123 @@
+You are a QA engineer verifying the Brand Portal implementation. Do not implement new features unless something is broken; focus on testing + confirming behavior. Run the app locally in Replit, click through the UI, and report results as a checklist with PASS/FAIL, and short notes for any FAIL (what you saw, where, and what should happen).
+
+⸻
+
+1) Create Campaign wizard (one question at a time popup)
+
+Entry
+	•	Navigate to Brand Portal → Campaigns → click “Create Campaign”.
+	•	Confirm it opens as a popup/modal wizard.
+
+One-question-per-step behavior
+
+Verify that:
+	•	Only one question is visible at a time.
+	•	There are clear Next / Back / Cancel controls.
+	•	You cannot proceed without completing required fields for the current step.
+
+Base steps (always)
+
+Confirm these appear in order:
+	1.	Campaign name
+	2.	Campaign objectives
+	3.	Start date
+	4.	Type of campaign (UGC / Influencer / Hybrid)
+
+Branching validation
+
+If UGC selected:
+Confirm wizard shows UGC questions:
+	1.	Persona you’re looking for
+	2.	Gender
+	3.	Age range
+	4.	Number of videos
+
+If Influencer selected:
+Confirm wizard shows Influencer questions:
+	1.	Type of influencer (micro / nano / mid tier / macro / mega)
+	2.	Niche
+	3.	Budget for creators
+	4.	Platforms
+
+If Hybrid selected:
+	•	Confirm wizard shows both UGC and Influencer question sets (all steps appear).
+	•	Confirm the order is logical and no steps are missing.
+
+Submission
+	•	Finish the wizard and create a campaign for each type (UGC, Influencer, Hybrid).
+	•	Confirm the created campaign appears in the campaigns list and opens correctly.
+
+Acceptance:
+	•	Wizard is modal, one-question-per-step, branching works, required validation blocks Next.
+
+⸻
+
+2) Campaign Details → Creators tab (recommended creators + approve/reject + content review)
+
+For a campaign that has admin-recommended creators:
+
+Creators tab content
+	•	Open campaign details → go to Creators tab.
+	•	Confirm it shows all creator profiles recommended by admin.
+
+Approval flow
+	•	Confirm each creator has Approve and Reject buttons.
+	•	Click Reject and confirm it requires a reason (why).
+	•	Submit rejection and confirm:
+	•	creator status updates (Rejected)
+	•	reason is visible somewhere appropriate
+	•	persists after refresh
+
+Content review moved into Creators tab
+	•	Confirm there is no separate content review UI outside the Creators tab.
+	•	Confirm any “review content” functionality that existed is now accessible inside Creators tab (per creator).
+
+Acceptance:
+	•	Recommended creators visible.
+	•	Approve/Reject works.
+	•	Reject requires reason.
+	•	Content review is handled inside Creators tab.
+
+⸻
+
+3) Remove campaign Content tab (old one)
+	•	In campaign details navigation, confirm the Content tab is removed (the old content-review tab).
+	•	Confirm there is no broken link/tab.
+	•	If a direct route existed, confirm it doesn’t appear in the UI.
+
+Acceptance:
+	•	Old campaign Content tab is gone.
+
+⸻
+
+4) Brand Portal Content tab = Saved content analytics only
+
+Navigate to Brand Portal → Content tab.
+
+Verify:
+	•	Content tab shows ONLY saved content (bookmarked/archived by brand), not all content submissions.
+	•	It displays a list/table including:
+	•	Creator name
+	•	Views
+	•	Likes
+	•	Comments
+	•	Saves
+	•	Shares
+	•	Engagement rate
+
+Verify engagement rate:
+	•	Confirm engagement rate is displayed per row and doesn’t show NaN/Infinity when views are 0.
+
+Acceptance:
+	•	Content tab = saved content analytics only, with required columns.
+
+⸻
+
+5) Report results
+
+Produce a final report:
+	•	Checklist with PASS/FAIL for each section above
+	•	For FAIL items: specify exact screen, exact issue, and what is missing/wrong
+	•	Include any console errors encountered (copy message text)
+
+Do not implement changes unless explicitly requested; this task is verification only.
