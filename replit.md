@@ -90,10 +90,8 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
 
 ## User Roles & Permissions
 
-- **Super Admin**: Full access to all features (Campaigns, Creator Network, Analytics, Settings)
-- **Employee**: Limited access to Campaigns and Creator Network only
-- **Brand**: Access to their own campaigns, creator network, analytics
-- **Creator**: Onboarding flow and campaign participation
+- **Admin**: Full access to all features (Campaigns, Creator Network, Analytics, Settings)
+- **Brand**: Access to their own campaigns, creator network, analytics, and profile settings
 
 ## Campaign Wizard Features
 

@@ -19,8 +19,7 @@ function ShellInner() {
 
     const basePath = `/app/${role}`;
     if (location.pathname === basePath || location.pathname === `${basePath}/`) {
-      const fallback = role === 'creator' ? 'assignments' : 'campaigns';
-      navigate(`${basePath}/${fallback}`, { replace: true });
+      navigate(`${basePath}/campaigns`, { replace: true });
     }
   }, [currentRole, location.pathname, navigate, role]);
 
@@ -54,20 +53,13 @@ function ShellInner() {
         </nav>
         <div className="app-sidebar-footer">
           <p>Role</p>
-          <div className="role-switch role-switch-grid">
+          <div className="role-switch">
             <button
               type="button"
               className={role === 'admin' ? 'active' : undefined}
               onClick={() => handleRoleChange('admin')}
             >
-              Super Admin
-            </button>
-            <button
-              type="button"
-              className={role === 'employee' ? 'active' : undefined}
-              onClick={() => handleRoleChange('employee')}
-            >
-              Employee
+              Admin
             </button>
             <button
               type="button"
@@ -75,13 +67,6 @@ function ShellInner() {
               onClick={() => handleRoleChange('brand')}
             >
               Brand
-            </button>
-            <button
-              type="button"
-              className={role === 'creator' ? 'active' : undefined}
-              onClick={() => handleRoleChange('creator')}
-            >
-              Creator
             </button>
           </div>
         </div>
