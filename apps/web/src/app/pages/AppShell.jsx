@@ -38,7 +38,7 @@ function ShellInner() {
       <aside className="app-sidebar">
         <div className="app-brand">
           <img src="/assets/logo1.svg" alt="kreate & co" />
-          <span>Phase 1</span>
+          <span>Workspace</span>
         </div>
         <nav className="app-nav">
           {currentRole.nav.map((item) => (
@@ -76,7 +76,7 @@ function ShellInner() {
         <header className="app-topbar">
           <div>
             <h1>{currentRole.label} Workspace</h1>
-            <p>Phase 1 core workflows and approvals.</p>
+            <p>Core workflows and approvals.</p>
           </div>
           <div className="app-topbar-actions">
             <input className="app-search" placeholder="Search campaigns, creators, content" />

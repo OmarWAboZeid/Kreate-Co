@@ -74,7 +74,7 @@ export default function AuthPage({ initialMode = 'login' }) {
       <div className="auth-card">
         <div className="auth-brand">
           <img src="/assets/logo1.svg" alt="kreate & co" />
-          <p>Phase 1 workspace access</p>
+          <p>Workspace access</p>
         </div>
 
         <div className="auth-toggle">

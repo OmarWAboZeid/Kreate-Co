@@ -29,7 +29,7 @@ export default function SettingsPage() {
       </div>
 
       <div className="card">
-        <h3>Phase 2 Extensions</h3>
+        <h3>Coming Soon</h3>
         <ul className="list">
           <li>Agency workspace switcher (coming soon)</li>
           <li>Billing & invoices (coming soon)</li>

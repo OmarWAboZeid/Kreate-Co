@@ -43,7 +43,7 @@ export default function AnalyticsPage() {
           <p>Daily refresh for the first 7 days, weekly thereafter.</p>
         </div>
         <button type="button" className="btn btn-secondary">
-          Export (Phase 2)
+          Export
         </button>
       </div>
 
