@@ -135,6 +135,29 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
 - **Final Video Link**: Input for submitted content URL
 - **Add Submitted Content**: Modal with content link, type, and notes
 
+## Authentication & Access Control
+
+- **User Registration**: New users sign up with email/password and start in "pending" status
+- **Pending Review**: Unapproved users see "Account Under Review" page and cannot access platform
+- **Admin Approval**: Admins can approve/reject users from the Users management page
+- **Session Management**: Server-side sessions with HTTP-only cookies (7-day expiry)
+- **Protected Routes**: All /app/* routes require authentication and approved status
+- **Admin Credentials**: admin@kreate.co / admin123
+
+### User Status Flow
+1. **pending** - Default for new signups, cannot access platform
+2. **approved** - Can access all platform features
+3. **rejected** - Access denied, redirected to login
+
+### Auth API Endpoints
+- `POST /api/auth/register` - Create new user (returns pending status)
+- `POST /api/auth/login` - Authenticate user
+- `POST /api/auth/logout` - End session
+- `GET /api/auth/user` - Get current user
+- `GET /api/admin/users` - List all users (admin only)
+- `POST /api/admin/users/:id/approve` - Approve user (admin only)
+- `POST /api/admin/users/:id/reject` - Reject user (admin only)
+
 ## Recent Changes
 - **Feb 2026**: Extracted Brands to dedicated navigation section (Admin only)
 - **Feb 2026**: Complete Brand Portal overhaul with revamped campaign wizard

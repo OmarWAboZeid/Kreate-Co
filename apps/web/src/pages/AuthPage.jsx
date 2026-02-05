@@ -1,30 +1,69 @@
-import { useMemo, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-const safeStorage = {
-  set(key, value) {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(key, value);
-  },
-};
+import { useAuth } from '../hooks/useAuth.jsx';
 
 export default function AuthPage({ initialMode = 'login' }) {
   const navigate = useNavigate();
+  const { user, login, register, isLoading } = useAuth();
   const [mode, setMode] = useState(initialMode);
   const [role, setRole] = useState('brand');
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const roleLabel = useMemo(() => (role === 'brand' ? 'Brand' : 'Creator'), [role]);
+  useEffect(() => {
+    if (!isLoading && user) {
+      if (user.status === 'pending') {
+        navigate('/pending-review');
+      } else if (user.status === 'approved') {
+        const targetRole = user.role === 'admin' ? 'admin' : 'brand';
+        navigate(`/app/${targetRole}/campaigns`);
+      }
+    }
+  }, [user, isLoading, navigate]);
 
   const updateForm = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+    setError('');
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-    safeStorage.set('kreate_role', role);
-    navigate(role === 'brand' ? '/app/brand/campaigns' : '/app/creator/assignments');
+    setError('');
+    setSubmitting(true);
+
+    try {
+      if (mode === 'signup') {
+        if (form.password !== form.confirm) {
+          setError('Passwords do not match');
+          setSubmitting(false);
+          return;
+        }
+        if (form.password.length < 6) {
+          setError('Password must be at least 6 characters');
+          setSubmitting(false);
+          return;
+        }
+        await register(form.email, form.password, form.name, role);
+      } else {
+        await login(form.email, form.password);
+      }
+    } catch (err) {
+      setError(err.message || 'An error occurred');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="auth-page">
+        <div className="auth-card">
+          <div className="loading-spinner" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-page">
@@ -86,6 +125,7 @@ export default function AuthPage({ initialMode = 'login' }) {
                 value={form.name}
                 onChange={(e) => updateForm('name', e.target.value)}
                 placeholder="Your name"
+                required
               />
             </label>
           )}
@@ -131,10 +171,11 @@ export default function AuthPage({ initialMode = 'login' }) {
             </label>
           )}
 
-          <button type="submit" className="btn btn-primary">
-            {mode === 'login' ? `Log in` : `Create account`}
+          {error && <p className="auth-error">{error}</p>}
+
+          <button type="submit" className="btn btn-primary" disabled={submitting}>
+            {submitting ? 'Please wait...' : mode === 'login' ? 'Log in' : 'Create account'}
           </button>
-          <p className="muted auth-helper">Testing mode: no real authentication yet.</p>
         </form>
       </div>
     </div>

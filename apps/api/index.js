@@ -27,6 +27,23 @@ const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
 const checkDatabaseStatus = () => checkDatabase(pool);
 const checkTigerbeetleStatus = () => checkTigerbeetle(TIGERBEETLE_ADDRESS);
 
+async function requireApprovedUser(req, res) {
+  if (!pool) {
+    json(res, 503, { ok: false, error: 'Database not configured' });
+    return null;
+  }
+  const user = await getSessionUser(pool, req);
+  if (!user) {
+    json(res, 401, { ok: false, error: 'Authentication required' });
+    return null;
+  }
+  if (user.status !== 'approved') {
+    json(res, 403, { ok: false, error: 'Account not approved' });
+    return null;
+  }
+  return user;
+}
+
 const server = http.createServer(async (req, res) => {
   const { method, url } = req;
 
@@ -75,9 +92,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/influencers' || url.startsWith('/api/influencers?')) {
-    if (!pool) {
-      return json(res, 503, { ok: false, error: 'Database not configured' });
-    }
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
     try {
       const urlObj = new URL(url, `http://localhost:${PORT}`);
       const page = parseInt(urlObj.searchParams.get('page')) || 1;
@@ -108,9 +124,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/ugc-creators' || url.startsWith('/api/ugc-creators?')) {
-    if (!pool) {
-      return json(res, 503, { ok: false, error: 'Database not configured' });
-    }
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
     try {
       const urlObj = new URL(url, `http://localhost:${PORT}`);
       const page = parseInt(urlObj.searchParams.get('page')) || 1;
@@ -143,6 +158,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (method === 'POST' && url === '/api/uploads/request-url') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
     try {
       const body = await parseBody(req);
       const { name, size, contentType } = body;
@@ -164,6 +181,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (method === 'GET' && url.startsWith('/objects/')) {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
     try {
       const file = await getObjectFile(url);
       if (!file) {
@@ -177,9 +196,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/brands' || url.startsWith('/api/brands?')) {
-    if (!pool) {
-      return json(res, 503, { ok: false, error: 'Database not configured' });
-    }
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
     if (method === 'GET') {
       try {
         const result = await pool.query('SELECT id, name, logo_url, created_at FROM brands ORDER BY name ASC');
@@ -211,9 +229,8 @@ const server = http.createServer(async (req, res) => {
 
   const brandDeleteMatch = url.match(/^\/api\/brands\/(\d+)$/);
   if (method === 'DELETE' && brandDeleteMatch) {
-    if (!pool) {
-      return json(res, 503, { ok: false, error: 'Database not configured' });
-    }
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
     try {
       const brandId = brandDeleteMatch[1];
       const result = await pool.query('DELETE FROM brands WHERE id = $1 RETURNING id', [brandId]);
@@ -334,14 +351,12 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (method === 'GET' && url === '/api/admin/users') {
-    if (!pool) {
-      return json(res, 503, { ok: false, error: 'Database not configured' });
+    const currentUser = await requireApprovedUser(req, res);
+    if (!currentUser) return;
+    if (currentUser.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
     }
     try {
-      const currentUser = await getSessionUser(pool, req);
-      if (!currentUser || currentUser.role !== 'admin') {
-        return json(res, 403, { ok: false, error: 'Admin access required' });
-      }
       
       const result = await pool.query(
         'SELECT id, email, name, role, status, created_at FROM users ORDER BY created_at DESC'
@@ -355,14 +370,12 @@ const server = http.createServer(async (req, res) => {
 
   const userApproveMatch = url.match(/^\/api\/admin\/users\/(\d+)\/approve$/);
   if (method === 'POST' && userApproveMatch) {
-    if (!pool) {
-      return json(res, 503, { ok: false, error: 'Database not configured' });
+    const currentUser = await requireApprovedUser(req, res);
+    if (!currentUser) return;
+    if (currentUser.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
     }
     try {
-      const currentUser = await getSessionUser(pool, req);
-      if (!currentUser || currentUser.role !== 'admin') {
-        return json(res, 403, { ok: false, error: 'Admin access required' });
-      }
       
       const userId = userApproveMatch[1];
       const result = await pool.query(
@@ -385,14 +398,12 @@ const server = http.createServer(async (req, res) => {
 
   const userRejectMatch = url.match(/^\/api\/admin\/users\/(\d+)\/reject$/);
   if (method === 'POST' && userRejectMatch) {
-    if (!pool) {
-      return json(res, 503, { ok: false, error: 'Database not configured' });
+    const currentUser = await requireApprovedUser(req, res);
+    if (!currentUser) return;
+    if (currentUser.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
     }
     try {
-      const currentUser = await getSessionUser(pool, req);
-      if (!currentUser || currentUser.role !== 'admin') {
-        return json(res, 403, { ok: false, error: 'Admin access required' });
-      }
       
       const userId = userRejectMatch[1];
       const result = await pool.query(
