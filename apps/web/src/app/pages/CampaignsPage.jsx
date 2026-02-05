@@ -15,11 +15,13 @@ const defaultForm = {
   startDate: '',
   endDate: '',
   description: '',
-  objectives: '',
-  budget: '',
+  objectives: [],
   targetAudience: '',
   creatorType: '',
-  creatorsNeeded: '',
+  creatorTiers: [],
+  dealType: '',
+  campaignPackage: '',
+  customPackage: '',
   deliverables: '',
   contentFormat: [],
   notes: '',
@@ -97,6 +99,26 @@ export default function CampaignsPage() {
     });
   };
 
+  const toggleObjective = (objective) => {
+    setForm((prev) => {
+      const exists = prev.objectives.includes(objective);
+      return {
+        ...prev,
+        objectives: exists ? prev.objectives.filter((item) => item !== objective) : [...prev.objectives, objective],
+      };
+    });
+  };
+
+  const toggleCreatorTier = (tier) => {
+    setForm((prev) => {
+      const exists = prev.creatorTiers.includes(tier);
+      return {
+        ...prev,
+        creatorTiers: exists ? prev.creatorTiers.filter((item) => item !== tier) : [...prev.creatorTiers, tier],
+      };
+    });
+  };
+
   const closeModal = () => {
     setForm(defaultForm);
     setShowModal(false);
@@ -148,10 +170,12 @@ export default function CampaignsPage() {
       status: 'Draft',
       description: form.description,
       objectives: form.objectives,
-      budgetRange: form.budget,
       targetAudience: form.targetAudience,
       creatorType: form.creatorType,
-      creatorsNeeded: form.creatorsNeeded,
+      creatorTiers: form.creatorTiers,
+      dealType: form.dealType,
+      campaignPackage: form.campaignPackage,
+      customPackage: form.customPackage,
       deliverables: form.deliverables,
       contentFormat: form.contentFormat,
       timeline: { start: form.startDate, end: form.endDate },
@@ -237,6 +261,8 @@ export default function CampaignsPage() {
         onChange={updateForm}
         onTogglePlatform={togglePlatform}
         onToggleContentFormat={toggleContentFormat}
+        onToggleObjective={toggleObjective}
+        onToggleCreatorTier={toggleCreatorTier}
         onSubmit={handleCreateCampaign}
       />
 

@@ -4785,6 +4785,16 @@ body.modal-open {
   margin-top: 4px;
 }
 
+.pill-group.vertical {
+  flex-direction: column;
+}
+
+.pill-group.vertical button {
+  text-align: left;
+  border-radius: 12px;
+  padding: 14px 18px;
+}
+
 .brand-display {
   font-weight: 600;
   color: var(--color-crimson);

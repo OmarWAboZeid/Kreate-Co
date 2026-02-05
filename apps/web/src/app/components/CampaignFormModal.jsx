@@ -1,5 +1,36 @@
-const PLATFORM_OPTIONS = ['Instagram', 'TikTok', 'Facebook'];
-const CONTENT_FORMAT_OPTIONS = ['Reels', 'Stories', 'Posts', 'Videos'];
+const PLATFORM_OPTIONS = ['TikTok', 'Instagram'];
+const CONTENT_FORMAT_OPTIONS = ['Reel', 'Post', 'Story'];
+const DEAL_TYPES = ['Collab', 'Paid', 'Mix'];
+const OBJECTIVES = ['Awareness', 'Sales', 'Launch', 'Content Bank'];
+const CREATOR_TIERS = [
+  { value: 'nano', label: 'Nano Influencers' },
+  { value: 'micro', label: 'Micro Influencers' },
+  { value: 'mid-tier', label: 'Mid-tier' },
+  { value: 'macro', label: 'Macro' },
+];
+
+const UGC_PACKAGES = [
+  { value: '4', label: '4 Videos' },
+  { value: '8', label: '8 Videos' },
+  { value: '12', label: '12 Videos' },
+  { value: '20', label: '20 Videos' },
+  { value: 'other', label: 'Other' },
+];
+
+const INFLUENCER_PACKAGES = [
+  { value: '10', label: '10 Videos' },
+  { value: '15', label: '15 Videos' },
+  { value: '20', label: '20 Videos' },
+  { value: '40', label: '40 Videos' },
+  { value: 'other', label: 'Other' },
+];
+
+const HYBRID_BUNDLES = [
+  { value: 'buzz', label: 'Buzz Bundle', desc: '4 UGC, 10 influencer videos' },
+  { value: 'hype', label: 'Hype Bundle', desc: '8 UGC, 15 influencer videos' },
+  { value: 'impact', label: 'Impact Bundle', desc: '12 UGC, 25 influencer videos' },
+  { value: 'viral', label: 'Viral Campaign', desc: '20 UGC, 40 influencer videos' },
+];
 
 export default function CampaignFormModal({
   open,
@@ -10,9 +41,19 @@ export default function CampaignFormModal({
   onChange,
   onTogglePlatform,
   onToggleContentFormat,
+  onToggleObjective,
+  onToggleCreatorTier,
   onSubmit,
 }) {
   if (!open) return null;
+
+  const showCreatorTiers = form.creatorType === 'Influencer' || form.creatorType === 'Hybrid';
+
+  const getPackageOptions = () => {
+    if (form.creatorType === 'UGC') return UGC_PACKAGES;
+    if (form.creatorType === 'Influencer') return INFLUENCER_PACKAGES;
+    return null;
+  };
 
   return (
     <div className="modal-overlay active">
@@ -79,6 +120,137 @@ export default function CampaignFormModal({
           </div>
 
           <div className="campaign-form-section">
+            <h4>Campaign Type & Payment</h4>
+            <div className="campaign-form-grid">
+              <label className="campaign-field">
+                <span>Campaign Type *</span>
+                <select
+                  className="input"
+                  value={form.creatorType}
+                  onChange={(event) => onChange('creatorType', event.target.value)}
+                >
+                  <option value="">Select type</option>
+                  <option value="UGC">UGC</option>
+                  <option value="Influencer">Influencer</option>
+                  <option value="Hybrid">Hybrid</option>
+                </select>
+              </label>
+
+              <label className="campaign-field">
+                <span>Type of Campaign (Deal) *</span>
+                <select
+                  className="input"
+                  value={form.dealType}
+                  onChange={(event) => onChange('dealType', event.target.value)}
+                >
+                  <option value="">Select deal type</option>
+                  {DEAL_TYPES.map((type) => (
+                    <option key={type} value={type.toLowerCase()}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="campaign-field">
+                <span>Start Date</span>
+                <input
+                  className="input"
+                  type="date"
+                  value={form.startDate}
+                  onChange={(event) => onChange('startDate', event.target.value)}
+                />
+              </label>
+
+              <label className="campaign-field">
+                <span>End Date</span>
+                <input
+                  className="input"
+                  type="date"
+                  value={form.endDate}
+                  onChange={(event) => onChange('endDate', event.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+
+          {form.creatorType && (
+            <div className="campaign-form-section">
+              <h4>Campaign Package *</h4>
+              <div className="campaign-form-grid">
+                {form.creatorType === 'Hybrid' ? (
+                  <div className="campaign-field full-width">
+                    <span>Select Bundle</span>
+                    <div className="pill-group vertical">
+                      {HYBRID_BUNDLES.map((bundle) => (
+                        <button
+                          key={bundle.value}
+                          type="button"
+                          className={form.campaignPackage === bundle.value ? 'active' : undefined}
+                          onClick={() => onChange('campaignPackage', bundle.value)}
+                        >
+                          <strong>{bundle.label}</strong> - {bundle.desc}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="campaign-field">
+                      <span>Package</span>
+                      <div className="pill-group">
+                        {getPackageOptions()?.map((pkg) => (
+                          <button
+                            key={pkg.value}
+                            type="button"
+                            className={form.campaignPackage === pkg.value ? 'active' : undefined}
+                            onClick={() => onChange('campaignPackage', pkg.value)}
+                          >
+                            {pkg.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {form.campaignPackage === 'other' && (
+                      <label className="campaign-field">
+                        <span>Custom Package *</span>
+                        <input
+                          className="input"
+                          value={form.customPackage}
+                          onChange={(event) => onChange('customPackage', event.target.value)}
+                          placeholder="Enter custom package details"
+                        />
+                      </label>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {showCreatorTiers && (
+            <div className="campaign-form-section">
+              <h4>Creator Tiers (Multi-select) *</h4>
+              <div className="campaign-form-grid">
+                <div className="campaign-field full-width">
+                  <div className="pill-group">
+                    {CREATOR_TIERS.map((tier) => (
+                      <button
+                        key={tier.value}
+                        type="button"
+                        className={form.creatorTiers?.includes(tier.value) ? 'active' : undefined}
+                        onClick={() => onToggleCreatorTier(tier.value)}
+                      >
+                        {tier.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="campaign-form-section">
             <h4>Campaign Details</h4>
             <div className="campaign-form-grid">
               <div className="campaign-field">
@@ -112,46 +284,28 @@ export default function CampaignFormModal({
                   ))}
                 </div>
               </div>
-
-              <label className="campaign-field">
-                <span>Creator Type</span>
-                <select
-                  className="input"
-                  value={form.creatorType}
-                  onChange={(event) => onChange('creatorType', event.target.value)}
-                >
-                  <option value="">Select type</option>
-                  <option value="UGC Creators">UGC Creators</option>
-                  <option value="Influencers">Influencers</option>
-                  <option value="Both">Both</option>
-                </select>
-              </label>
-
-              <label className="campaign-field">
-                <span>Start Date</span>
-                <input
-                  className="input"
-                  type="date"
-                  value={form.startDate}
-                  onChange={(event) => onChange('startDate', event.target.value)}
-                />
-              </label>
-
-              <label className="campaign-field">
-                <span>End Date</span>
-                <input
-                  className="input"
-                  type="date"
-                  value={form.endDate}
-                  onChange={(event) => onChange('endDate', event.target.value)}
-                />
-              </label>
             </div>
           </div>
 
           <div className="campaign-form-section">
-            <h4>Target & Objectives</h4>
+            <h4>Objectives & Target</h4>
             <div className="campaign-form-grid">
+              <div className="campaign-field full-width">
+                <span>Campaign Objectives (Multi-select) *</span>
+                <div className="pill-group">
+                  {OBJECTIVES.map((obj) => (
+                    <button
+                      key={obj}
+                      type="button"
+                      className={form.objectives?.includes(obj.toLowerCase()) ? 'active' : undefined}
+                      onClick={() => onToggleObjective(obj.toLowerCase())}
+                    >
+                      {obj}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <label className="campaign-field">
                 <span>Target Audience</span>
                 <input
@@ -160,21 +314,6 @@ export default function CampaignFormModal({
                   onChange={(event) => onChange('targetAudience', event.target.value)}
                   placeholder="e.g. Women 18-35, Fashion enthusiasts"
                 />
-              </label>
-
-              <label className="campaign-field">
-                <span>Campaign Objectives</span>
-                <select
-                  className="input"
-                  value={form.objectives}
-                  onChange={(event) => onChange('objectives', event.target.value)}
-                >
-                  <option value="">Select objective</option>
-                  <option value="Awareness">Awareness</option>
-                  <option value="Sales">Sales</option>
-                  <option value="Launch">Launch</option>
-                  <option value="Content Bank">Content Bank</option>
-                </select>
               </label>
 
               <label className="campaign-field full-width">
@@ -210,7 +349,18 @@ export default function CampaignFormModal({
             type="button"
             className="btn btn-primary"
             onClick={onSubmit}
-            disabled={!form.name || !form.brand || form.platforms.length === 0}
+            disabled={
+              !form.name ||
+              !form.brand ||
+              !form.creatorType ||
+              !form.dealType ||
+              !form.campaignPackage ||
+              (form.campaignPackage === 'other' && !form.customPackage) ||
+              (showCreatorTiers && (!form.creatorTiers || form.creatorTiers.length === 0)) ||
+              form.platforms.length === 0 ||
+              !form.objectives ||
+              form.objectives.length === 0
+            }
           >
             Create Campaign
           </button>

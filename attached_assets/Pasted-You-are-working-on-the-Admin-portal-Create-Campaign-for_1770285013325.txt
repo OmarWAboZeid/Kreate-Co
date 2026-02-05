@@ -1,0 +1,104 @@
+You are working on the Admin portal → Create Campaign form/wizard. Implement ONLY the changes listed below (no other refactors or unrelated edits). Update UI + validation + API payload + persistence as needed so these fields save correctly and can be used later.
+
+⸻
+
+1) Remove budget range
+	•	Remove the budget range field entirely from Admin Create Campaign:
+	•	Not shown in UI
+	•	Not required by validation
+	•	Not sent in the create campaign request
+	•	Not stored/used for newly created campaigns
+
+⸻
+
+2) Add “Type of campaign” (deal type)
+	•	Add a required field: Type of campaign
+	•	Options (enum):
+	•	collab
+	•	paid
+	•	mix
+	•	Persist this value on the campaign record.
+
+⸻
+
+3) Add “Campaign package” selection (conditional by campaign kind)
+
+Add a required Campaign package field with options depending on the campaign kind (UGC / Influencer / Hybrid):
+
+If campaign kind = Influencer
+	•	10 videos
+	•	15 videos
+	•	20 videos
+	•	40 videos
+	•	Other → show a textbox (required) to capture custom package text
+
+If campaign kind = UGC
+	•	4 videos
+	•	8 videos
+	•	12 videos
+	•	20 videos
+	•	Other → show a textbox (required) to capture custom package text
+
+If campaign kind = Hybrid
+	•	Buzz bundle (4 UGC, 10 influencer videos)
+	•	Hype bundle (8 UGC, 15 influencer videos)
+	•	Impact bundle (12 UGC, 25 influencer videos)
+	•	Viral campaign (20 UGC, 40 influencer videos)
+
+Persist the selected package (and the “Other” text when used).
+
+⸻
+
+4) Remove “creators needed”
+	•	Remove the creators needed field entirely from Admin Create Campaign:
+	•	Not shown
+	•	Not validated
+	•	Not sent/stored
+
+⸻
+
+5) Update “Creator type” (multi-select, only for influencer/hybrid)
+	•	Replace the existing creator type control with a multi-select (multiple types can be chosen):
+	•	nano influencers
+	•	micro influencers
+	•	mid tier
+	•	macro
+	•	This field appears ONLY if the campaign kind includes influencers:
+	•	Show for Influencer and Hybrid
+	•	Do NOT show for UGC-only
+	•	Persist as an array/list of selected values.
+
+⸻
+
+6) Update Campaign objectives (fixed multi-select)
+	•	Replace campaign objectives input with a multi-select using ONLY:
+	•	awareness
+	•	sales
+	•	launch
+	•	content bank
+	•	Persist objectives as an array/list.
+
+⸻
+
+7) Remove “live” from content format
+	•	In any content format selector inside Admin Create Campaign:
+	•	Remove the option “live”
+	•	Ensure it cannot be selected for new campaigns
+
+⸻
+
+8) Remove YouTube from platforms
+	•	In any platforms selector inside Admin Create Campaign:
+	•	Remove YouTube
+	•	Ensure it cannot be selected for new campaigns
+
+⸻
+
+Acceptance criteria
+	•	Admin Create Campaign form reflects the above changes exactly.
+	•	Removed fields are gone end-to-end (UI + validation + payload).
+	•	New fields are required where specified and saved correctly.
+	•	Creator type appears only for Influencer/Hybrid and supports multiple selections.
+	•	YouTube and live are not selectable.
+
+Implement now.

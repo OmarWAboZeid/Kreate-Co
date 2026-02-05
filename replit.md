@@ -102,7 +102,7 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
 - **Admin**: Full access to all features (Campaigns, Creator Network, Analytics, Settings)
 - **Brand**: Access to their own campaigns, creator network, analytics, and profile settings
 
-## Campaign Wizard Features
+## Campaign Wizard Features (Brand Portal)
 
 - **Brand Selection**: New brand (with name input) or existing brand dropdown
 - **Payment Type**: Collab, Paid, or Mix
@@ -110,8 +110,24 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
 - **Objectives**: Awareness, Sales, Launch, Content Bank
 - **Packages**: Bundles (Buzz/Hype/Impact/Viral) or custom package counts
 - **Creator Tiers**: Multi-select (Nano/Micro/Mid-tier/Macro) - hidden for UGC-only
-- **Platforms**: TikTok, Instagram (YouTube removed)
-- **Content Formats**: Reel, Post, Story (Live removed)
+- **Platforms**: TikTok, Instagram
+- **Content Formats**: Reel, Post, Story
+
+## Admin Campaign Form Fields
+
+- **Campaign Name**: Required text input
+- **Brand**: Dropdown from managed brands list
+- **Campaign Type**: UGC, Influencer, or Hybrid (required)
+- **Deal Type**: Collab, Paid, or Mix (required)
+- **Campaign Package**: 
+  - UGC: 4/8/12/20 videos or Other (custom text)
+  - Influencer: 10/15/20/40 videos or Other (custom text)
+  - Hybrid: Buzz/Hype/Impact/Viral bundles
+- **Creator Tiers**: Multi-select (Nano/Micro/Mid-tier/Macro) - only for Influencer/Hybrid
+- **Platforms**: TikTok, Instagram (multi-select, required)
+- **Content Format**: Reel, Post, Story (multi-select)
+- **Objectives**: Awareness, Sales, Launch, Content Bank (multi-select, required)
+- **Removed fields**: Budget range, Creators needed, YouTube, Live format
 
 ## Creator Workflow Management (Brand View)
 
