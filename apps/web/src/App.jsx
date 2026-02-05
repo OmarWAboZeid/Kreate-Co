@@ -8,6 +8,7 @@ import CreatorsPage from './app/pages/CreatorsPage.jsx';
 import ContentPage from './app/pages/ContentPage.jsx';
 import AnalyticsPage from './app/pages/AnalyticsPage.jsx';
 import SettingsPage from './app/pages/SettingsPage.jsx';
+import BrandsPage from './app/pages/BrandsPage.jsx';
 
 function NotFound() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="campaigns" element={<CampaignsPage />} />
           <Route path="campaigns/:campaignId" element={<CampaignDetailPage />} />
           <Route path="creators" element={<CreatorsPage />} />
+          <Route path="brands" element={<BrandsPage />} />
           <Route path="content" element={<ContentPage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="settings" element={<SettingsPage />} />

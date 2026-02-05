@@ -4,6 +4,7 @@ export const roleConfig = {
     nav: [
       { to: 'campaigns', label: 'Campaigns' },
       { to: 'creators', label: 'Creator Network' },
+      { to: 'brands', label: 'Brands' },
       { to: 'analytics', label: 'Analytics' },
       { to: 'settings', label: 'Settings' },
     ],

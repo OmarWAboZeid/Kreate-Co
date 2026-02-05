@@ -120,6 +120,7 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
 - **Add Submitted Content**: Modal with content link, type, and notes
 
 ## Recent Changes
+- **Feb 2026**: Extracted Brands to dedicated navigation section (Admin only)
 - **Feb 2026**: Complete Brand Portal overhaul with revamped campaign wizard
 - **Feb 2026**: Added Employee role with restricted permissions
 - **Feb 2026**: Renamed "Creators" to "Creator Network" throughout app
