@@ -6,6 +6,15 @@ const dotenv = require('dotenv');
 const { json, notFound, parseBody, cors } = require('./lib/http');
 const { checkDatabase, checkTigerbeetle } = require('./lib/health');
 const { getUploadURL, normalizeObjectPath, getObjectFile, streamObject } = require('./lib/upload');
+const {
+  hashPassword,
+  comparePasswords,
+  setSessionCookie,
+  clearSessionCookie,
+  createSession,
+  getSessionUser,
+  deleteSession,
+} = require('./lib/auth');
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
@@ -214,6 +223,193 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { ok: true, message: 'Brand deleted' });
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if (method === 'POST' && url === '/api/auth/register') {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    try {
+      const body = await parseBody(req);
+      const { email, password, name, role } = body;
+      
+      if (!email || !password || !name) {
+        return json(res, 400, { ok: false, error: 'Email, password, and name are required' });
+      }
+      
+      const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+      if (existingUser.rows.length > 0) {
+        return json(res, 409, { ok: false, error: 'Email already registered' });
+      }
+      
+      const passwordHash = await hashPassword(password);
+      const userRole = role === 'creator' ? 'creator' : 'brand';
+      
+      const result = await pool.query(
+        `INSERT INTO users (email, password_hash, name, role, status) 
+         VALUES ($1, $2, $3, $4, 'pending') 
+         RETURNING id, email, name, role, status, created_at`,
+        [email.toLowerCase(), passwordHash, name, userRole]
+      );
+      
+      const user = result.rows[0];
+      const sessionId = await createSession(pool, user.id);
+      setSessionCookie(res, sessionId);
+      
+      return json(res, 201, { ok: true, user });
+    } catch (error) {
+      console.error('Register error:', error);
+      return json(res, 500, { ok: false, error: 'Registration failed' });
+    }
+  }
+
+  if (method === 'POST' && url === '/api/auth/login') {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    try {
+      const body = await parseBody(req);
+      const { email, password } = body;
+      
+      if (!email || !password) {
+        return json(res, 400, { ok: false, error: 'Email and password are required' });
+      }
+      
+      const result = await pool.query(
+        'SELECT id, email, password_hash, name, role, status, created_at FROM users WHERE email = $1',
+        [email.toLowerCase()]
+      );
+      
+      if (result.rows.length === 0) {
+        return json(res, 401, { ok: false, error: 'Invalid email or password' });
+      }
+      
+      const user = result.rows[0];
+      const validPassword = await comparePasswords(password, user.password_hash);
+      
+      if (!validPassword) {
+        return json(res, 401, { ok: false, error: 'Invalid email or password' });
+      }
+      
+      const sessionId = await createSession(pool, user.id);
+      setSessionCookie(res, sessionId);
+      
+      const { password_hash, ...safeUser } = user;
+      return json(res, 200, { ok: true, user: safeUser });
+    } catch (error) {
+      console.error('Login error:', error);
+      return json(res, 500, { ok: false, error: 'Login failed' });
+    }
+  }
+
+  if (method === 'POST' && url === '/api/auth/logout') {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    try {
+      await deleteSession(pool, req);
+      clearSessionCookie(res);
+      return json(res, 200, { ok: true });
+    } catch (error) {
+      console.error('Logout error:', error);
+      return json(res, 500, { ok: false, error: 'Logout failed' });
+    }
+  }
+
+  if (method === 'GET' && url === '/api/auth/user') {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    try {
+      const user = await getSessionUser(pool, req);
+      if (!user) {
+        return json(res, 401, { ok: false, error: 'Not authenticated' });
+      }
+      return json(res, 200, { ok: true, user });
+    } catch (error) {
+      console.error('Get user error:', error);
+      return json(res, 500, { ok: false, error: 'Failed to get user' });
+    }
+  }
+
+  if (method === 'GET' && url === '/api/admin/users') {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    try {
+      const currentUser = await getSessionUser(pool, req);
+      if (!currentUser || currentUser.role !== 'admin') {
+        return json(res, 403, { ok: false, error: 'Admin access required' });
+      }
+      
+      const result = await pool.query(
+        'SELECT id, email, name, role, status, created_at FROM users ORDER BY created_at DESC'
+      );
+      return json(res, 200, { ok: true, data: result.rows });
+    } catch (error) {
+      console.error('Get users error:', error);
+      return json(res, 500, { ok: false, error: 'Failed to get users' });
+    }
+  }
+
+  const userApproveMatch = url.match(/^\/api\/admin\/users\/(\d+)\/approve$/);
+  if (method === 'POST' && userApproveMatch) {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    try {
+      const currentUser = await getSessionUser(pool, req);
+      if (!currentUser || currentUser.role !== 'admin') {
+        return json(res, 403, { ok: false, error: 'Admin access required' });
+      }
+      
+      const userId = userApproveMatch[1];
+      const result = await pool.query(
+        `UPDATE users SET status = 'approved', updated_at = NOW() 
+         WHERE id = $1 
+         RETURNING id, email, name, role, status`,
+        [userId]
+      );
+      
+      if (result.rows.length === 0) {
+        return json(res, 404, { ok: false, error: 'User not found' });
+      }
+      
+      return json(res, 200, { ok: true, user: result.rows[0] });
+    } catch (error) {
+      console.error('Approve user error:', error);
+      return json(res, 500, { ok: false, error: 'Failed to approve user' });
+    }
+  }
+
+  const userRejectMatch = url.match(/^\/api\/admin\/users\/(\d+)\/reject$/);
+  if (method === 'POST' && userRejectMatch) {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    try {
+      const currentUser = await getSessionUser(pool, req);
+      if (!currentUser || currentUser.role !== 'admin') {
+        return json(res, 403, { ok: false, error: 'Admin access required' });
+      }
+      
+      const userId = userRejectMatch[1];
+      const result = await pool.query(
+        `UPDATE users SET status = 'rejected', updated_at = NOW() 
+         WHERE id = $1 
+         RETURNING id, email, name, role, status`,
+        [userId]
+      );
+      
+      if (result.rows.length === 0) {
+        return json(res, 404, { ok: false, error: 'User not found' });
+      }
+      
+      return json(res, 200, { ok: true, user: result.rows[0] });
+    } catch (error) {
+      console.error('Reject user error:', error);
+      return json(res, 500, { ok: false, error: 'Failed to reject user' });
     }
   }
 
