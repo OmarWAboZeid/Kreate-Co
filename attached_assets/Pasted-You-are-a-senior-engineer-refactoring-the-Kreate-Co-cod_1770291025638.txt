@@ -1,0 +1,127 @@
+You are a senior engineer refactoring the Kreate&Co codebase for maintainability and extensibility. This task is refactor/cleanup only: do not change product behavior or UX (no feature changes), except where required to remove duplication and bugs caused by messy structure. Preserve routes, permissions, and existing flows.
+
+Goals
+	•	Make the code modular, consistent, and easy to extend.
+	•	Reduce duplication, improve naming, improve folder structure, and unify styling.
+	•	Ensure the app still works exactly the same after refactor.
+
+⸻
+
+1) Refactor scope and rules
+	•	No behavior changes (same UI output, same logic, same API calls).
+	•	Improve structure only: split large files, extract reusable components, standardize patterns.
+	•	If you find small bugs caused by refactor opportunities (e.g., duplicated CSS causing layout issues), fix them but document it.
+
+Deliverable: a clean PR-style set of commits with clear messages.
+
+⸻
+
+2) Component modularization
+
+Refactor the UI code to:
+	•	Break large pages into:
+	•	Page component (route-level container)
+	•	Sections components (page sections)
+	•	Shared components (reusable UI)
+	•	Extract repeated UI patterns into reusable components, such as:
+	•	Page header (title + actions)
+	•	Filter/search toolbar
+	•	Table/list view components
+	•	Cards (creator card, campaign row)
+	•	Modal wrapper + form modal layout
+	•	Status badge/pill
+	•	Empty state component
+	•	Loading skeleton components
+	•	Confirm dialog / reason dialog
+
+Guidelines:
+	•	Components should be small and single-responsibility.
+	•	Avoid prop drilling: use context/hooks if already present and appropriate.
+	•	Standardize component API naming and props.
+
+⸻
+
+3) Styling cleanup (generalize CSS)
+
+Clean and standardize styling without changing appearance:
+	•	Remove inline styles scattered across components (move to reusable classes).
+	•	Consolidate duplicated styles into shared styles/utilities.
+	•	Standardize spacing, typography, and layout utilities.
+	•	Create a single source of truth for:
+	•	colors (if used)
+	•	spacing scale
+	•	typography scale
+	•	border radius
+	•	shadows
+	•	Use the existing styling approach in the repo (Tailwind, CSS modules, styled-components, etc.). Do not introduce a new framework unless the repo already supports it.
+	•	Ensure the left sidebar fixed behavior remains intact (do not regress layout).
+
+⸻
+
+4) State management & data fetching cleanup
+	•	Standardize data fetching patterns:
+	•	Put API calls in one layer (e.g., services/ or api/).
+	•	Keep UI components free of direct request logic where possible.
+	•	Normalize types/interfaces:
+	•	Centralize shared types in a consistent location.
+	•	Remove duplicated type definitions.
+	•	Extract repeated state logic into custom hooks:
+	•	useCampaignsList, useCampaignDetails, useCreatorNetwork, etc. (names can vary)
+	•	Ensure consistent error handling and loading state behavior across pages.
+
+⸻
+
+5) Folder structure cleanup
+
+Reorganize the code into a predictable structure (adapt to repo conventions). Example target structure:
+	•	src/pages/ (route-level)
+	•	src/features/
+	•	campaigns/
+	•	creator-network/
+	•	content-analytics/
+	•	src/components/ (shared UI)
+	•	src/hooks/
+	•	src/api/ or src/services/
+	•	src/styles/ (shared styles/tokens)
+	•	src/utils/
+
+Rules:
+	•	Don’t move files randomly—group by feature and reuse.
+	•	Update imports and keep paths clean.
+
+⸻
+
+6) Code quality standards
+	•	Enforce consistent naming conventions and file naming.
+	•	Remove dead code, unused components, unused CSS.
+	•	Reduce component complexity:
+	•	limit deeply nested JSX
+	•	extract helpers
+	•	avoid duplicated conditionals
+	•	Add simple comments only where necessary for non-obvious logic.
+
+⸻
+
+7) Testing / verification
+
+After refactor:
+	•	Run the app and verify key flows still work:
+	•	Campaigns list renders and filters work
+	•	Create Campaign wizard works
+	•	Campaign details page renders
+	•	Creator network section works (search/filter)
+	•	Content analytics list renders
+	•	Permissions still apply
+	•	Fix any regressions caused by refactor.
+
+⸻
+
+8) Output required
+
+At the end, provide:
+	•	Summary of refactor changes (bullet list)
+	•	Updated folder structure (tree)
+	•	Any behavior changes (should be “none”)
+	•	Known remaining tech debt if you chose not to touch it
+
+Proceed with the refactor now.
