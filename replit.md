@@ -8,15 +8,48 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
 
 ```
 ├── apps/
-│   ├── api/          # Node.js backend API (port 4000)
-│   │   └── index.js  # Main API server with health endpoints
-│   └── web/          # React frontend (Vite, port 54321)
-│       ├── src/      # React components and pages
+│   ├── api/                    # Node.js backend API (port 4000)
+│   │   ├── index.js            # Main API server with routes
+│   │   └── lib/auth.js         # Authentication middleware
+│   └── web/                    # React frontend (Vite, port 5000)
+│       ├── src/
+│       │   ├── app/
+│       │   │   ├── api/        # API client utilities
+│       │   │   ├── components/ # Shared UI components
+│       │   │   ├── config/     # App configuration (roles, options)
+│       │   │   ├── data/       # Initial state data
+│       │   │   ├── hooks/      # Custom React hooks
+│       │   │   ├── pages/      # Route-level page components
+│       │   │   ├── utils/      # Utility functions
+│       │   │   └── state.jsx   # Global state management
+│       │   ├── pages/          # Public pages (auth, landing)
+│       │   ├── styles.css      # Global styles with design tokens
+│       │   └── App.jsx         # Root app with routing
 │       └── vite.config.cjs
-├── supabase/         # Database migrations and config
-├── package.json      # Root package with dev scripts
-└── .env              # Environment configuration
+├── supabase/                   # Database migrations and config
+├── package.json                # Root package with dev scripts
+└── .env                        # Environment configuration
 ```
+
+## Shared Components
+
+Located in `apps/web/src/app/components/`:
+- **Modal** - Reusable modal wrapper with size variants
+- **PageHeader** - Page title with description and actions
+- **Card** - Content card with header/body/footer
+- **StatusPill** - Color-coded status indicator
+- **EmptyState** - Empty state placeholder
+- **ConfirmDialog** - Confirmation modal
+- **LoadingSpinner** - Loading indicator
+- **CreatorFilters** - Filter controls for creator lists
+- **CampaignWizard** - Multi-step campaign creation wizard
+
+## Custom Hooks
+
+Located in `apps/web/src/app/hooks/`:
+- **useAuth** - Authentication state and actions (login, register, logout)
+- **useBrands** - Brand data fetching and CRUD operations
+- **useCreators** - UGC and influencer data with filtering
 
 ## Running the Application
 
@@ -159,6 +192,11 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
 - `POST /api/admin/users/:id/reject` - Reject user (admin only)
 
 ## Recent Changes
+- **Feb 2026**: Codebase refactoring - extracted shared components (Modal, PageHeader, Card, etc.)
+- **Feb 2026**: Added custom hooks for data fetching (useAuth, useBrands, useCreators)
+- **Feb 2026**: Precise role permissions - Admins ONLY suggest creators, Brands ONLY approve/reject
+- **Feb 2026**: Brands can only VIEW content, not add content (admin/employee only)
+- **Feb 2026**: Removed "Phase 1" and "Phase 2" wording from the platform
 - **Feb 2026**: Extracted Brands to dedicated navigation section (Admin only)
 - **Feb 2026**: Complete Brand Portal overhaul with revamped campaign wizard
 - **Feb 2026**: Added Employee role with restricted permissions

@@ -74,11 +74,16 @@ export function useInfluencers(filters = {}) {
 }
 
 export function useCreators(type, filters = {}) {
-  const ugc = useUgcCreators(type === 'ugc' ? filters : {});
-  const influencer = useInfluencers(type === 'influencer' ? filters : {});
+  const ugc = useUgcCreators(filters);
+  const influencer = useInfluencers(filters);
 
   if (type === 'ugc') {
-    return ugc;
+    return {
+      creators: ugc.ugcCreators,
+      allCreators: ugc.allUgcCreators,
+      loading: ugc.loading,
+      error: ugc.error
+    };
   }
   return {
     creators: influencer.influencers,
