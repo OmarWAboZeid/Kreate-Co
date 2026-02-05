@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getJson } from '../api/client.js';
 import CreatorFilters from '../components/CreatorFilters.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import Modal from '../components/Modal.jsx';
 import StatusPill from '../components/StatusPill.jsx';
 import { useAppDispatch, useAppState } from '../state.jsx';
 
@@ -585,124 +586,128 @@ export default function CampaignDetailPage() {
         </section>
       )}
 
-      {addContentModal.open && (
-        <div className="modal-overlay active">
-          <div className="modal-content">
-            <h3>Add Submitted Content</h3>
-            <p>Add content submitted by {addContentModal.creator?.name}</p>
-            <div className="modal-form">
-              <label>
-                <span>Content Link *</span>
-                <input
-                  type="url"
-                  className="input"
-                  placeholder="https://..."
-                  value={contentForm.link}
-                  onChange={(e) => setContentForm((prev) => ({ ...prev, link: e.target.value }))}
-                  required
-                />
-              </label>
-              <label>
-                <span>Platform</span>
-                <select
-                  className="input"
-                  value={contentForm.platform}
-                  onChange={(e) => setContentForm((prev) => ({ ...prev, platform: e.target.value }))}
-                >
-                  <option value="">Select platform</option>
-                  <option value="TikTok">TikTok</option>
-                  <option value="Instagram">Instagram</option>
-                </select>
-              </label>
-              <label>
-                <span>Content Type</span>
-                <select
-                  className="input"
-                  value={contentForm.type}
-                  onChange={(e) => setContentForm((prev) => ({ ...prev, type: e.target.value }))}
-                >
-                  <option value="">Select type</option>
-                  <option value="Reel">Reel</option>
-                  <option value="Post">Post</option>
-                  <option value="Story">Story</option>
-                </select>
-              </label>
-              <label>
-                <span>Notes</span>
-                <textarea
-                  className="input"
-                  placeholder="Optional notes..."
-                  rows={3}
-                  value={contentForm.notes}
-                  onChange={(e) => setContentForm((prev) => ({ ...prev, notes: e.target.value }))}
-                />
-              </label>
-            </div>
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setAddContentModal({ open: false, creator: null });
-                  setContentForm({ link: '', platform: '', type: '', notes: '' });
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleAddContent}
-                disabled={!contentForm.link}
-              >
-                Add Content
-              </button>
-            </div>
-          </div>
+      <Modal
+        open={addContentModal.open}
+        onClose={() => {
+          setAddContentModal({ open: false, creator: null });
+          setContentForm({ link: '', platform: '', type: '', notes: '' });
+        }}
+        title="Add Submitted Content"
+        description={`Add content submitted by ${addContentModal.creator?.name || ''}`}
+      >
+        <div className="modal-form">
+          <label>
+            <span>Content Link *</span>
+            <input
+              type="url"
+              className="input"
+              placeholder="https://..."
+              value={contentForm.link}
+              onChange={(e) => setContentForm((prev) => ({ ...prev, link: e.target.value }))}
+              required
+            />
+          </label>
+          <label>
+            <span>Platform</span>
+            <select
+              className="input"
+              value={contentForm.platform}
+              onChange={(e) => setContentForm((prev) => ({ ...prev, platform: e.target.value }))}
+            >
+              <option value="">Select platform</option>
+              <option value="TikTok">TikTok</option>
+              <option value="Instagram">Instagram</option>
+            </select>
+          </label>
+          <label>
+            <span>Content Type</span>
+            <select
+              className="input"
+              value={contentForm.type}
+              onChange={(e) => setContentForm((prev) => ({ ...prev, type: e.target.value }))}
+            >
+              <option value="">Select type</option>
+              <option value="Reel">Reel</option>
+              <option value="Post">Post</option>
+              <option value="Story">Story</option>
+            </select>
+          </label>
+          <label>
+            <span>Notes</span>
+            <textarea
+              className="input"
+              placeholder="Optional notes..."
+              rows={3}
+              value={contentForm.notes}
+              onChange={(e) => setContentForm((prev) => ({ ...prev, notes: e.target.value }))}
+            />
+          </label>
         </div>
-      )}
+        <div className="modal-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setAddContentModal({ open: false, creator: null });
+              setContentForm({ link: '', platform: '', type: '', notes: '' });
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={handleAddContent}
+            disabled={!contentForm.link}
+          >
+            Add Content
+          </button>
+        </div>
+      </Modal>
 
-      {rejectModal.open && (
-        <div className="modal-overlay active">
-          <div className="modal-content">
-            <h3>Reject Creator</h3>
-            <p>Please provide a reason for rejecting {rejectModal.creator?.name}</p>
-            <div className="modal-form">
-              <label>
-                <span>Rejection Reason *</span>
-                <textarea
-                  className="input"
-                  placeholder="Why are you rejecting this creator?"
-                  rows={4}
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  required
-                />
-              </label>
-            </div>
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setRejectModal({ open: false, creator: null });
-                  setRejectReason('');
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                onClick={handleRejectConfirm}
-                disabled={!rejectReason.trim()}
-              >
-                Confirm Rejection
-              </button>
-            </div>
-          </div>
+      <Modal
+        open={rejectModal.open}
+        onClose={() => {
+          setRejectModal({ open: false, creator: null });
+          setRejectReason('');
+        }}
+        title="Reject Creator"
+        description={`Please provide a reason for rejecting ${rejectModal.creator?.name || ''}`}
+      >
+        <div className="modal-form">
+          <label>
+            <span>Rejection Reason *</span>
+            <textarea
+              className="input"
+              placeholder="Why are you rejecting this creator?"
+              rows={4}
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              required
+            />
+          </label>
         </div>
-      )}
+        <div className="modal-actions">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setRejectModal({ open: false, creator: null });
+              setRejectReason('');
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={handleRejectConfirm}
+            disabled={!rejectReason.trim()}
+          >
+            Confirm Rejection
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }
