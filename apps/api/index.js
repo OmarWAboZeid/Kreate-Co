@@ -1,5 +1,6 @@
 const http = require('node:http');
 const path = require('node:path');
+const fs = require('node:fs');
 
 const { Pool } = require('pg');
 const dotenv = require('dotenv');
@@ -18,7 +19,9 @@ const {
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const PORT = Number(process.env.API_PORT || 4000);
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const PORT = IS_PRODUCTION ? 5000 : Number(process.env.API_PORT || 4000);
+const STATIC_DIR = path.resolve(__dirname, '../web/dist');
 const DATABASE_URL = process.env.DATABASE_URL;
 const TIGERBEETLE_ADDRESS = process.env.TIGERBEETLE_ADDRESS || 'localhost:3000';
 
@@ -428,8 +431,52 @@ const server = http.createServer(async (req, res) => {
     return json(res, 405, { ok: false, error: 'Method not allowed' });
   }
 
+  if (IS_PRODUCTION) {
+    return serveStatic(req, res, url);
+  }
+
   return notFound(res);
 });
+
+const MIME_TYPES = {
+  '.html': 'text/html',
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.eot': 'application/vnd.ms-fontobject',
+};
+
+function serveStatic(req, res, urlPath) {
+  let filePath = path.join(STATIC_DIR, urlPath === '/' ? 'index.html' : urlPath);
+  
+  if (!fs.existsSync(filePath)) {
+    filePath = path.join(STATIC_DIR, 'index.html');
+  }
+  
+  const ext = path.extname(filePath).toLowerCase();
+  const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+  
+  try {
+    const content = fs.readFileSync(filePath);
+    res.writeHead(200, { 
+      'Content-Type': contentType,
+      'Cache-Control': 'no-cache'
+    });
+    res.end(content);
+  } catch (err) {
+    console.error('Static file error:', err);
+    return notFound(res);
+  }
+}
 
 server.listen(PORT, () => {
   console.log(`[dummy-api] listening on http://localhost:${PORT}`);

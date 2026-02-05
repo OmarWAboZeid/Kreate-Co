@@ -45,12 +45,12 @@ export default function CampaignDetailPage() {
     const fetchCreators = async () => {
       try {
         setLoading(true);
-        const [ugcData, infData] = await Promise.all([
+        const [ugcRes, infRes] = await Promise.all([
           getJson('/api/ugc-creators?limit=100', 'Failed to fetch UGC creators'),
           getJson('/api/influencers?limit=100', 'Failed to fetch influencers'),
         ]);
-        setUgcCreators(ugcData || []);
-        setInfluencers(infData || []);
+        setUgcCreators(ugcRes?.data || []);
+        setInfluencers(infRes?.data || []);
       } catch (err) {
         console.error('Failed to fetch creators:', err);
       } finally {
