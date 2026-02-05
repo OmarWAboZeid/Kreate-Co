@@ -492,13 +492,15 @@ export default function CampaignDetailPage() {
                           </button>
                         </>
                       )}
-                      <button
-                        type="button"
-                        className="btn btn-secondary"
-                        onClick={() => setAddContentModal({ open: true, creator })}
-                      >
-                        Add Content
-                      </button>
+                      {(role === 'admin' || role === 'employee') && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          onClick={() => setAddContentModal({ open: true, creator })}
+                        >
+                          Add Content
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
