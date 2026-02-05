@@ -6629,6 +6629,88 @@ body.modal-open {
   background: #dc2626;
 }
 
+/* === SUGGEST CREATORS SECTION === */
+.suggest-creators-section {
+  margin-top: 16px;
+}
+
+.suggest-creators-section .section-description {
+  color: rgba(42, 42, 42, 0.6);
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+.suggest-creators-section .tab-group {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.suggest-creators-section .tab-button {
+  padding: 10px 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(112, 17, 63, 0.2);
+  background: var(--color-white);
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.suggest-creators-section .tab-button:hover {
+  background: rgba(112, 17, 63, 0.05);
+}
+
+.suggest-creators-section .tab-button.active {
+  background: var(--color-crimson);
+  color: white;
+  border-color: var(--color-crimson);
+}
+
+.suggest-filters {
+  margin-bottom: 16px;
+}
+
+.suggest-creators-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.suggest-creator-card {
+  background: var(--color-smoke);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.suggest-creator-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.suggest-creator-info h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.suggest-creator-info .creator-meta {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  color: rgba(42, 42, 42, 0.6);
+}
+
+.loading-state {
+  padding: 40px;
+  text-align: center;
+  color: rgba(42, 42, 42, 0.6);
+}
+
 /* === MODAL STYLES === */
 .modal-content {
   background: var(--color-white);

@@ -214,6 +214,30 @@ function appReducer(state, action) {
         ),
       };
     }
+    case 'SUGGEST_CREATOR': {
+      const { campaignId, creatorId } = action.payload;
+      const existing = state.campaignCreators[campaignId] || {
+        shortlist: [],
+        approvals: {},
+        outreach: {},
+        rejectionReasons: {},
+      };
+      if (existing.shortlist.includes(creatorId)) return state;
+      return {
+        ...state,
+        campaignCreators: {
+          ...state.campaignCreators,
+          [campaignId]: {
+            ...existing,
+            shortlist: [...existing.shortlist, creatorId],
+            approvals: {
+              ...existing.approvals,
+              [creatorId]: 'Suggested',
+            },
+          },
+        },
+      };
+    }
     case 'SET_CREATOR_WORKFLOW_STATUS': {
       const { campaignId, creatorId, status, finalVideoLink } = action.payload;
       const existing = state.campaignCreators[campaignId];

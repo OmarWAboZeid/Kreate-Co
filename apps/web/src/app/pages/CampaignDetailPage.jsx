@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { getJson } from '../api/client.js';
+import CreatorFilters from '../components/CreatorFilters.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import StatusPill from '../components/StatusPill.jsx';
 import { useAppDispatch, useAppState } from '../state.jsx';
@@ -9,7 +11,7 @@ const makeId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 10)}
 export default function CampaignDetailPage() {
   const { role, campaignId } = useParams();
   const navigate = useNavigate();
-  const { campaigns, creators, campaignCreators, contentItems } = useAppState();
+  const { campaigns, campaignCreators, contentItems } = useAppState();
   const dispatch = useAppDispatch();
   const [creatorFilter, setCreatorFilter] = useState('all');
   const [creatorSearch, setCreatorSearch] = useState('');
@@ -18,13 +20,80 @@ export default function CampaignDetailPage() {
   const [rejectModal, setRejectModal] = useState({ open: false, creator: null });
   const [rejectReason, setRejectReason] = useState('');
 
+  const [ugcCreators, setUgcCreators] = useState([]);
+  const [influencers, setInfluencers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [suggestTab, setSuggestTab] = useState('ugc');
+  const [ugcFilters, setUgcFilters] = useState({
+    search: '',
+    gender: '',
+    age: '',
+    niche: '',
+    experienceLevel: '',
+  });
+  const [influencerFilters, setInfluencerFilters] = useState({
+    search: '',
+    followerCount: '',
+    gender: '',
+    niche: '',
+    platform: '',
+    engagementRate: '',
+  });
+
+  useEffect(() => {
+    const fetchCreators = async () => {
+      try {
+        setLoading(true);
+        const [ugcRes, infRes] = await Promise.all([
+          getJson('/api/ugc-creators?limit=100', 'Failed to fetch UGC creators'),
+          getJson('/api/influencers?limit=100', 'Failed to fetch influencers'),
+        ]);
+        if (ugcRes.ok) setUgcCreators(ugcRes.data || []);
+        if (infRes.ok) setInfluencers(infRes.data || []);
+      } catch (err) {
+        console.error('Failed to fetch creators:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCreators();
+  }, []);
+
   const campaign = campaigns.find((item) => item.id === campaignId);
+
+  const allCreators = useMemo(() => [...ugcCreators, ...influencers], [ugcCreators, influencers]);
 
   const creatorMap = useMemo(() => {
     const map = new Map();
-    creators.forEach((creator) => map.set(creator.id, creator));
+    allCreators.forEach((creator) => map.set(creator.id, creator));
     return map;
-  }, [creators]);
+  }, [allCreators]);
+
+  const filteredUgcCreators = useMemo(() => {
+    return ugcCreators.filter((creator) => {
+      if (ugcFilters.search && !creator.name.toLowerCase().includes(ugcFilters.search.toLowerCase())) {
+        return false;
+      }
+      if (ugcFilters.niche && creator.niche !== ugcFilters.niche) return false;
+      if (ugcFilters.gender && creator.gender !== ugcFilters.gender) return false;
+      if (ugcFilters.age) {
+        const [min, max] = ugcFilters.age.split('-').map(Number);
+        const age = parseInt(creator.age);
+        if (isNaN(age) || age < min || age > max) return false;
+      }
+      return true;
+    });
+  }, [ugcCreators, ugcFilters]);
+
+  const filteredInfluencerCreators = useMemo(() => {
+    return influencers.filter((creator) => {
+      if (influencerFilters.search && !creator.name.toLowerCase().includes(influencerFilters.search.toLowerCase())) {
+        return false;
+      }
+      if (influencerFilters.niche && creator.niche !== influencerFilters.niche) return false;
+      return true;
+    });
+  }, [influencers, influencerFilters]);
 
   if (!campaign) {
     return (
@@ -86,6 +155,15 @@ export default function CampaignDetailPage() {
         actor: role === 'brand' ? 'Brand' : 'Admin',
         note: '',
       },
+    });
+  };
+
+  const handleSuggestCreator = (creator) => {
+    const isAlreadySuggested = creatorState.shortlist.includes(creator.id);
+    if (isAlreadySuggested) return;
+    dispatch({
+      type: 'SUGGEST_CREATOR',
+      payload: { campaignId: campaign.id, creatorId: creator.id },
     });
   };
 
@@ -429,6 +507,81 @@ export default function CampaignDetailPage() {
           )}
         </div>
       </section>
+
+      {(role === 'admin' || role === 'employee') && (
+        <section className="detail-card suggest-creators-section">
+          <div className="detail-card-header">
+            <h3>Suggest Creators</h3>
+            <p className="section-description">Browse and add creators to this campaign</p>
+          </div>
+          <div className="tab-group">
+            <button
+              type="button"
+              className={`tab-button ${suggestTab === 'ugc' ? 'active' : ''}`}
+              onClick={() => setSuggestTab('ugc')}
+            >
+              UGC Creators ({ugcCreators.length})
+            </button>
+            <button
+              type="button"
+              className={`tab-button ${suggestTab === 'influencer' ? 'active' : ''}`}
+              onClick={() => setSuggestTab('influencer')}
+            >
+              Influencers ({influencers.length})
+            </button>
+          </div>
+          <div className="suggest-filters">
+            <CreatorFilters
+              type={suggestTab}
+              filters={suggestTab === 'ugc' ? ugcFilters : influencerFilters}
+              onChange={suggestTab === 'ugc' ? setUgcFilters : setInfluencerFilters}
+            />
+          </div>
+          <div className="detail-card-content">
+            {loading ? (
+              <div className="loading-state">Loading creators...</div>
+            ) : (
+              <div className="suggest-creators-grid">
+                {(suggestTab === 'ugc' ? filteredUgcCreators : filteredInfluencerCreators).map((creator) => {
+                  const isAlreadySuggested = creatorState.shortlist.includes(creator.id);
+                  return (
+                    <div key={creator.id} className="suggest-creator-card">
+                      <div className="creator-avatar">{creator.name.charAt(0).toUpperCase()}</div>
+                      <div className="suggest-creator-info">
+                        <h4>{creator.name}</h4>
+                        <p className="creator-meta">
+                          {creator.handle || creator.tiktok_url ? '@' + (creator.handle || 'creator') : ''} 
+                          {creator.niche && ` · ${creator.niche}`}
+                        </p>
+                        {suggestTab === 'ugc' && creator.gender && (
+                          <p className="creator-meta">{creator.gender} · Age: {creator.age || 'N/A'}</p>
+                        )}
+                        {suggestTab === 'influencer' && creator.followers && (
+                          <p className="creator-meta">{creator.followers.toLocaleString()} followers</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className={`btn ${isAlreadySuggested ? 'btn-secondary' : 'btn-primary'}`}
+                        disabled={isAlreadySuggested}
+                        onClick={() => handleSuggestCreator(creator)}
+                      >
+                        {isAlreadySuggested ? 'Added' : 'Suggest'}
+                      </button>
+                    </div>
+                  );
+                })}
+                {(suggestTab === 'ugc' ? filteredUgcCreators : filteredInfluencerCreators).length === 0 && (
+                  <EmptyState
+                    title="No creators found"
+                    description="Try adjusting your filters or search terms."
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {addContentModal.open && (
         <div className="modal-overlay active">
