@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import CampaignFormModal from '../components/CampaignFormModal.jsx';
 import CampaignGrid from '../components/CampaignGrid.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import CampaignWizard from '../components/CampaignWizard.jsx';
 import { storage, useAppDispatch, useAppState, utils } from '../state.jsx';
+
+const API_BASE = '/api';
 
 const defaultForm = {
   name: '',
@@ -32,7 +34,25 @@ export default function CampaignsPage() {
   const [form, setForm] = useState(defaultForm);
   const [adminBrandFilter, setAdminBrandFilter] = useState('');
 
-  const brandFilter = role === 'brand' ? storage.getBrand() || brands[0] : null;
+  useEffect(() => {
+    const fetchBrands = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/brands`);
+        const data = await res.json();
+        if (data.ok) {
+          dispatch({ type: 'SET_BRANDS', payload: data.data });
+        }
+      } catch (err) {
+        console.error('Error fetching brands:', err);
+      }
+    };
+    if (brands.length === 0) {
+      fetchBrands();
+    }
+  }, [dispatch, brands.length]);
+
+  const brandNames = brands.map((b) => (typeof b === 'string' ? b : b.name));
+  const brandFilter = role === 'brand' ? storage.getBrand() || brandNames[0] : null;
   const visibleCampaigns = useMemo(() => {
     let filtered = campaigns;
     if (brandFilter) {
@@ -179,7 +199,7 @@ export default function CampaignsPage() {
             onChange={(event) => setAdminBrandFilter(event.target.value)}
           >
             <option value="">All Brands</option>
-            {brands.map((brand) => (
+            {brandNames.map((brand) => (
               <option key={brand} value={brand}>
                 {brand}
               </option>
@@ -211,7 +231,7 @@ export default function CampaignsPage() {
       <CampaignFormModal
         open={showModal}
         form={form}
-        brands={brands}
+        brands={brandNames}
         role={role}
         onClose={closeModal}
         onChange={updateForm}

@@ -1,7 +1,7 @@
 import { createActivity } from '../utils/stateUtils.js';
 
 const initialState = {
-  brands: ['Rabbit', 'Hankology', 'Chez Koukou', 'Minilet'],
+  brands: [],
   campaigns: [
     {
       id: 'camp-001',

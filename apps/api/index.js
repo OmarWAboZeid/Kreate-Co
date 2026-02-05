@@ -3,8 +3,9 @@ const path = require('node:path');
 
 const { Pool } = require('pg');
 const dotenv = require('dotenv');
-const { json, notFound } = require('./lib/http');
+const { json, notFound, parseBody, cors } = require('./lib/http');
 const { checkDatabase, checkTigerbeetle } = require('./lib/health');
+const { getUploadURL, normalizeObjectPath, getObjectFile, streamObject } = require('./lib/upload');
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
@@ -19,8 +20,9 @@ const checkTigerbeetleStatus = () => checkTigerbeetle(TIGERBEETLE_ADDRESS);
 
 const server = http.createServer(async (req, res) => {
   const { method, url } = req;
-  if (method !== 'GET') {
-    return json(res, 405, { ok: false, error: 'Method not allowed' });
+
+  if (method === 'OPTIONS') {
+    return cors(res);
   }
 
   if (url === '/api/health') {
@@ -129,6 +131,94 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });
     }
+  }
+
+  if (method === 'POST' && url === '/api/uploads/request-url') {
+    try {
+      const body = await parseBody(req);
+      const { name, size, contentType } = body;
+      if (!name) {
+        return json(res, 400, { ok: false, error: 'Missing required field: name' });
+      }
+      const uploadURL = await getUploadURL();
+      const objectPath = normalizeObjectPath(uploadURL);
+      return json(res, 200, {
+        ok: true,
+        uploadURL,
+        objectPath,
+        metadata: { name, size, contentType },
+      });
+    } catch (error) {
+      console.error('Error generating upload URL:', error);
+      return json(res, 500, { ok: false, error: 'Failed to generate upload URL' });
+    }
+  }
+
+  if (method === 'GET' && url.startsWith('/objects/')) {
+    try {
+      const file = await getObjectFile(url);
+      if (!file) {
+        return json(res, 404, { ok: false, error: 'Object not found' });
+      }
+      return streamObject(file, res);
+    } catch (error) {
+      console.error('Error serving object:', error);
+      return json(res, 500, { ok: false, error: 'Failed to serve object' });
+    }
+  }
+
+  if (url === '/api/brands' || url.startsWith('/api/brands?')) {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    if (method === 'GET') {
+      try {
+        const result = await pool.query('SELECT id, name, logo_url, created_at FROM brands ORDER BY name ASC');
+        return json(res, 200, { ok: true, data: result.rows });
+      } catch (error) {
+        return json(res, 500, { ok: false, error: error.message });
+      }
+    }
+    if (method === 'POST') {
+      try {
+        const body = await parseBody(req);
+        const { name, logo_url } = body;
+        if (!name) {
+          return json(res, 400, { ok: false, error: 'Brand name is required' });
+        }
+        const result = await pool.query(
+          'INSERT INTO brands (name, logo_url) VALUES ($1, $2) RETURNING id, name, logo_url, created_at',
+          [name.trim(), logo_url || null]
+        );
+        return json(res, 201, { ok: true, data: result.rows[0] });
+      } catch (error) {
+        if (error.code === '23505') {
+          return json(res, 409, { ok: false, error: 'A brand with this name already exists' });
+        }
+        return json(res, 500, { ok: false, error: error.message });
+      }
+    }
+  }
+
+  const brandDeleteMatch = url.match(/^\/api\/brands\/(\d+)$/);
+  if (method === 'DELETE' && brandDeleteMatch) {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    try {
+      const brandId = brandDeleteMatch[1];
+      const result = await pool.query('DELETE FROM brands WHERE id = $1 RETURNING id', [brandId]);
+      if (result.rowCount === 0) {
+        return json(res, 404, { ok: false, error: 'Brand not found' });
+      }
+      return json(res, 200, { ok: true, message: 'Brand deleted' });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if (method !== 'GET') {
+    return json(res, 405, { ok: false, error: 'Method not allowed' });
   }
 
   return notFound(res);

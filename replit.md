@@ -71,6 +71,10 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
 
 ## Database Schema
 
+### brands table
+
+- id, name (unique), logo_url, created_at, updated_at
+
 ### influencers table
 
 - id, name, tiktok_url, instagram_url, followers, niche, phone, region, notes, category, created_at, updated_at
@@ -87,6 +91,11 @@ A workspace application for kreate & co, a UGC and influencer marketing company.
 - `GET /api/health/all` - Combined health status
 - `GET /api/influencers` - Fetch all influencers from database
 - `GET /api/ugc-creators` - Fetch all UGC creators from database
+- `GET /api/brands` - Fetch all brands from database
+- `POST /api/brands` - Create a new brand (name, logo_url)
+- `DELETE /api/brands/:id` - Delete a brand by ID
+- `POST /api/uploads/request-url` - Get presigned URL for file upload
+- `GET /objects/*` - Serve uploaded files from object storage
 
 ## User Roles & Permissions
 

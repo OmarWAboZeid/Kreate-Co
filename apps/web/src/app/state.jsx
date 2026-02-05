@@ -14,6 +14,24 @@ const AppDispatchContext = createContext(null);
 
 function appReducer(state, action) {
   switch (action.type) {
+    case 'SET_BRANDS': {
+      return {
+        ...state,
+        brands: action.payload,
+      };
+    }
+    case 'ADD_BRAND': {
+      return {
+        ...state,
+        brands: [...state.brands, action.payload],
+      };
+    }
+    case 'DELETE_BRAND': {
+      return {
+        ...state,
+        brands: state.brands.filter((b) => b.id !== action.payload),
+      };
+    }
     case 'CREATE_CAMPAIGN': {
       const campaign = action.payload;
       return {
