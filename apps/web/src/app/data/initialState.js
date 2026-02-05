@@ -78,7 +78,7 @@ const initialState = {
       creatorId: 'cr-001',
       platform: 'Instagram',
       type: 'Reel',
-      status: 'Pending Review',
+      status: 'Approved',
       revisionCount: 1,
       caption: 'Easy morning glow routine featuring the new tint shades.',
       hashtags: '#kreate #rabbitbeauty #ugc',
@@ -86,6 +86,13 @@ const initialState = {
       submittedAt: '2026-02-01',
       notes: 'Captured in natural light, requested hook change.',
       feedback: [],
+      metrics: {
+        views: 45000,
+        likes: 3200,
+        comments: 156,
+        shares: 89,
+        saves: 420,
+      },
     },
     {
       id: 'cnt-002',

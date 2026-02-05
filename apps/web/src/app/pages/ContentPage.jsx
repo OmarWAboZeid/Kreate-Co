@@ -135,12 +135,26 @@ export default function ContentPage() {
     const approvedContent = visibleContentItems.filter(
       (item) => item.status === 'Approved' || item.status === 'Published'
     );
+
+    const calculateEngagementRate = (metrics) => {
+      if (!metrics || !metrics.views || metrics.views === 0) return '0.00';
+      const interactions = (metrics.likes || 0) + (metrics.comments || 0) + (metrics.shares || 0) + (metrics.saves || 0);
+      return ((interactions / metrics.views) * 100).toFixed(2);
+    };
+
+    const formatNumber = (num) => {
+      if (!num && num !== 0) return '-';
+      if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
+      if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+      return num.toString();
+    };
+
     return (
       <div className="page-stack">
         <div className="page-header">
           <div>
             <h2>Saved Content</h2>
-            <p>Your approved content library for download and repurposing.</p>
+            <p>Your approved content analytics and performance metrics.</p>
           </div>
         </div>
 
@@ -150,41 +164,46 @@ export default function ContentPage() {
             description="Content approved from your campaigns will appear here."
           />
         ) : (
-          <div className="saved-content-grid">
-            {approvedContent.map((item) => {
-              const campaign = campaigns.find((c) => c.id === item.campaignId);
-              const creator = creatorMap.get(item.creatorId);
-              return (
-                <div key={item.id} className="saved-content-card">
-                  <div className="saved-content-preview">
-                    {item.type === 'Reel'
-                      ? '🎬'
-                      : item.type === 'Post'
-                        ? '📷'
-                        : item.type === 'Story'
-                          ? '📱'
-                          : '🎥'}
-                  </div>
-                  <div className="saved-content-info">
-                    <h4>
-                      {item.type} - {item.platform}
-                    </h4>
-                    <p className="saved-content-meta">
-                      {creator?.name || 'Unknown'} • {campaign?.name || 'Unknown Campaign'}
-                    </p>
-                    <p className="saved-content-meta">{item.submittedAt}</p>
-                    <div className="saved-content-actions">
-                      <button type="button" className="btn btn-secondary">
-                        Download
-                      </button>
-                      <button type="button" className="btn btn-primary">
-                        View
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="analytics-table-container">
+            <table className="analytics-table">
+              <thead>
+                <tr>
+                  <th>Creator</th>
+                  <th>Platform</th>
+                  <th>Type</th>
+                  <th>Views</th>
+                  <th>Likes</th>
+                  <th>Comments</th>
+                  <th>Saves</th>
+                  <th>Shares</th>
+                  <th>Engagement Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {approvedContent.map((item) => {
+                  const creator = creatorMap.get(item.creatorId);
+                  const metrics = item.metrics || {};
+                  const engagementRate = calculateEngagementRate(metrics);
+                  return (
+                    <tr key={item.id}>
+                      <td className="creator-cell">
+                        <div className="creator-cell-content">
+                          <span className="creator-name">{creator?.name || 'Unknown'}</span>
+                        </div>
+                      </td>
+                      <td>{item.platform}</td>
+                      <td>{item.type}</td>
+                      <td>{formatNumber(metrics.views)}</td>
+                      <td>{formatNumber(metrics.likes)}</td>
+                      <td>{formatNumber(metrics.comments)}</td>
+                      <td>{formatNumber(metrics.saves)}</td>
+                      <td>{formatNumber(metrics.shares)}</td>
+                      <td className="engagement-cell">{engagementRate}%</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

@@ -178,7 +178,7 @@ function appReducer(state, action) {
       };
     }
     case 'SET_CREATOR_DECISION': {
-      const { campaignId, creatorId, decision, actor, note } = action.payload;
+      const { campaignId, creatorId, decision, actor, note, rejectionReason } = action.payload;
       const existing = state.campaignCreators[campaignId];
       if (!existing) return state;
       return {
@@ -190,6 +190,12 @@ function appReducer(state, action) {
             approvals: {
               ...existing.approvals,
               [creatorId]: decision,
+            },
+            rejectionReasons: {
+              ...existing.rejectionReasons,
+              ...(decision === 'Brand Rejected' && rejectionReason
+                ? { [creatorId]: rejectionReason }
+                : {}),
             },
           },
         },

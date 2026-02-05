@@ -2,18 +2,18 @@ import { useState } from 'react';
 
 const STEPS = {
   NAME: 1,
-  BRAND_TYPE: 2,
-  OBJECTIVES: 3,
-  START_DATE: 4,
-  CAMPAIGN_TYPE: 5,
-  PAYMENT_TYPE: 6,
-  PACKAGE_SELECTION: 7,
-  CREATOR_TIERS: 8,
-  UGC_PERSONA: 9,
-  UGC_GENDER: 10,
-  UGC_AGE: 11,
-  INFLUENCER_NICHE: 12,
-  INFLUENCER_PLATFORMS: 13,
+  OBJECTIVES: 2,
+  START_DATE: 3,
+  CAMPAIGN_TYPE: 4,
+  PAYMENT_TYPE: 5,
+  CREATOR_TIERS: 6,
+  UGC_PERSONA: 7,
+  UGC_GENDER: 8,
+  UGC_AGE: 9,
+  UGC_VIDEOS: 10,
+  INFLUENCER_NICHE: 11,
+  INFLUENCER_PLATFORMS: 12,
+  INFLUENCER_BUDGET: 13,
   REVIEW: 14,
 };
 
@@ -27,9 +27,9 @@ const CREATOR_TIERS = [
 ];
 
 const NICHES = ['Fashion', 'F&B', 'Beauty', 'Lifestyle', 'Tech'];
-const PLATFORMS = ['Instagram', 'TikTok', 'Facebook'];
+const PLATFORMS = ['Instagram', 'TikTok'];
 
-const UGC_PACKAGES = [
+const UGC_VIDEO_OPTIONS = [
   { value: '4', label: '4 Videos' },
   { value: '8', label: '8 Videos' },
   { value: '12', label: '12 Videos' },
@@ -37,44 +37,33 @@ const UGC_PACKAGES = [
   { value: 'other', label: 'Other' },
 ];
 
-const INFLUENCER_PACKAGES = [
-  { value: '10', label: '10 Creators' },
-  { value: '15', label: '15 Creators' },
-  { value: '20', label: '20 Creators' },
-  { value: '40', label: '40 Creators' },
-  { value: 'other', label: 'Other' },
-];
-
-const BUNDLES = [
-  { value: 'buzz', label: 'Buzz', ugc: 4, influencer: 10, desc: 'Perfect for small launches' },
-  { value: 'hype', label: 'Hype', ugc: 8, influencer: 15, desc: 'Build momentum' },
-  { value: 'impact', label: 'Impact', ugc: 12, influencer: 25, desc: 'Maximum reach' },
-  { value: 'viral', label: 'Viral', ugc: 20, influencer: 40, desc: 'Go all out' },
+const BUDGET_OPTIONS = [
+  { value: 'under-5k', label: 'Under $5,000' },
+  { value: '5k-10k', label: '$5,000 - $10,000' },
+  { value: '10k-25k', label: '$10,000 - $25,000' },
+  { value: '25k-50k', label: '$25,000 - $50,000' },
+  { value: 'over-50k', label: 'Over $50,000' },
+  { value: 'tbd', label: 'To be discussed' },
 ];
 
 export default function CampaignWizard({ onClose, onSubmit, brandName }) {
   const [currentStep, setCurrentStep] = useState(STEPS.NAME);
   const [form, setForm] = useState({
     name: '',
-    brandType: '',
-    existingBrandName: brandName || '',
-    newBrandName: '',
+    brandName: brandName || '',
     objectives: '',
     startDate: '',
     campaignType: '',
     paymentType: '',
-    packageType: '',
-    ugcPackage: '',
-    ugcPackageOther: '',
-    influencerPackage: '',
-    influencerPackageOther: '',
-    bundle: '',
     creatorTiers: [],
     ugcPersona: '',
     ugcGender: '',
     ugcAgeRange: '',
+    ugcVideos: '',
+    ugcVideosOther: '',
     influencerNiche: '',
     influencerPlatforms: [],
+    influencerBudget: '',
   });
 
   const updateForm = (field, value) => {
@@ -106,50 +95,81 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
   };
 
   const getNextStep = () => {
-    if (currentStep === STEPS.PACKAGE_SELECTION) {
-      if (form.campaignType === 'UGC') return STEPS.UGC_PERSONA;
-      return STEPS.CREATOR_TIERS;
+    switch (currentStep) {
+      case STEPS.NAME:
+        return STEPS.OBJECTIVES;
+      case STEPS.OBJECTIVES:
+        return STEPS.START_DATE;
+      case STEPS.START_DATE:
+        return STEPS.CAMPAIGN_TYPE;
+      case STEPS.CAMPAIGN_TYPE:
+        return STEPS.PAYMENT_TYPE;
+      case STEPS.PAYMENT_TYPE:
+        if (form.campaignType === 'UGC') return STEPS.UGC_PERSONA;
+        return STEPS.CREATOR_TIERS;
+      case STEPS.CREATOR_TIERS:
+        if (form.campaignType === 'Hybrid') return STEPS.UGC_PERSONA;
+        return STEPS.INFLUENCER_NICHE;
+      case STEPS.UGC_PERSONA:
+        return STEPS.UGC_GENDER;
+      case STEPS.UGC_GENDER:
+        return STEPS.UGC_AGE;
+      case STEPS.UGC_AGE:
+        return STEPS.UGC_VIDEOS;
+      case STEPS.UGC_VIDEOS:
+        if (form.campaignType === 'Hybrid') return STEPS.INFLUENCER_NICHE;
+        return STEPS.REVIEW;
+      case STEPS.INFLUENCER_NICHE:
+        return STEPS.INFLUENCER_PLATFORMS;
+      case STEPS.INFLUENCER_PLATFORMS:
+        return STEPS.INFLUENCER_BUDGET;
+      case STEPS.INFLUENCER_BUDGET:
+        return STEPS.REVIEW;
+      default:
+        return currentStep + 1;
     }
-    if (currentStep === STEPS.CREATOR_TIERS) {
-      if (form.campaignType === 'Hybrid') return STEPS.UGC_PERSONA;
-      return STEPS.INFLUENCER_NICHE;
-    }
-    if (currentStep === STEPS.UGC_AGE) {
-      if (form.campaignType === 'Hybrid') return STEPS.INFLUENCER_NICHE;
-      return STEPS.REVIEW;
-    }
-    if (currentStep === STEPS.INFLUENCER_PLATFORMS) {
-      return STEPS.REVIEW;
-    }
-    return currentStep + 1;
   };
 
   const getPrevStep = () => {
-    if (currentStep === STEPS.UGC_PERSONA) {
-      if (form.campaignType === 'Hybrid') return STEPS.CREATOR_TIERS;
-      return STEPS.PACKAGE_SELECTION;
+    switch (currentStep) {
+      case STEPS.OBJECTIVES:
+        return STEPS.NAME;
+      case STEPS.START_DATE:
+        return STEPS.OBJECTIVES;
+      case STEPS.CAMPAIGN_TYPE:
+        return STEPS.START_DATE;
+      case STEPS.PAYMENT_TYPE:
+        return STEPS.CAMPAIGN_TYPE;
+      case STEPS.CREATOR_TIERS:
+        return STEPS.PAYMENT_TYPE;
+      case STEPS.UGC_PERSONA:
+        if (form.campaignType === 'Hybrid') return STEPS.CREATOR_TIERS;
+        return STEPS.PAYMENT_TYPE;
+      case STEPS.UGC_GENDER:
+        return STEPS.UGC_PERSONA;
+      case STEPS.UGC_AGE:
+        return STEPS.UGC_GENDER;
+      case STEPS.UGC_VIDEOS:
+        return STEPS.UGC_AGE;
+      case STEPS.INFLUENCER_NICHE:
+        if (form.campaignType === 'Hybrid') return STEPS.UGC_VIDEOS;
+        return STEPS.CREATOR_TIERS;
+      case STEPS.INFLUENCER_PLATFORMS:
+        return STEPS.INFLUENCER_NICHE;
+      case STEPS.INFLUENCER_BUDGET:
+        return STEPS.INFLUENCER_PLATFORMS;
+      case STEPS.REVIEW:
+        if (form.campaignType === 'UGC') return STEPS.UGC_VIDEOS;
+        return STEPS.INFLUENCER_BUDGET;
+      default:
+        return currentStep - 1;
     }
-    if (currentStep === STEPS.CREATOR_TIERS) return STEPS.PACKAGE_SELECTION;
-    if (currentStep === STEPS.INFLUENCER_NICHE) {
-      if (form.campaignType === 'Hybrid') return STEPS.UGC_AGE;
-      return STEPS.CREATOR_TIERS;
-    }
-    if (currentStep === STEPS.REVIEW) {
-      if (form.campaignType === 'UGC') return STEPS.UGC_AGE;
-      return STEPS.INFLUENCER_PLATFORMS;
-    }
-    return currentStep - 1;
   };
 
   const canProceed = () => {
     switch (currentStep) {
       case STEPS.NAME:
         return form.name.trim().length > 0;
-      case STEPS.BRAND_TYPE: {
-        if (!form.brandType) return false;
-        if (form.brandType === 'existing') return true;
-        return form.newBrandName.trim().length > 0;
-      }
       case STEPS.OBJECTIVES:
         return form.objectives.length > 0;
       case STEPS.START_DATE:
@@ -158,30 +178,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return form.campaignType.length > 0;
       case STEPS.PAYMENT_TYPE:
         return form.paymentType.length > 0;
-      case STEPS.PACKAGE_SELECTION: {
-        if (form.packageType === 'bundle') return form.bundle.length > 0;
-        if (form.campaignType === 'UGC') {
-          if (form.ugcPackage === 'other') return form.ugcPackageOther.trim().length > 0;
-          return form.ugcPackage.length > 0;
-        }
-        if (form.campaignType === 'Influencer') {
-          if (form.influencerPackage === 'other')
-            return form.influencerPackageOther.trim().length > 0;
-          return form.influencerPackage.length > 0;
-        }
-        if (form.campaignType === 'Hybrid') {
-          const ugcValid =
-            form.ugcPackage === 'other'
-              ? form.ugcPackageOther.trim().length > 0
-              : form.ugcPackage.length > 0;
-          const infValid =
-            form.influencerPackage === 'other'
-              ? form.influencerPackageOther.trim().length > 0
-              : form.influencerPackage.length > 0;
-          return ugcValid && infValid;
-        }
-        return false;
-      }
       case STEPS.CREATOR_TIERS:
         return form.creatorTiers.length > 0;
       case STEPS.UGC_PERSONA:
@@ -190,10 +186,15 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return form.ugcGender.length > 0;
       case STEPS.UGC_AGE:
         return form.ugcAgeRange.length > 0;
+      case STEPS.UGC_VIDEOS:
+        if (form.ugcVideos === 'other') return form.ugcVideosOther.trim().length > 0;
+        return form.ugcVideos.length > 0;
       case STEPS.INFLUENCER_NICHE:
         return form.influencerNiche.length > 0;
       case STEPS.INFLUENCER_PLATFORMS:
         return form.influencerPlatforms.length > 0;
+      case STEPS.INFLUENCER_BUDGET:
+        return form.influencerBudget.length > 0;
       default:
         return true;
     }
@@ -211,38 +212,18 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
     }
   };
 
-  const getBrandName = () => {
-    if (form.brandType === 'existing') return form.existingBrandName;
-    return form.newBrandName;
-  };
-
-  const getPackageDetails = () => {
-    if (form.packageType === 'bundle') {
-      const bundle = BUNDLES.find((b) => b.value === form.bundle);
-      return { ugcCount: bundle?.ugc || 0, influencerCount: bundle?.influencer || 0 };
-    }
-    return {
-      ugcCount: form.ugcPackage === 'other' ? form.ugcPackageOther : form.ugcPackage,
-      influencerCount:
-        form.influencerPackage === 'other' ? form.influencerPackageOther : form.influencerPackage,
-    };
-  };
-
   const handleSubmit = () => {
-    const packageDetails = getPackageDetails();
+    const ugcCount = form.ugcVideos === 'other' ? form.ugcVideosOther : form.ugcVideos;
+    
     onSubmit({
       name: form.name,
-      brand: getBrandName(),
-      brandType: form.brandType,
+      brand: form.brandName,
       objectives: form.objectives,
       startDate: form.startDate,
       campaignType: form.campaignType,
       paymentType: form.paymentType,
-      packageType: form.packageType,
-      bundle: form.bundle,
-      ugcCount: packageDetails.ugcCount,
-      influencerCount: packageDetails.influencerCount,
       creatorTiers: form.creatorTiers,
+      ugcCount: ugcCount || null,
       ugc:
         form.campaignType === 'UGC' || form.campaignType === 'Hybrid'
           ? {
@@ -257,16 +238,17 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
               niche: form.influencerNiche,
               platforms: form.influencerPlatforms,
               tiers: form.creatorTiers,
+              budget: form.influencerBudget,
             }
           : null,
     });
   };
 
   const getTotalSteps = () => {
-    if (form.campaignType === 'UGC') return 11;
+    if (form.campaignType === 'UGC') return 10;
     if (form.campaignType === 'Influencer') return 10;
     if (form.campaignType === 'Hybrid') return 14;
-    return 7;
+    return 5;
   };
 
   const getProgress = () => {
@@ -288,45 +270,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
               placeholder="e.g. Summer Collection Launch"
               autoFocus
             />
-          </div>
-        );
-
-      case STEPS.BRAND_TYPE:
-        return (
-          <div className="wizard-step">
-            <h3>Is this for a new or existing brand?</h3>
-            <p>Select the brand type for this campaign</p>
-            <div className="wizard-options">
-              <button
-                type="button"
-                className={`wizard-option-card ${form.brandType === 'existing' ? 'active' : ''}`}
-                onClick={() => updateForm('brandType', 'existing')}
-              >
-                <span className="wizard-option-title">Existing Brand</span>
-                <span className="wizard-option-desc">
-                  {form.existingBrandName || 'Your current brand'}
-                </span>
-              </button>
-              <button
-                type="button"
-                className={`wizard-option-card ${form.brandType === 'new' ? 'active' : ''}`}
-                onClick={() => updateForm('brandType', 'new')}
-              >
-                <span className="wizard-option-title">New Brand</span>
-                <span className="wizard-option-desc">Add a new brand to your account</span>
-              </button>
-            </div>
-            {form.brandType === 'new' && (
-              <div className="wizard-input-group">
-                <label>New Brand Name</label>
-                <input
-                  className="input wizard-input"
-                  value={form.newBrandName}
-                  onChange={(e) => updateForm('newBrandName', e.target.value)}
-                  placeholder="Enter brand name"
-                />
-              </div>
-            )}
           </div>
         );
 
@@ -432,108 +375,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
           </div>
         );
 
-      case STEPS.PACKAGE_SELECTION:
-        return (
-          <div className="wizard-step">
-            <h3>Choose your package</h3>
-            <p>Select a bundle or customize your package</p>
-
-            <div className="package-type-toggle">
-              <button
-                type="button"
-                className={`toggle-btn ${form.packageType === 'bundle' ? 'active' : ''}`}
-                onClick={() => updateForm('packageType', 'bundle')}
-              >
-                Bundles
-              </button>
-              <button
-                type="button"
-                className={`toggle-btn ${form.packageType === 'custom' ? 'active' : ''}`}
-                onClick={() => updateForm('packageType', 'custom')}
-              >
-                Custom
-              </button>
-            </div>
-
-            {form.packageType === 'bundle' && (
-              <div className="wizard-options-grid">
-                {BUNDLES.map((bundle) => (
-                  <button
-                    key={bundle.value}
-                    type="button"
-                    className={`wizard-option-card ${form.bundle === bundle.value ? 'active' : ''}`}
-                    onClick={() => updateForm('bundle', bundle.value)}
-                  >
-                    <span className="wizard-option-title">{bundle.label}</span>
-                    <span className="wizard-option-desc">
-                      {bundle.ugc} UGC + {bundle.influencer} Influencers
-                    </span>
-                    <span className="wizard-option-meta">{bundle.desc}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {form.packageType === 'custom' && (
-              <div className="custom-package-section">
-                {(form.campaignType === 'UGC' || form.campaignType === 'Hybrid') && (
-                  <div className="package-group">
-                    <h4>UGC Videos</h4>
-                    <div className="wizard-options">
-                      {UGC_PACKAGES.map((pkg) => (
-                        <button
-                          key={pkg.value}
-                          type="button"
-                          className={`wizard-option ${form.ugcPackage === pkg.value ? 'active' : ''}`}
-                          onClick={() => updateForm('ugcPackage', pkg.value)}
-                        >
-                          {pkg.label}
-                        </button>
-                      ))}
-                    </div>
-                    {form.ugcPackage === 'other' && (
-                      <input
-                        className="input wizard-input-sm"
-                        type="number"
-                        value={form.ugcPackageOther}
-                        onChange={(e) => updateForm('ugcPackageOther', e.target.value)}
-                        placeholder="Enter number of videos"
-                      />
-                    )}
-                  </div>
-                )}
-
-                {(form.campaignType === 'Influencer' || form.campaignType === 'Hybrid') && (
-                  <div className="package-group">
-                    <h4>Influencers</h4>
-                    <div className="wizard-options">
-                      {INFLUENCER_PACKAGES.map((pkg) => (
-                        <button
-                          key={pkg.value}
-                          type="button"
-                          className={`wizard-option ${form.influencerPackage === pkg.value ? 'active' : ''}`}
-                          onClick={() => updateForm('influencerPackage', pkg.value)}
-                        >
-                          {pkg.label}
-                        </button>
-                      ))}
-                    </div>
-                    {form.influencerPackage === 'other' && (
-                      <input
-                        className="input wizard-input-sm"
-                        type="number"
-                        value={form.influencerPackageOther}
-                        onChange={(e) => updateForm('influencerPackageOther', e.target.value)}
-                        placeholder="Enter number of influencers"
-                      />
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        );
-
       case STEPS.CREATOR_TIERS:
         return (
           <div className="wizard-step">
@@ -618,6 +459,35 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
           </div>
         );
 
+      case STEPS.UGC_VIDEOS:
+        return (
+          <div className="wizard-step">
+            <h3>How many videos do you need?</h3>
+            <p>Select the number of UGC videos for this campaign</p>
+            <div className="wizard-options">
+              {UGC_VIDEO_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`wizard-option ${form.ugcVideos === opt.value ? 'active' : ''}`}
+                  onClick={() => updateForm('ugcVideos', opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {form.ugcVideos === 'other' && (
+              <input
+                className="input wizard-input"
+                type="number"
+                value={form.ugcVideosOther}
+                onChange={(e) => updateForm('ugcVideosOther', e.target.value)}
+                placeholder="Enter number of videos"
+              />
+            )}
+          </div>
+        );
+
       case STEPS.INFLUENCER_NICHE:
         return (
           <div className="wizard-step">
@@ -642,7 +512,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>Which platforms should they post on?</h3>
-            <p>Select one or more platforms</p>
+            <p>Select one or more platforms (multi-select)</p>
             <div className="wizard-options">
               {PLATFORMS.map((platform) => (
                 <button
@@ -655,75 +525,112 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                 </button>
               ))}
             </div>
+            {form.influencerPlatforms.length > 0 && (
+              <p className="selected-count">Selected: {form.influencerPlatforms.join(', ')}</p>
+            )}
+          </div>
+        );
+
+      case STEPS.INFLUENCER_BUDGET:
+        return (
+          <div className="wizard-step">
+            <h3>What's your budget for creators?</h3>
+            <p>Select your approximate budget range</p>
+            <div className="wizard-options">
+              {BUDGET_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`wizard-option ${form.influencerBudget === opt.value ? 'active' : ''}`}
+                  onClick={() => updateForm('influencerBudget', opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         );
 
       case STEPS.REVIEW:
-        const pkg = getPackageDetails();
         return (
           <div className="wizard-step">
             <h3>Review your campaign</h3>
-            <p>Confirm the details before creating</p>
+            <p>Make sure everything looks good before submitting</p>
             <div className="wizard-review">
-              <div className="review-item">
-                <span className="review-label">Campaign Name</span>
-                <span className="review-value">{form.name}</span>
-              </div>
-              <div className="review-item">
-                <span className="review-label">Brand</span>
-                <span className="review-value">
-                  {getBrandName()} ({form.brandType})
-                </span>
-              </div>
-              <div className="review-item">
-                <span className="review-label">Objective</span>
-                <span className="review-value">{form.objectives}</span>
-              </div>
-              <div className="review-item">
-                <span className="review-label">Start Date</span>
-                <span className="review-value">{form.startDate}</span>
-              </div>
-              <div className="review-item">
-                <span className="review-label">Campaign Type</span>
-                <span className="review-value">{form.campaignType}</span>
-              </div>
-              <div className="review-item">
-                <span className="review-label">Compensation</span>
-                <span className="review-value">{form.paymentType}</span>
-              </div>
-              {form.packageType === 'bundle' && (
+              <div className="review-section">
+                <h4>Campaign Details</h4>
                 <div className="review-item">
-                  <span className="review-label">Bundle</span>
-                  <span className="review-value">
-                    {BUNDLES.find((b) => b.value === form.bundle)?.label}
-                  </span>
+                  <span>Campaign Name</span>
+                  <strong>{form.name}</strong>
                 </div>
-              )}
+                <div className="review-item">
+                  <span>Objective</span>
+                  <strong>{form.objectives}</strong>
+                </div>
+                <div className="review-item">
+                  <span>Start Date</span>
+                  <strong>{form.startDate}</strong>
+                </div>
+                <div className="review-item">
+                  <span>Campaign Type</span>
+                  <strong>{form.campaignType}</strong>
+                </div>
+                <div className="review-item">
+                  <span>Payment Type</span>
+                  <strong>{form.paymentType}</strong>
+                </div>
+              </div>
+
               {(form.campaignType === 'UGC' || form.campaignType === 'Hybrid') && (
-                <div className="review-item">
-                  <span className="review-label">UGC Videos</span>
-                  <span className="review-value">{pkg.ugcCount}</span>
+                <div className="review-section">
+                  <h4>UGC Requirements</h4>
+                  <div className="review-item">
+                    <span>Persona</span>
+                    <strong>{form.ugcPersona}</strong>
+                  </div>
+                  <div className="review-item">
+                    <span>Gender</span>
+                    <strong>{form.ugcGender}</strong>
+                  </div>
+                  <div className="review-item">
+                    <span>Age Range</span>
+                    <strong>{form.ugcAgeRange}</strong>
+                  </div>
+                  <div className="review-item">
+                    <span>Number of Videos</span>
+                    <strong>
+                      {form.ugcVideos === 'other' ? form.ugcVideosOther : form.ugcVideos}
+                    </strong>
+                  </div>
                 </div>
               )}
+
               {(form.campaignType === 'Influencer' || form.campaignType === 'Hybrid') && (
-                <>
+                <div className="review-section">
+                  <h4>Influencer Requirements</h4>
                   <div className="review-item">
-                    <span className="review-label">Influencers</span>
-                    <span className="review-value">{pkg.influencerCount}</span>
+                    <span>Creator Tiers</span>
+                    <strong>
+                      {form.creatorTiers
+                        .map((t) => CREATOR_TIERS.find((ct) => ct.value === t)?.label)
+                        .join(', ')}
+                    </strong>
                   </div>
                   <div className="review-item">
-                    <span className="review-label">Creator Tiers</span>
-                    <span className="review-value">{form.creatorTiers.join(', ')}</span>
+                    <span>Niche</span>
+                    <strong>{form.influencerNiche}</strong>
                   </div>
                   <div className="review-item">
-                    <span className="review-label">Niche</span>
-                    <span className="review-value">{form.influencerNiche}</span>
+                    <span>Platforms</span>
+                    <strong>{form.influencerPlatforms.join(', ')}</strong>
                   </div>
                   <div className="review-item">
-                    <span className="review-label">Platforms</span>
-                    <span className="review-value">{form.influencerPlatforms.join(', ')}</span>
+                    <span>Budget</span>
+                    <strong>
+                      {BUDGET_OPTIONS.find((b) => b.value === form.influencerBudget)?.label}
+                    </strong>
                   </div>
-                </>
+                </div>
               )}
             </div>
           </div>
@@ -742,18 +649,20 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
             <div className="wizard-progress-bar" style={{ width: `${getProgress()}%` }} />
           </div>
           <button type="button" className="wizard-close" onClick={onClose}>
-            &times;
+            ×
           </button>
         </div>
 
         <div className="wizard-content">{renderStepContent()}</div>
 
         <div className="wizard-footer">
-          {currentStep > STEPS.NAME && (
-            <button type="button" className="btn btn-secondary" onClick={handleBack}>
-              Back
-            </button>
-          )}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={currentStep === STEPS.NAME ? onClose : handleBack}
+          >
+            {currentStep === STEPS.NAME ? 'Cancel' : 'Back'}
+          </button>
           {currentStep === STEPS.REVIEW ? (
             <button type="button" className="btn btn-primary" onClick={handleSubmit}>
               Create Campaign
@@ -765,7 +674,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
               onClick={handleNext}
               disabled={!canProceed()}
             >
-              Continue
+              Next
             </button>
           )}
         </div>

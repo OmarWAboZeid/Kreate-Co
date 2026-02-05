@@ -15,6 +15,8 @@ export default function CampaignDetailPage() {
   const [creatorSearch, setCreatorSearch] = useState('');
   const [addContentModal, setAddContentModal] = useState({ open: false, creator: null });
   const [contentForm, setContentForm] = useState({ link: '', platform: '', type: '', notes: '' });
+  const [rejectModal, setRejectModal] = useState({ open: false, creator: null });
+  const [rejectReason, setRejectReason] = useState('');
 
   const campaign = campaigns.find((item) => item.id === campaignId);
 
@@ -85,6 +87,28 @@ export default function CampaignDetailPage() {
         note: '',
       },
     });
+  };
+
+  const handleRejectConfirm = () => {
+    if (!rejectModal.creator || !rejectReason.trim()) return;
+    dispatch({
+      type: 'SET_CREATOR_DECISION',
+      payload: {
+        campaignId: campaign.id,
+        creatorId: rejectModal.creator.id,
+        decision: 'Brand Rejected',
+        actor: role === 'brand' ? 'Brand' : 'Admin',
+        note: rejectReason,
+        rejectionReason: rejectReason,
+      },
+    });
+    setRejectModal({ open: false, creator: null });
+    setRejectReason('');
+  };
+
+  const openRejectModal = (creator) => {
+    setRejectModal({ open: true, creator });
+    setRejectReason('');
   };
 
   const handleAddContent = () => {
@@ -316,6 +340,11 @@ export default function CampaignDetailPage() {
                         <div className="creator-status-row">
                           <StatusPill status={decision} />
                         </div>
+                        {decision === 'Brand Rejected' && creatorState.rejectionReasons?.[creator.id] && (
+                          <p className="rejection-reason">
+                            <strong>Rejection reason:</strong> {creatorState.rejectionReasons[creator.id]}
+                          </p>
+                        )}
                       </div>
                     </div>
 
@@ -379,7 +408,7 @@ export default function CampaignDetailPage() {
                           <button
                             type="button"
                             className="btn btn-danger"
-                            onClick={() => handleDecision(creator.id, 'Brand Rejected')}
+                            onClick={() => openRejectModal(creator)}
                           >
                             Reject
                           </button>
@@ -472,6 +501,48 @@ export default function CampaignDetailPage() {
                 disabled={!contentForm.link}
               >
                 Add Content
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejectModal.open && (
+        <div className="modal-overlay active">
+          <div className="modal-content">
+            <h3>Reject Creator</h3>
+            <p>Please provide a reason for rejecting {rejectModal.creator?.name}</p>
+            <div className="modal-form">
+              <label>
+                <span>Rejection Reason *</span>
+                <textarea
+                  className="input"
+                  placeholder="Why are you rejecting this creator?"
+                  rows={4}
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  required
+                />
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setRejectModal({ open: false, creator: null });
+                  setRejectReason('');
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleRejectConfirm}
+                disabled={!rejectReason.trim()}
+              >
+                Confirm Rejection
               </button>
             </div>
           </div>
