@@ -37,7 +37,7 @@ function ShellInner() {
     <div className="app-shell">
       <aside className="app-sidebar">
         <div className="app-brand">
-          <img src="/assets/logo1.svg" alt="kreate & co" />
+          <img src="/assets/brand/logos/wordmark-clean.png" alt="kreate & co" />
           <span>Workspace</span>
         </div>
         <nav className="app-nav">

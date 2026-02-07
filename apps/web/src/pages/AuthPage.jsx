@@ -73,7 +73,7 @@ export default function AuthPage({ initialMode = 'login' }) {
       <div className="auth-decor auth-decor-4" />
       <div className="auth-card">
         <div className="auth-brand">
-          <img src="/assets/logo1.svg" alt="kreate & co" />
+          <img src="/assets/brand/logos/wordmark-clean.png" alt="kreate & co" />
           <p>Workspace access</p>
         </div>
 

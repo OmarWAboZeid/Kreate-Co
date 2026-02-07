@@ -16,7 +16,7 @@ export default function PendingReviewPage() {
       <div className="auth-decor auth-decor-4" />
       <div className="auth-card pending-review-card">
         <div className="auth-brand">
-          <img src="/assets/logo1.svg" alt="kreate & co" />
+          <img src="/assets/brand/logos/wordmark-clean.png" alt="kreate & co" />
         </div>
         
         <div className="pending-review-content">
