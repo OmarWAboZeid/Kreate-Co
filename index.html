@@ -1,0 +1,165 @@
+<!--
+How to use:
+1) Open this file in a browser.
+2) Drag & drop a TikTok JSON export (e.g., tiktok-analysis.json) or use the file picker.
+3) The dashboard will render automatically. Use search/filters/sort and download CSV.
+-->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TikTok Analytics Snapshot</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="header">
+        <div>
+          <h1>TikTok Analytics Snapshot</h1>
+          <p class="muted">Upload a TikTok JSON export to view a clean, readable dashboard.</p>
+        </div>
+        <div class="status" id="uploadStatus">
+          <div class="status-line">No file loaded</div>
+          <div class="status-meta">Videos: — · Last parsed: —</div>
+        </div>
+      </header>
+
+      <section class="upload" id="dropZone">
+        <div class="upload-inner">
+          <div>
+            <h3>Upload TikTok JSON</h3>
+            <p class="muted">Drag & drop a .json file or click to browse.</p>
+          </div>
+          <label class="btn btn-primary">
+            Choose File
+            <input type="file" id="fileInput" accept="application/json" hidden />
+          </label>
+        </div>
+        <div class="upload-hint">Supports common TikTokApi exports (items, itemList, aweme_list, etc.).</div>
+      </section>
+
+      <section class="error" id="errorBox" hidden></section>
+
+      <section class="section" id="accountSection" hidden>
+        <div class="section-header">
+          <h2>Account Summary</h2>
+          <span class="badge">From uploaded JSON</span>
+        </div>
+        <div class="cards">
+          <div class="card">
+            <div class="card-label">Handle + Name</div>
+            <div class="card-value" id="cardHandle">—</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Followers</div>
+            <div class="card-value" id="cardFollowers">—</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Total Videos</div>
+            <div class="card-value" id="cardVideos">—</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Total Likes</div>
+            <div class="card-value" id="cardLikes">—</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Following</div>
+            <div class="card-value" id="cardFollowing">—</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="totalsSection" hidden>
+        <div class="section-header">
+          <h2>Key Totals (Computed)</h2>
+        </div>
+        <div class="cards">
+          <div class="card">
+            <div class="card-label">Total Views</div>
+            <div class="card-value" id="totalViews">—</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Total Likes</div>
+            <div class="card-value" id="totalLikes">—</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Total Comments</div>
+            <div class="card-value" id="totalComments">—</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Total Shares</div>
+            <div class="card-value" id="totalShares">—</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Total Saves</div>
+            <div class="card-value" id="totalSaves">—</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Avg Engagement Rate</div>
+            <div class="card-value" id="avgEngagement">—</div>
+          </div>
+          <div class="card">
+            <div class="card-label">Avg Views / Video</div>
+            <div class="card-value" id="avgViews">—</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="chartsSection" hidden>
+        <div class="section-header">
+          <h2>Top Videos</h2>
+        </div>
+        <div class="chart-grid">
+          <div class="chart">
+            <h3>Top 10 by Views</h3>
+            <div id="chartViews"></div>
+          </div>
+          <div class="chart">
+            <h3>Top 10 by Engagement Rate</h3>
+            <div id="chartEngagement"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="videosSection" hidden>
+        <div class="section-header">
+          <h2>Videos</h2>
+          <div class="actions">
+            <input type="text" id="searchInput" class="input" placeholder="Search caption…" />
+            <input type="number" id="minViewsInput" class="input" placeholder="Min views" />
+            <input type="number" id="minEngagementInput" class="input" placeholder="Min ER %" />
+            <button class="btn btn-secondary" id="resetFilters">Reset</button>
+            <button class="btn btn-primary" id="downloadCsv">Download CSV</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table" id="videosTable">
+            <thead>
+              <tr>
+                <th data-sort="caption">Caption</th>
+                <th data-sort="views" class="num">Views</th>
+                <th data-sort="likes" class="num">Likes</th>
+                <th data-sort="comments" class="num">Comments</th>
+                <th data-sort="shares" class="num">Shares</th>
+                <th data-sort="saves" class="num">Saves</th>
+                <th data-sort="engagement" class="num">Engagement %</th>
+                <th data-sort="date" class="num">Date</th>
+              </tr>
+            </thead>
+            <tbody id="videosBody"></tbody>
+          </table>
+        </div>
+
+        <div class="pagination" id="pagination"></div>
+      </section>
+
+      <footer class="footer">
+        <p class="muted">No backend required. Runs entirely in your browser.</p>
+      </footer>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

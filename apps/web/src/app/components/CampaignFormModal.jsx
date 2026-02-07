@@ -9,34 +9,19 @@ const CREATOR_TIERS = [
   { value: 'macro', label: 'Macro' },
 ];
 
-const UGC_PACKAGES = [
-  { value: '4', label: '4 Videos' },
-  { value: '8', label: '8 Videos' },
-  { value: '12', label: '12 Videos' },
-  { value: '20', label: '20 Videos' },
-  { value: 'other', label: 'Other' },
-];
-
-const INFLUENCER_PACKAGES = [
-  { value: '10', label: '10 Videos' },
-  { value: '15', label: '15 Videos' },
-  { value: '20', label: '20 Videos' },
-  { value: '40', label: '40 Videos' },
-  { value: 'other', label: 'Other' },
-];
-
-const HYBRID_BUNDLES = [
-  { value: 'buzz', label: 'Buzz Bundle', desc: '4 UGC, 10 influencer videos' },
-  { value: 'hype', label: 'Hype Bundle', desc: '8 UGC, 15 influencer videos' },
-  { value: 'impact', label: 'Impact Bundle', desc: '12 UGC, 25 influencer videos' },
-  { value: 'viral', label: 'Viral Campaign', desc: '20 UGC, 40 influencer videos' },
-];
+const dealTypeLabel = {
+  collab: 'Collab',
+  paid: 'Paid',
+  mix: 'Mix',
+};
 
 export default function CampaignFormModal({
   open,
   form,
   brands,
   role,
+  packages = [],
+  loadingPackages = false,
   onClose,
   onChange,
   onTogglePlatform,
@@ -49,11 +34,25 @@ export default function CampaignFormModal({
 
   const showCreatorTiers = form.creatorType === 'Influencer' || form.creatorType === 'Hybrid';
 
-  const getPackageOptions = () => {
-    if (form.creatorType === 'UGC') return UGC_PACKAGES;
-    if (form.creatorType === 'Influencer') return INFLUENCER_PACKAGES;
-    return null;
-  };
+  const selectedPackage = packages.find((pkg) => pkg.id === form.campaignPackage);
+
+  const filteredPackages = packages.filter((pkg) => {
+    if (form.dealType && pkg.deal_type !== form.dealType) return false;
+    if (!form.creatorType) return false;
+    if (form.creatorType === 'Hybrid') {
+      return pkg.package_type === 'bundle';
+    }
+    if (form.creatorType === 'UGC') {
+      return pkg.package_type === 'ugc' || (pkg.package_type === 'custom' && /ugc/i.test(pkg.name));
+    }
+    if (form.creatorType === 'Influencer') {
+      return (
+        pkg.package_type === 'influencer' ||
+        (pkg.package_type === 'custom' && /influencer/i.test(pkg.name))
+      );
+    }
+    return false;
+  });
 
   return (
     <div className="modal-overlay active">
@@ -178,51 +177,42 @@ export default function CampaignFormModal({
             <div className="campaign-form-section">
               <h4>Campaign Package *</h4>
               <div className="campaign-form-grid">
-                {form.creatorType === 'Hybrid' ? (
-                  <div className="campaign-field full-width">
-                    <span>Select Bundle</span>
-                    <div className="pill-group vertical">
-                      {HYBRID_BUNDLES.map((bundle) => (
+                <div className="campaign-field full-width">
+                  <span>
+                    Package{form.dealType ? ` · ${dealTypeLabel[form.dealType]}` : ''}
+                  </span>
+                  {loadingPackages ? (
+                    <p className="muted">Loading packages...</p>
+                  ) : (
+                    <div className={`pill-group ${form.creatorType === 'Hybrid' ? 'vertical' : ''}`}>
+                      {filteredPackages.map((pkg) => (
                         <button
-                          key={bundle.value}
+                          key={pkg.id}
                           type="button"
-                          className={form.campaignPackage === bundle.value ? 'active' : undefined}
-                          onClick={() => onChange('campaignPackage', bundle.value)}
+                          className={form.campaignPackage === pkg.id ? 'active' : undefined}
+                          onClick={() => onChange('campaignPackage', pkg.id)}
                         >
-                          <strong>{bundle.label}</strong> - {bundle.desc}
+                          <strong>{pkg.name}</strong>
+                          {pkg.description ? ` - ${pkg.description}` : ''}
+                          {pkg.price_amount != null ? ` · $${pkg.price_amount}` : ''}
                         </button>
                       ))}
+                      {filteredPackages.length === 0 && (
+                        <span className="muted">Select a deal type to see packages.</span>
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="campaign-field">
-                      <span>Package</span>
-                      <div className="pill-group">
-                        {getPackageOptions()?.map((pkg) => (
-                          <button
-                            key={pkg.value}
-                            type="button"
-                            className={form.campaignPackage === pkg.value ? 'active' : undefined}
-                            onClick={() => onChange('campaignPackage', pkg.value)}
-                          >
-                            {pkg.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {form.campaignPackage === 'other' && (
-                      <label className="campaign-field">
-                        <span>Custom Package *</span>
-                        <input
-                          className="input"
-                          value={form.customPackage}
-                          onChange={(event) => onChange('customPackage', event.target.value)}
-                          placeholder="Enter custom package details"
-                        />
-                      </label>
-                    )}
-                  </>
+                  )}
+                </div>
+                {selectedPackage?.customizable && (
+                  <label className="campaign-field">
+                    <span>Custom Package *</span>
+                    <input
+                      className="input"
+                      value={form.customPackage}
+                      onChange={(event) => onChange('customPackage', event.target.value)}
+                      placeholder="Enter custom package details"
+                    />
+                  </label>
                 )}
               </div>
             </div>
@@ -355,7 +345,7 @@ export default function CampaignFormModal({
               !form.creatorType ||
               !form.dealType ||
               !form.campaignPackage ||
-              (form.campaignPackage === 'other' && !form.customPackage) ||
+              (selectedPackage?.customizable && !form.customPackage) ||
               (showCreatorTiers && (!form.creatorTiers || form.creatorTiers.length === 0)) ||
               form.platforms.length === 0 ||
               !form.objectives ||

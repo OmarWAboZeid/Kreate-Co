@@ -1,0 +1,15 @@
+alter table campaigns
+  add column campaign_type text check (campaign_type in ('UGC', 'Influencer', 'Hybrid')),
+  add column deal_type text check (deal_type in ('collab', 'paid', 'mix')),
+  add column target_audience text,
+  add column deliverables text,
+  add column notes text,
+  add column platforms text[] not null default '{}',
+  add column objectives text[] not null default '{}',
+  add column content_formats text[] not null default '{}',
+  add column creator_tiers text[] not null default '{}',
+  add column package_id uuid references campaign_packages(id) on delete set null,
+  add column package_price_snapshot numeric(12, 2),
+  add column custom_package_label text,
+  add column ugc_video_count integer,
+  add column influencer_video_count integer;

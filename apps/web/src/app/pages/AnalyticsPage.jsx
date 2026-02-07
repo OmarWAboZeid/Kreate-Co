@@ -7,7 +7,8 @@ export default function AnalyticsPage() {
   const { role } = useParams();
   const { campaigns, contentItems, creators, brands } = useAppState();
 
-  const brandFilter = role === 'brand' ? storage.getBrand() || brands[0] : null;
+  const brandNames = brands.map((brand) => (typeof brand === 'string' ? brand : brand.name));
+  const brandFilter = role === 'brand' ? storage.getBrand() || brandNames[0] : null;
 
   const visibleCampaigns = useMemo(() => {
     if (!brandFilter) return campaigns;

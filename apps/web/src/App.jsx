@@ -8,10 +8,14 @@ import CampaignsPage from './app/pages/CampaignsPage.jsx';
 import CampaignDetailPage from './app/pages/CampaignDetailPage.jsx';
 import CreatorAssignmentsPage from './app/pages/CreatorAssignmentsPage.jsx';
 import CreatorsPage from './app/pages/CreatorsPage.jsx';
+import ContentPage from './app/pages/ContentPage.jsx';
 import AnalyticsPage from './app/pages/AnalyticsPage.jsx';
 import SettingsPage from './app/pages/SettingsPage.jsx';
 import BrandsPage from './app/pages/BrandsPage.jsx';
 import UsersPage from './app/pages/UsersPage.jsx';
+import TikTokAnalyzePage from './pages/TikTokAnalyzePage.jsx';
+import TikTokResultsPage from './pages/TikTokResultsPage.jsx';
+import TikTokCreatorSearchPage from './pages/TikTokCreatorSearchPage.jsx';
 
 function NotFound() {
   return (
@@ -32,6 +36,9 @@ export default function App() {
           <Route path="/" element={<AuthPage />} />
           <Route path="/signup" element={<AuthPage initialMode="signup" />} />
           <Route path="/pending-review" element={<PendingReviewPage />} />
+          <Route path="/tiktok" element={<TikTokAnalyzePage />} />
+          <Route path="/tiktok/results" element={<TikTokResultsPage />} />
+          <Route path="/tiktok/creators" element={<TikTokCreatorSearchPage />} />
           <Route path="/app" element={<Navigate to="/app/admin/campaigns" replace />} />
           <Route
             path="/app/:role"
@@ -45,6 +52,7 @@ export default function App() {
             <Route path="campaigns" element={<CampaignsPage />} />
             <Route path="campaigns/:campaignId" element={<CampaignDetailPage />} />
             <Route path="creators" element={<CreatorsPage />} />
+            <Route path="content" element={<ContentPage />} />
             <Route path="brands" element={<BrandsPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="settings" element={<SettingsPage />} />

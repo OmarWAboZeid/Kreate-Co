@@ -26,6 +26,23 @@ function appReducer(state, action) {
         brands: [...state.brands, action.payload],
       };
     }
+    case 'SET_CAMPAIGNS': {
+      return {
+        ...state,
+        campaigns: action.payload || [],
+      };
+    }
+    case 'SET_CAMPAIGN_CREATORS': {
+      const { campaignId, data } = action.payload;
+      if (!campaignId) return state;
+      return {
+        ...state,
+        campaignCreators: {
+          ...state.campaignCreators,
+          [campaignId]: data,
+        },
+      };
+    }
     case 'DELETE_BRAND': {
       return {
         ...state,

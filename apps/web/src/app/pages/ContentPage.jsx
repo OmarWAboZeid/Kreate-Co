@@ -24,7 +24,8 @@ export default function ContentPage() {
 
   const creatorMap = new Map(creators.map((creator) => [creator.id, creator]));
   const campaignMap = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
-  const brandFilter = role === 'brand' ? storage.getBrand() || brands[0] : null;
+  const brandNames = brands.map((brand) => (typeof brand === 'string' ? brand : brand.name));
+  const brandFilter = role === 'brand' ? storage.getBrand() || brandNames[0] : null;
   const creatorFilter = role === 'creator' ? storage.getCreator() || creators[0]?.id : null;
   const visibleContentItems = contentItems.filter((item) => {
     if (brandFilter && campaignMap.get(item.campaignId)?.brand !== brandFilter) return false;

@@ -9,6 +9,14 @@ import { useAppDispatch, useAppState } from '../state.jsx';
 
 const makeId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 
+const formatHandle = (creator) => {
+  if (!creator) return '';
+  const raw =
+    creator.instagram_handle || creator.tiktok_handle || creator.handle || creator.instagramHandle || creator.tiktokHandle;
+  if (!raw) return '';
+  return raw.startsWith('@') ? raw : `@${raw}`;
+};
+
 export default function CampaignDetailPage() {
   const { role, campaignId } = useParams();
   const navigate = useNavigate();
@@ -20,6 +28,7 @@ export default function CampaignDetailPage() {
   const [contentForm, setContentForm] = useState({ link: '', platform: '', type: '', notes: '' });
   const [rejectModal, setRejectModal] = useState({ open: false, creator: null });
   const [rejectReason, setRejectReason] = useState('');
+  const [loadingCreatorsState, setLoadingCreatorsState] = useState(false);
 
   const [ugcCreators, setUgcCreators] = useState([]);
   const [influencers, setInfluencers] = useState([]);
@@ -59,6 +68,29 @@ export default function CampaignDetailPage() {
     };
     fetchCreators();
   }, []);
+
+  const refreshCampaignCreators = async () => {
+    if (!campaignId) return;
+    setLoadingCreatorsState(true);
+    try {
+      const res = await fetch(`/api/campaigns/${campaignId}/creators`);
+      const data = await res.json();
+      if (data.ok) {
+        dispatch({
+          type: 'SET_CAMPAIGN_CREATORS',
+          payload: { campaignId, data: data.data },
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch campaign creators:', err);
+    } finally {
+      setLoadingCreatorsState(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshCampaignCreators();
+  }, [campaignId]);
 
   const campaign = campaigns.find((item) => item.id === campaignId);
 
@@ -111,6 +143,7 @@ export default function CampaignDetailPage() {
     shortlist: [],
     approvals: {},
     outreach: {},
+    rejectionReasons: {},
   };
   const shortlistCreators = creatorState.shortlist.map((id) => creatorMap.get(id)).filter(Boolean);
 
@@ -132,57 +165,80 @@ export default function CampaignDetailPage() {
     return result;
   }, [shortlistCreators, creatorFilter, creatorSearch, creatorState.approvals]);
 
-  const handleStatusChange = (creatorId, status) => {
-    dispatch({
-      type: 'SET_CREATOR_WORKFLOW_STATUS',
-      payload: { campaignId: campaign.id, creatorId, status },
-    });
+  const handleStatusChange = async (creatorId, status) => {
+    try {
+      await fetch(`/api/campaigns/${campaign.id}/creators/${creatorId}/workflow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workflowStatus: status }),
+      });
+      refreshCampaignCreators();
+    } catch (err) {
+      console.error('Failed to update workflow status:', err);
+    }
   };
 
-  const handleFinalLinkChange = (creatorId, link) => {
-    dispatch({
-      type: 'SET_CREATOR_WORKFLOW_STATUS',
-      payload: { campaignId: campaign.id, creatorId, finalVideoLink: link },
-    });
+  const handleFinalLinkChange = async (creatorId, link) => {
+    try {
+      await fetch(`/api/campaigns/${campaign.id}/creators/${creatorId}/workflow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ finalVideoLink: link }),
+      });
+      refreshCampaignCreators();
+    } catch (err) {
+      console.error('Failed to update final link:', err);
+    }
   };
 
-  const handleDecision = (creatorId, decision) => {
-    dispatch({
-      type: 'SET_CREATOR_DECISION',
-      payload: {
-        campaignId: campaign.id,
-        creatorId,
-        decision,
-        actor: role === 'brand' ? 'Brand' : 'Admin',
-        note: '',
-      },
-    });
+  const handleDecision = async (creatorId, decision) => {
+    const mappedDecision =
+      decision === 'Brand Approved'
+        ? 'approved'
+        : decision === 'Brand Rejected'
+          ? 'rejected'
+          : 'pending';
+    try {
+      await fetch(`/api/campaigns/${campaign.id}/creators/${creatorId}/decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision: mappedDecision, note: '' }),
+      });
+      refreshCampaignCreators();
+    } catch (err) {
+      console.error('Failed to update decision:', err);
+    }
   };
 
-  const handleSuggestCreator = (creator) => {
+  const handleSuggestCreator = async (creator) => {
     const isAlreadySuggested = creatorState.shortlist.includes(creator.id);
     if (isAlreadySuggested) return;
-    dispatch({
-      type: 'SUGGEST_CREATOR',
-      payload: { campaignId: campaign.id, creatorId: creator.id },
-    });
+    try {
+      await fetch(`/api/campaigns/${campaign.id}/creators/suggest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ creatorId: creator.id }),
+      });
+      refreshCampaignCreators();
+    } catch (err) {
+      console.error('Failed to suggest creator:', err);
+    }
   };
 
-  const handleRejectConfirm = () => {
+  const handleRejectConfirm = async () => {
     if (!rejectModal.creator || !rejectReason.trim()) return;
-    dispatch({
-      type: 'SET_CREATOR_DECISION',
-      payload: {
-        campaignId: campaign.id,
-        creatorId: rejectModal.creator.id,
-        decision: 'Brand Rejected',
-        actor: role === 'brand' ? 'Brand' : 'Admin',
-        note: rejectReason,
-        rejectionReason: rejectReason,
-      },
-    });
-    setRejectModal({ open: false, creator: null });
-    setRejectReason('');
+    try {
+      await fetch(`/api/campaigns/${campaign.id}/creators/${rejectModal.creator.id}/decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decision: 'rejected', note: rejectReason }),
+      });
+      setRejectModal({ open: false, creator: null });
+      setRejectReason('');
+      refreshCampaignCreators();
+    } catch (err) {
+      console.error('Failed to reject creator:', err);
+    }
   };
 
   const openRejectModal = (creator) => {
@@ -258,7 +314,7 @@ export default function CampaignDetailPage() {
           </div>
           <div className="detail-row">
             <span className="detail-label">Deal Type</span>
-            <span className="detail-value">{campaign.paymentType || 'Paid'}</span>
+            <span className="detail-value">{campaign.dealType || campaign.paymentType || 'Paid'}</span>
           </div>
           <div className="detail-row">
             <span className="detail-label">Start Date</span>
@@ -267,8 +323,7 @@ export default function CampaignDetailPage() {
           <div className="detail-row">
             <span className="detail-label">Package</span>
             <span className="detail-value">
-              {campaign.packageType || 'Custom'}
-              {campaign.bundle ? ` · ${campaign.bundle}` : ''}
+              {campaign.package?.name || campaign.customPackageLabel || 'Custom'}
             </span>
           </div>
           <div className="detail-row">
@@ -406,6 +461,7 @@ export default function CampaignDetailPage() {
                 const finalLink = outreach.finalVideoLink || '';
                 const creatorContent = campaignContent.filter((c) => c.creatorId === creator.id);
                 const canApprove = role === 'brand' && decision === 'Suggested';
+                const handleLabel = formatHandle(creator);
 
                 return (
                   <div key={creator.id} className="creator-network-card">
@@ -414,7 +470,7 @@ export default function CampaignDetailPage() {
                       <div className="creator-details">
                         <h4>{creator.name}</h4>
                         <p>
-                          {creator.handles?.instagram || creator.handle || '@creator'} · {creator.niche}
+                          {handleLabel || '@creator'} · {creator.niche}
                         </p>
                         <div className="creator-status-row">
                           <StatusPill status={decision} />
@@ -547,14 +603,16 @@ export default function CampaignDetailPage() {
               <div className="suggest-creators-grid">
                 {(suggestTab === 'ugc' ? filteredUgcCreators : filteredInfluencerCreators).map((creator) => {
                   const isAlreadySuggested = creatorState.shortlist.includes(creator.id);
+                  const handleLabel = formatHandle(creator);
                   return (
                     <div key={creator.id} className="suggest-creator-card">
                       <div className="creator-avatar">{creator.name.charAt(0).toUpperCase()}</div>
                       <div className="suggest-creator-info">
                         <h4>{creator.name}</h4>
                         <p className="creator-meta">
-                          {creator.handle || creator.tiktok_url ? '@' + (creator.handle || 'creator') : ''} 
-                          {creator.niche && ` · ${creator.niche}`}
+                          {handleLabel}
+                          {handleLabel && creator.niche ? ' · ' : ''}
+                          {creator.niche || ''}
                         </p>
                         {suggestTab === 'ugc' && creator.gender && (
                           <p className="creator-meta">{creator.gender} · Age: {creator.age || 'N/A'}</p>

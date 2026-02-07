@@ -1875,6 +1875,241 @@ body.modal-open {
   padding: 120px 24px;
 }
 
+.analysis-form {
+  display: flex;
+  gap: 12px;
+  max-width: 720px;
+  margin: 24px 0;
+  flex-wrap: wrap;
+}
+
+.analysis-form .input {
+  flex: 1;
+  min-width: 260px;
+}
+
+.error-text {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.results-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tiktok-results .table-wrap {
+  background: var(--color-white);
+  border-radius: 16px;
+  border: 1px solid rgba(112, 17, 63, 0.08);
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+}
+
+.tiktok-results table.table {
+  display: table;
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.tiktok-results .table thead th {
+  text-align: left;
+  padding: 12px 14px;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(42, 42, 42, 0.7);
+  background: rgba(112, 17, 63, 0.04);
+  border-bottom: 1px solid rgba(112, 17, 63, 0.08);
+}
+
+.tiktok-results .table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(112, 17, 63, 0.08);
+  vertical-align: top;
+}
+
+.tiktok-results .table tbody td:first-child,
+.tiktok-results .table thead th:first-child {
+  width: 88px;
+}
+
+.tiktok-results .table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.tiktok-results .table th.num,
+.tiktok-results .table td.num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.tiktok-results .table tbody tr:hover {
+  background: rgba(112, 17, 63, 0.03);
+}
+
+.tiktok-results .caption-cell span {
+  line-height: 1.4;
+}
+
+.creator-search-form {
+  align-items: stretch;
+}
+
+.creator-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.creator-actions .btn {
+  white-space: nowrap;
+}
+
+.video-row {
+  cursor: pointer;
+}
+
+.thumb-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(112, 17, 63, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumb-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumb-placeholder {
+  color: rgba(42, 42, 42, 0.4);
+  font-weight: 600;
+}
+
+.caption-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.video-link {
+  font-size: 0.85rem;
+  color: var(--color-crimson);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.expand-row td {
+  background: rgba(112, 17, 63, 0.04);
+}
+
+.expand-content {
+  display: grid;
+  gap: 8px;
+  padding: 12px 4px;
+  font-size: 0.9rem;
+}
+.dashboard-section {
+  margin-top: 32px;
+}
+
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.dashboard-card {
+  background: var(--color-white);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(112, 17, 63, 0.08);
+}
+
+.chart-card {
+  background: var(--color-white);
+  border-radius: 16px;
+  border: 1px solid rgba(112, 17, 63, 0.08);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.chart-list {
+  display: grid;
+  gap: 10px;
+}
+
+.chart-row {
+  display: grid;
+  grid-template-columns: 48px 1fr 80px;
+  gap: 10px;
+  align-items: center;
+}
+
+.chart-label {
+  font-size: 0.85rem;
+  color: rgba(42, 42, 42, 0.6);
+}
+
+.chart-bar {
+  background: rgba(112, 17, 63, 0.08);
+  border-radius: 999px;
+  height: 10px;
+  overflow: hidden;
+}
+
+.chart-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-crimson), var(--color-sand));
+}
+
+.chart-value {
+  font-size: 0.85rem;
+  text-align: right;
+}
+.results-json {
+  background: #111827;
+  color: #f9fafb;
+  padding: 24px;
+  border-radius: 12px;
+  max-height: 70vh;
+  overflow: auto;
+  font-size: 0.85rem;
+}
+
+.debug-log {
+  background: #111827;
+  color: #f9fafb;
+  padding: 12px;
+  border-radius: 8px;
+  max-height: 240px;
+  overflow: auto;
+  font-size: 0.8rem;
+  margin-top: 8px;
+}
+
 .app-topbar {
   padding: 32px 40px 24px;
   display: flex;

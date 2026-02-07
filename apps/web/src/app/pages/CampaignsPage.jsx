@@ -4,7 +4,7 @@ import CampaignFormModal from '../components/CampaignFormModal.jsx';
 import CampaignGrid from '../components/CampaignGrid.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import CampaignWizard from '../components/CampaignWizard.jsx';
-import { storage, useAppDispatch, useAppState, utils } from '../state.jsx';
+import { storage, useAppDispatch, useAppState } from '../state.jsx';
 
 const API_BASE = '/api';
 
@@ -35,6 +35,11 @@ export default function CampaignsPage() {
   const [showWizard, setShowWizard] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [adminBrandFilter, setAdminBrandFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [packages, setPackages] = useState([]);
+  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
+  const [loadingPackages, setLoadingPackages] = useState(false);
 
   useEffect(() => {
     const fetchBrands = async () => {
@@ -53,6 +58,42 @@ export default function CampaignsPage() {
     }
   }, [dispatch, brands.length]);
 
+  useEffect(() => {
+    const fetchCampaigns = async () => {
+      setLoadingCampaigns(true);
+      try {
+        const res = await fetch(`${API_BASE}/campaigns`);
+        const data = await res.json();
+        if (data.ok) {
+          dispatch({ type: 'SET_CAMPAIGNS', payload: data.data });
+        }
+      } catch (err) {
+        console.error('Error fetching campaigns:', err);
+      } finally {
+        setLoadingCampaigns(false);
+      }
+    };
+    fetchCampaigns();
+  }, [dispatch]);
+
+  useEffect(() => {
+    const fetchPackages = async () => {
+      setLoadingPackages(true);
+      try {
+        const res = await fetch(`${API_BASE}/packages`);
+        const data = await res.json();
+        if (data.ok) {
+          setPackages(data.data || []);
+        }
+      } catch (err) {
+        console.error('Error fetching packages:', err);
+      } finally {
+        setLoadingPackages(false);
+      }
+    };
+    fetchPackages();
+  }, []);
+
   const brandNames = brands.map((b) => (typeof b === 'string' ? b : b.name));
   const brandFilter = role === 'brand' ? storage.getBrand() || brandNames[0] : null;
   const visibleCampaigns = useMemo(() => {
@@ -63,8 +104,23 @@ export default function CampaignsPage() {
     if ((role === 'admin' || role === 'employee') && adminBrandFilter) {
       filtered = filtered.filter((campaign) => campaign.brand === adminBrandFilter);
     }
+    if (statusFilter) {
+      const normalizedStatus = statusFilter.toLowerCase();
+      filtered = filtered.filter(
+        (campaign) => (campaign.status || '').toLowerCase() === normalizedStatus
+      );
+    }
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase();
+      filtered = filtered.filter((campaign) => {
+        return (
+          (campaign.name || '').toLowerCase().includes(query) ||
+          (campaign.brand || '').toLowerCase().includes(query)
+        );
+      });
+    }
     return filtered;
-  }, [brandFilter, campaigns, role, adminBrandFilter]);
+  }, [brandFilter, campaigns, role, adminBrandFilter, searchQuery, statusFilter]);
 
   const openModal = () => {
     if (role === 'brand' && brandFilter) {
@@ -124,69 +180,71 @@ export default function CampaignsPage() {
     setShowModal(false);
   };
 
-  const handleWizardSubmit = (wizardData) => {
-    const newCampaign = {
-      id: utils.makeId('camp'),
-      name: wizardData.name,
-      brand: wizardData.brand,
-      brandType: wizardData.brandType,
-      platforms: wizardData.influencer?.platforms || ['Instagram'],
-      status: 'Draft',
-      description: '',
-      objectives: wizardData.objectives,
-      paymentType: wizardData.paymentType,
-      packageType: wizardData.packageType,
-      bundle: wizardData.bundle,
-      ugcCount: wizardData.ugcCount,
-      influencerCount: wizardData.influencerCount,
-      creatorTiers: wizardData.creatorTiers,
-      targetAudience: '',
-      creatorType: wizardData.campaignType,
-      deliverables: '',
-      contentFormat: [],
-      timeline: { start: wizardData.startDate, end: '' },
-      notes: '',
-      criteria: {
-        ugc: wizardData.ugc,
-        influencer: wizardData.influencer,
-      },
-      criteriaVersion: 0,
-      createdAt: new Date().toISOString().slice(0, 10),
-    };
-    dispatch({ type: 'CREATE_CAMPAIGN', payload: newCampaign, actor: 'Brand' });
-    setShowWizard(false);
+  const handleWizardSubmit = async (wizardData) => {
+    try {
+      const res = await fetch(`${API_BASE}/campaigns`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: wizardData.name,
+          brand: wizardData.brand,
+          status: 'Draft',
+          platforms: wizardData.influencer?.platforms || ['Instagram'],
+          objectives: wizardData.objectives,
+          campaignType: wizardData.campaignType,
+          dealType: wizardData.paymentType ? wizardData.paymentType.toLowerCase() : null,
+          creatorTiers: wizardData.creatorTiers,
+          startDate: wizardData.startDate,
+          ugcVideoCount: wizardData.ugcCount || null,
+          influencerVideoCount: wizardData.influencerCount || null,
+          customPackageLabel: wizardData.ugcVideosOther || null,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        dispatch({ type: 'CREATE_CAMPAIGN', payload: data.data, actor: 'Brand' });
+        setShowWizard(false);
+      }
+    } catch (error) {
+      console.error('Failed to create campaign:', error);
+    }
   };
 
-  const handleCreateCampaign = () => {
+  const handleCreateCampaign = async () => {
     if (!form.name || !form.brand || form.platforms.length === 0) {
       return;
     }
-
-    const newCampaign = {
-      id: utils.makeId('camp'),
-      name: form.name,
-      brand: form.brand,
-      platforms: form.platforms,
-      status: 'Draft',
-      description: form.description,
-      objectives: form.objectives,
-      targetAudience: form.targetAudience,
-      creatorType: form.creatorType,
-      creatorTiers: form.creatorTiers,
-      dealType: form.dealType,
-      campaignPackage: form.campaignPackage,
-      customPackage: form.customPackage,
-      deliverables: form.deliverables,
-      contentFormat: form.contentFormat,
-      timeline: { start: form.startDate, end: form.endDate },
-      notes: form.notes,
-      criteria: {},
-      criteriaVersion: 0,
-      createdAt: new Date().toISOString().slice(0, 10),
-    };
-
-    dispatch({ type: 'CREATE_CAMPAIGN', payload: newCampaign, actor: 'Admin' });
-    closeModal();
+    try {
+      const res = await fetch(`${API_BASE}/campaigns`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          brand: form.brand,
+          status: 'Draft',
+          platforms: form.platforms,
+          objectives: form.objectives,
+          contentFormat: form.contentFormat,
+          creatorTiers: form.creatorTiers,
+          campaignType: form.creatorType,
+          dealType: form.dealType,
+          targetAudience: form.targetAudience,
+          deliverables: form.deliverables,
+          notes: form.notes,
+          startDate: form.startDate,
+          endDate: form.endDate,
+          packageId: form.campaignPackage || null,
+          customPackageLabel: form.customPackage || null,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        dispatch({ type: 'CREATE_CAMPAIGN', payload: data.data, actor: 'Admin' });
+        closeModal();
+      }
+    } catch (error) {
+      console.error('Failed to create campaign:', error);
+    }
   };
 
   return (
@@ -208,13 +266,22 @@ export default function CampaignsPage() {
       </div>
 
       <div className="filters-bar">
-        <input className="input" placeholder="Search campaigns" />
-        <select className="input">
-          <option>Status</option>
-          <option>Draft</option>
-          <option>Submitted</option>
-          <option>In Review</option>
-          <option>Active</option>
+        <input
+          className="input"
+          placeholder="Search campaigns"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+        />
+        <select
+          className="input"
+          value={statusFilter}
+          onChange={(event) => setStatusFilter(event.target.value)}
+        >
+          <option value="">Status</option>
+          <option value="Draft">Draft</option>
+          <option value="Submitted">Submitted</option>
+          <option value="In Review">In Review</option>
+          <option value="Active">Active</option>
         </select>
         {(role === 'admin' || role === 'employee') && (
           <select
@@ -232,7 +299,9 @@ export default function CampaignsPage() {
         )}
       </div>
 
-      {visibleCampaigns.length === 0 ? (
+      {loadingCampaigns ? (
+        <div className="loading-state">Loading campaigns...</div>
+      ) : visibleCampaigns.length === 0 ? (
         <EmptyState
           title="No campaigns yet"
           description="Create your first campaign to start building a roster."
@@ -257,6 +326,8 @@ export default function CampaignsPage() {
         form={form}
         brands={brandNames}
         role={role}
+        packages={packages}
+        loadingPackages={loadingPackages}
         onClose={closeModal}
         onChange={updateForm}
         onTogglePlatform={togglePlatform}
