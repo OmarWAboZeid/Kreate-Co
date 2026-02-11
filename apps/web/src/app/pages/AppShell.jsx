@@ -51,6 +51,7 @@ function ShellInner() {
             </NavLink>
           ))}
         </nav>
+        <div className="app-sidebar-watermark" />
         <div className="app-sidebar-footer">
           <p>Role</p>
           <div className="role-switch">

@@ -71,6 +71,8 @@ export default function AuthPage({ initialMode = 'login' }) {
       <div className="auth-decor auth-decor-2" />
       <div className="auth-decor auth-decor-3" />
       <div className="auth-decor auth-decor-4" />
+      <div className="auth-decor auth-decor-5" />
+      <div className="auth-decor auth-decor-6" />
       <div className="auth-card">
         <div className="auth-brand">
           <img src="/assets/brand/logos/wordmark-clean.png" alt="kreate & co" />

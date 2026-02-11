@@ -83,7 +83,7 @@ body {
   font-family: var(--font-body);
   font-weight: 300;
   color: var(--color-dark);
-  background-color: var(--color-smoke);
+  background-color: #faf5ef;
   line-height: 1.6;
   overflow-x: hidden;
 }
@@ -553,7 +553,10 @@ p {
 
 .card:hover {
   transform: translateY(-8px);
-  box-shadow: var(--shadow-xl);
+  box-shadow:
+    var(--shadow-xl),
+    0 0 0 1px rgba(198, 208, 119, 0.25),
+    0 0 0 2px rgba(112, 17, 63, 0.1);
 }
 
 .card-glass {
@@ -1857,7 +1860,7 @@ body.modal-open {
 .app-shell {
   display: flex;
   min-height: 100vh;
-  background: #f5f1ec;
+  background: #faf5ef;
   overflow: hidden;
 }
 
@@ -2923,7 +2926,7 @@ body.modal-open {
   align-items: center;
   justify-content: center;
   padding: 60px 24px;
-  background: linear-gradient(160deg, #f9f5ef 0%, #f3ece3 40%, #ede5d9 100%);
+  background: linear-gradient(160deg, #70113F 0%, #5a0e33 40%, #4a0b2a 70%, #3d0923 100%);
   position: relative;
   overflow: hidden;
 }
@@ -2935,7 +2938,7 @@ body.modal-open {
   right: -20%;
   width: 70%;
   height: 70%;
-  background: radial-gradient(ellipse, rgba(198, 208, 119, 0.35) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(198, 208, 119, 0.15) 0%, transparent 70%);
   animation: floatBlob1 25s ease-in-out infinite;
   pointer-events: none;
 }
@@ -2947,7 +2950,7 @@ body.modal-open {
   left: -15%;
   width: 60%;
   height: 60%;
-  background: radial-gradient(ellipse, rgba(112, 17, 63, 0.12) 0%, transparent 70%);
+  background: radial-gradient(ellipse, rgba(198, 208, 119, 0.1) 0%, transparent 70%);
   animation: floatBlob2 20s ease-in-out infinite;
   pointer-events: none;
 }
@@ -2978,15 +2981,15 @@ body.modal-open {
 .auth-page .auth-decor {
   position: absolute;
   pointer-events: none;
-  opacity: 0.08;
+  opacity: 0.15;
   z-index: 0;
 }
 
 .auth-page .auth-decor-1 {
-  top: 5%;
-  left: 5%;
-  width: 180px;
-  height: 180px;
+  top: 4%;
+  left: 4%;
+  width: 200px;
+  height: 200px;
   background-image: url('/assets/brand/elements/element-01-sand.png');
   background-size: contain;
   background-repeat: no-repeat;
@@ -2994,21 +2997,21 @@ body.modal-open {
 }
 
 .auth-page .auth-decor-2 {
-  top: 10%;
-  right: 8%;
-  width: 120px;
-  height: 120px;
-  background-image: url('/assets/brand/elements/element-13-crimson.png');
+  top: 6%;
+  right: 6%;
+  width: 160px;
+  height: 160px;
+  background-image: url('/assets/brand/elements/element-03-sand.png');
   background-size: contain;
   background-repeat: no-repeat;
   animation: floatDecor 15s ease-in-out infinite 2s;
 }
 
 .auth-page .auth-decor-3 {
-  bottom: 10%;
-  left: 15%;
-  width: 140px;
-  height: 140px;
+  bottom: 6%;
+  left: 8%;
+  width: 180px;
+  height: 180px;
   background-image: url('/assets/brand/elements/element-05-sand.png');
   background-size: contain;
   background-repeat: no-repeat;
@@ -3016,14 +3019,38 @@ body.modal-open {
 }
 
 .auth-page .auth-decor-4 {
-  bottom: 15%;
-  right: 5%;
-  width: 160px;
-  height: 160px;
-  background-image: url('/assets/brand/elements/element-15-crimson.png');
+  bottom: 8%;
+  right: 4%;
+  width: 190px;
+  height: 190px;
+  background-image: url('/assets/brand/elements/element-07-sand.png');
   background-size: contain;
   background-repeat: no-repeat;
   animation: floatDecor 22s ease-in-out infinite 1s;
+}
+
+.auth-page .auth-decor-5 {
+  top: 45%;
+  left: 2%;
+  width: 120px;
+  height: 120px;
+  background-image: url('/assets/brand/elements/element-09-sand.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  opacity: 0.1;
+  animation: floatDecor 24s ease-in-out infinite 3s;
+}
+
+.auth-page .auth-decor-6 {
+  top: 40%;
+  right: 2%;
+  width: 130px;
+  height: 130px;
+  background-image: url('/assets/brand/elements/element-11-sand.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  opacity: 0.1;
+  animation: floatDecor 19s ease-in-out infinite 5s;
 }
 
 @keyframes floatDecor {
@@ -3039,21 +3066,21 @@ body.modal-open {
 }
 
 .auth-card {
-  width: min(420px, 100%);
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(40px) saturate(180%);
-  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  width: min(440px, 100%);
+  background: rgba(250, 245, 239, 0.88);
+  backdrop-filter: blur(48px) saturate(200%);
+  -webkit-backdrop-filter: blur(48px) saturate(200%);
   border-radius: 32px;
   padding: 48px 40px;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.5),
-    0 2px 4px rgba(112, 17, 63, 0.02),
-    0 8px 16px rgba(112, 17, 63, 0.04),
-    0 24px 48px rgba(112, 17, 63, 0.08),
-    0 48px 80px rgba(112, 17, 63, 0.06);
+    0 0 0 1px rgba(255, 255, 255, 0.3),
+    0 2px 4px rgba(0, 0, 0, 0.05),
+    0 8px 16px rgba(0, 0, 0, 0.08),
+    0 24px 48px rgba(0, 0, 0, 0.12),
+    0 48px 80px rgba(0, 0, 0, 0.08);
   display: grid;
   gap: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   animation: authCardIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
   position: relative;
   z-index: 1;
@@ -3090,9 +3117,9 @@ body.modal-open {
 }
 
 .auth-brand img {
-  height: 56px;
+  height: 72px;
   transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  filter: drop-shadow(0 2px 8px rgba(112, 17, 63, 0.1));
+  filter: drop-shadow(0 2px 8px rgba(112, 17, 63, 0.15));
 }
 
 .auth-brand img:hover {
@@ -3164,15 +3191,15 @@ body.modal-open {
 .auth-form .input {
   padding: 16px 20px;
   border-radius: 16px;
-  border: 2px solid rgba(112, 17, 63, 0.08);
-  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(198, 208, 119, 0.3);
+  background: rgba(255, 255, 255, 0.9);
   font-size: 1rem;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   font-weight: 500;
 }
 
 .auth-form .input:hover {
-  border-color: rgba(112, 17, 63, 0.15);
+  border-color: rgba(198, 208, 119, 0.5);
   background: rgba(255, 255, 255, 1);
 }
 
@@ -3180,8 +3207,8 @@ body.modal-open {
   border-color: var(--color-crimson);
   background: var(--color-white);
   box-shadow:
-    0 0 0 4px rgba(112, 17, 63, 0.06),
-    0 4px 12px rgba(112, 17, 63, 0.08);
+    0 0 0 4px rgba(112, 17, 63, 0.1),
+    0 4px 12px rgba(112, 17, 63, 0.12);
   outline: none;
 }
 
@@ -3594,19 +3621,44 @@ body.modal-open {
   border-radius: 4px;
 }
 
+.app-sidebar-watermark {
+  position: absolute;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 120px;
+  height: 120px;
+  background-image: url('/assets/brand/elements/element-11-sand.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.06;
+  pointer-events: none;
+}
+
 .app-topbar {
   padding: 24px 36px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  border-bottom: 1px solid rgba(112, 17, 63, 0.06);
-  background: rgba(255, 255, 255, 0.95);
+  border-bottom: none;
+  background: #faf5ef;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
   z-index: 20;
+}
+
+.app-topbar::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-crimson) 0%, var(--color-sand) 100%);
 }
 
 .app-topbar h1 {
@@ -4456,10 +4508,10 @@ body.modal-open {
   gap: 12px;
   align-items: center;
   padding: 16px 20px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(250, 245, 239, 0.95);
   border-radius: 16px;
   box-shadow: 0 2px 8px rgba(112, 17, 63, 0.04);
-  border: 1px solid rgba(112, 17, 63, 0.06);
+  border: 1px solid rgba(198, 208, 119, 0.15);
 }
 
 .filters-bar .input {
@@ -6996,6 +7048,7 @@ body.modal-open {
   margin: 0 0 4px;
   font-size: 1.5rem;
   font-weight: 700;
+  color: var(--color-crimson);
 }
 
 .page-header-text p {
