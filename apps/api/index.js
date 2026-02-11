@@ -252,6 +252,41 @@ const ensureOrgAccess = async (user, organizationId) => {
   return result.rowCount > 0;
 };
 
+const createOrgNotification = async (organizationId, message, channel, createdByUserId) => {
+  if (!organizationId || !message) return null;
+  const result = await pool.query(
+    `
+    INSERT INTO organization_notifications
+      (organization_id, message, channel, created_by_user_id)
+    VALUES ($1, $2, $3, $4)
+    RETURNING id
+    `,
+    [organizationId, message, channel || 'In-app', createdByUserId || null]
+  );
+  return result.rows[0] || null;
+};
+
+const getCampaignContext = async (campaignId) => {
+  const result = await pool.query(
+    `
+    SELECT c.id, c.name, c.organization_id, o.name as organization_name
+    FROM campaigns c
+    JOIN organizations o ON c.organization_id = o.id
+    WHERE c.id = $1
+    `,
+    [campaignId]
+  );
+  return result.rows[0] || null;
+};
+
+const getCreatorDisplayName = async (creatorId) => {
+  const result = await pool.query(
+    'SELECT display_name FROM creators WHERE id = $1',
+    [creatorId]
+  );
+  return result.rows[0]?.display_name || 'Creator';
+};
+
 async function requireApprovedUser(req, res) {
   if (!pool) {
     json(res, 503, { ok: false, error: 'Database not configured' });
@@ -954,6 +989,13 @@ const server = http.createServer(async (req, res) => {
         package_ugc_count: packageUgcCount,
       };
 
+      await createOrgNotification(
+        row.organization_id,
+        `Campaign created: ${row.name}`,
+        'In-app',
+        user.id
+      );
+
       return json(res, 201, { ok: true, data: mapCampaignRow(responseRow) });
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });
@@ -1060,15 +1102,27 @@ const server = http.createServer(async (req, res) => {
       );
       const nextRank = Number(maxRankResult.rows[0]?.max_rank || 0) + 1;
 
-      await pool.query(
+      const insertResult = await pool.query(
         `
         INSERT INTO campaign_invitations
           (campaign_id, creator_id, status, created_by_user_id, brand_decision, shortlist_rank)
         VALUES ($1, $2, 'shortlisted', $3, 'pending', $4)
         ON CONFLICT (campaign_id, creator_id) DO NOTHING
+        RETURNING id
         `,
         [campaignId, creatorId, user.id, nextRank]
       );
+
+      if (insertResult.rowCount > 0) {
+        const campaignContext = await getCampaignContext(campaignId);
+        const creatorName = await getCreatorDisplayName(creatorId);
+        await createOrgNotification(
+          campaignContext?.organization_id,
+          `Creator suggested for ${campaignContext?.name || 'campaign'}: ${creatorName}`,
+          'In-app',
+          user.id
+        );
+      }
 
       return json(res, 201, { ok: true });
     } catch (error) {
@@ -1117,6 +1171,17 @@ const server = http.createServer(async (req, res) => {
       if (updateResult.rows.length === 0) {
         return json(res, 404, { ok: false, error: 'Invitation not found' });
       }
+
+      const campaignContext = await getCampaignContext(campaignId);
+      const creatorName = await getCreatorDisplayName(creatorId);
+      const decisionLabel =
+        decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : 'updated';
+      await createOrgNotification(
+        campaignContext?.organization_id,
+        `Creator ${decisionLabel} for ${campaignContext?.name || 'campaign'}: ${creatorName}`,
+        'In-app',
+        user.id
+      );
 
       if (decision === 'approved') {
         await pool.query(
@@ -1168,6 +1233,17 @@ const server = http.createServer(async (req, res) => {
         return json(res, 400, { ok: false, error: 'Nothing to update' });
       }
 
+      const existingResult = await pool.query(
+        `
+        SELECT final_video_link
+        FROM campaign_participants
+        WHERE campaign_id = $1 AND creator_id = $2
+        `,
+        [campaignId, creatorId]
+      );
+
+      const previousFinalLink = existingResult.rows[0]?.final_video_link || null;
+
       const updateResult = await pool.query(
         `
         UPDATE campaign_participants
@@ -1181,6 +1257,17 @@ const server = http.createServer(async (req, res) => {
 
       if (updateResult.rows.length === 0) {
         return json(res, 404, { ok: false, error: 'Participant not found' });
+      }
+
+      if (finalVideoLink && finalVideoLink !== previousFinalLink) {
+        const campaignContext = await getCampaignContext(campaignId);
+        const creatorName = await getCreatorDisplayName(creatorId);
+        await createOrgNotification(
+          campaignContext?.organization_id,
+          `Final video submitted for ${campaignContext?.name || 'campaign'}: ${creatorName}`,
+          'In-app',
+          user.id
+        );
       }
 
       return json(res, 200, { ok: true });
@@ -1360,6 +1447,41 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (url.startsWith('/api/notifications') && method === 'GET') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin' && user.role !== 'employee') {
+      return json(res, 403, { ok: false, error: 'Forbidden' });
+    }
+    try {
+      const urlObj = new URL(url, `http://localhost:${PORT}`);
+      const limit = parseInt(urlObj.searchParams.get('limit')) || 50;
+      const organizationId = urlObj.searchParams.get('organizationId');
+      const values = [];
+      let whereClause = '';
+      if (organizationId) {
+        values.push(organizationId);
+        whereClause = `WHERE n.organization_id = $1`;
+      }
+      values.push(limit);
+      const limitIdx = values.length;
+      const result = await pool.query(
+        `
+        SELECT n.id, n.organization_id, o.name as organization_name, n.message, n.channel, n.read, n.created_at
+        FROM organization_notifications n
+        JOIN organizations o ON n.organization_id = o.id
+        ${whereClause}
+        ORDER BY n.created_at DESC
+        LIMIT $${limitIdx}
+        `,
+        values
+      );
+      return json(res, 200, { ok: true, data: result.rows });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
   const orgNotificationsMatch = url.match(
     /^\/api\/organizations\/([0-9a-fA-F-]+)\/notifications$/
   );
@@ -1378,7 +1500,7 @@ const server = http.createServer(async (req, res) => {
       const limit = parseInt(urlObj.searchParams.get('limit')) || 50;
       const result = await pool.query(
         `
-        SELECT id, message, channel, read, created_at
+        SELECT id, organization_id, message, channel, read, created_at
         FROM organization_notifications
         WHERE organization_id = $1
         ORDER BY created_at DESC
@@ -1492,6 +1614,12 @@ const server = http.createServer(async (req, res) => {
       console.error('Register error:', error);
       return json(res, 500, { ok: false, error: 'Registration failed' });
     }
+  }
+
+  if (method === 'GET' && url === '/api/me') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    return json(res, 200, { ok: true, data: user });
   }
 
   if (method === 'POST' && url === '/api/auth/login') {

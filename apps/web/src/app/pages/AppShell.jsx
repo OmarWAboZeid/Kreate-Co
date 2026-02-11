@@ -37,8 +37,10 @@ function ShellInner() {
     <div className="app-shell">
       <aside className="app-sidebar">
         <div className="app-brand">
-          <img src="/assets/brand/logos/wordmark-clean.png" alt="kreate & co" />
-          <span>Workspace</span>
+          <div className="app-brand-logo">
+            <img src="/assets/brand/logos/kreateco-wordmark.png" alt="Kreate&Co" />
+          </div>
+          <span className="app-brand-subtitle">Workspace</span>
         </div>
         <nav className="app-nav">
           {currentRole.nav.map((item) => (

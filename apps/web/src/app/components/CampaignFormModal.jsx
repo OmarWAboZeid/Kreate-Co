@@ -1,4 +1,4 @@
-const PLATFORM_OPTIONS = ['TikTok', 'Instagram'];
+const PLATFORM_OPTIONS = ['TikTok', 'Instagram', 'Facebook'];
 const CONTENT_FORMAT_OPTIONS = ['Reel', 'Post', 'Story'];
 const DEAL_TYPES = ['Collab', 'Paid', 'Mix'];
 const OBJECTIVES = ['Awareness', 'Sales', 'Launch', 'Content Bank'];

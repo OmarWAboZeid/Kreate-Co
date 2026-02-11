@@ -27,7 +27,7 @@ const CREATOR_TIERS = [
 ];
 
 const NICHES = ['Fashion', 'F&B', 'Beauty', 'Lifestyle', 'Tech'];
-const PLATFORMS = ['Instagram', 'TikTok'];
+const PLATFORMS = ['Instagram', 'TikTok', 'Facebook'];
 
 const UGC_VIDEO_OPTIONS = [
   { value: '4', label: '4 Videos' },
@@ -244,16 +244,70 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
     });
   };
 
-  const getTotalSteps = () => {
-    if (form.campaignType === 'UGC') return 10;
-    if (form.campaignType === 'Influencer') return 10;
-    if (form.campaignType === 'Hybrid') return 14;
-    return 5;
+  const getFlowSteps = () => {
+    const baseSteps = [
+      STEPS.NAME,
+      STEPS.OBJECTIVES,
+      STEPS.START_DATE,
+      STEPS.CAMPAIGN_TYPE,
+      STEPS.PAYMENT_TYPE,
+    ];
+
+    if (!form.campaignType) {
+      return [
+        ...baseSteps,
+        STEPS.CREATOR_TIERS,
+        STEPS.UGC_PERSONA,
+        STEPS.UGC_GENDER,
+        STEPS.UGC_AGE,
+        STEPS.UGC_VIDEOS,
+        STEPS.INFLUENCER_NICHE,
+        STEPS.INFLUENCER_PLATFORMS,
+        STEPS.INFLUENCER_BUDGET,
+        STEPS.REVIEW,
+      ];
+    }
+
+    if (form.campaignType === 'UGC') {
+      return [
+        ...baseSteps,
+        STEPS.UGC_PERSONA,
+        STEPS.UGC_GENDER,
+        STEPS.UGC_AGE,
+        STEPS.UGC_VIDEOS,
+        STEPS.REVIEW,
+      ];
+    }
+
+    if (form.campaignType === 'Influencer') {
+      return [
+        ...baseSteps,
+        STEPS.CREATOR_TIERS,
+        STEPS.INFLUENCER_NICHE,
+        STEPS.INFLUENCER_PLATFORMS,
+        STEPS.INFLUENCER_BUDGET,
+        STEPS.REVIEW,
+      ];
+    }
+
+    return [
+      ...baseSteps,
+      STEPS.CREATOR_TIERS,
+      STEPS.UGC_PERSONA,
+      STEPS.UGC_GENDER,
+      STEPS.UGC_AGE,
+      STEPS.UGC_VIDEOS,
+      STEPS.INFLUENCER_NICHE,
+      STEPS.INFLUENCER_PLATFORMS,
+      STEPS.INFLUENCER_BUDGET,
+      STEPS.REVIEW,
+    ];
   };
 
   const getProgress = () => {
-    const total = getTotalSteps();
-    return Math.min((currentStep / total) * 100, 100);
+    const flowSteps = getFlowSteps();
+    const index = Math.max(flowSteps.indexOf(currentStep), 0);
+    return Math.min(((index + 1) / flowSteps.length) * 100, 100);
   };
 
   const renderStepContent = () => {

@@ -7,9 +7,31 @@ export default function NotificationCenter({ role }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [sessionRole, setSessionRole] = useState(null);
+  const isBrand = role === 'brand';
+  const isAdminView = role === 'admin' || role === 'employee';
 
   useEffect(() => {
-    if (role !== 'brand' || brands.length > 0) return;
+    let active = true;
+    const fetchMe = async () => {
+      try {
+        const res = await fetch('/api/me');
+        const data = await res.json();
+        if (active && data.ok) {
+          setSessionRole(data.data?.role || null);
+        }
+      } catch (err) {
+        console.error('Failed to fetch session user:', err);
+      }
+    };
+    fetchMe();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isBrand || brands.length > 0) return;
     const fetchBrands = async () => {
       try {
         const res = await fetch('/api/brands');
@@ -22,21 +44,33 @@ export default function NotificationCenter({ role }) {
       }
     };
     fetchBrands();
-  }, [brands.length, dispatch, role]);
+  }, [brands.length, dispatch, isBrand]);
 
   const selectedBrandName =
-    role === 'brand' ? storage.getBrand() || brands[0]?.name : null;
+    isBrand ? storage.getBrand() || brands[0]?.name : null;
   const organizationId =
-    role === 'brand'
+    isBrand
       ? brands.find((brand) => brand.name === selectedBrandName)?.id
       : null;
+  const canAdminNotifications = sessionRole
+    ? sessionRole === 'admin' || sessionRole === 'employee'
+    : isAdminView;
+  const isImpersonatingBrand = isBrand && canAdminNotifications;
+  const notificationsUrl =
+    isBrand && organizationId
+      ? isImpersonatingBrand
+        ? `/api/notifications?organizationId=${organizationId}&limit=50`
+        : `/api/organizations/${organizationId}/notifications?limit=50`
+      : canAdminNotifications && isAdminView
+        ? '/api/notifications?limit=50'
+        : null;
 
   useEffect(() => {
-    if (!organizationId) return;
+    if (!notificationsUrl) return;
     const fetchNotifications = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/organizations/${organizationId}/notifications?limit=50`);
+        const res = await fetch(notificationsUrl);
         const data = await res.json();
         if (data.ok) {
           setNotifications(data.data || []);
@@ -48,16 +82,21 @@ export default function NotificationCenter({ role }) {
       }
     };
     fetchNotifications();
-  }, [organizationId]);
+  }, [notificationsUrl]);
+
+  useEffect(() => {
+    setNotifications([]);
+  }, [notificationsUrl]);
 
   const unreadCount = notifications.filter((note) => !note.read).length;
 
-  const markRead = (notificationId) => {
-    if (!organizationId) return;
+  const markRead = (note) => {
+    const orgId = note.organization_id || organizationId;
+    if (!orgId) return;
     setNotifications((prev) =>
-      prev.map((note) => (note.id === notificationId ? { ...note, read: true } : note))
+      prev.map((item) => (item.id === note.id ? { ...item, read: true } : item))
     );
-    fetch(`/api/organizations/${organizationId}/notifications/${notificationId}/read`, {
+    fetch(`/api/organizations/${orgId}/notifications/${note.id}/read`, {
       method: 'POST',
     }).catch((err) => {
       console.error('Failed to mark notification read:', err);
@@ -87,11 +126,14 @@ export default function NotificationCenter({ role }) {
               {notifications.map((note) => (
                 <li key={note.id} className={note.read ? 'read' : 'unread'}>
                   <div>
-                    <p>{note.message}</p>
+                    <p>
+                      {note.organization_name ? `${note.organization_name} · ` : ''}
+                      {note.message}
+                    </p>
                     <span>{note.channel}</span>
                   </div>
                   {!note.read && (
-                    <button type="button" className="link-button" onClick={() => markRead(note.id)}>
+                    <button type="button" className="link-button" onClick={() => markRead(note)}>
                       Mark read
                     </button>
                   )}
