@@ -18,6 +18,7 @@ const defaultForm = {
   objectives: [],
   targetAudience: '',
   creatorType: '',
+  campaignTypeDetail: '',
   creatorTiers: [],
   dealType: '',
   campaignPackage: '',
@@ -132,7 +133,12 @@ export default function CampaignsPage() {
   };
 
   const updateForm = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    setForm((prev) => {
+      if (field === 'creatorType' && value !== 'Hybrid') {
+        return { ...prev, creatorType: value, campaignTypeDetail: '' };
+      }
+      return { ...prev, [field]: value };
+    });
   };
 
   const togglePlatform = (platform) => {
@@ -192,6 +198,7 @@ export default function CampaignsPage() {
           platforms: wizardData.influencer?.platforms || ['Instagram'],
           objectives: wizardData.objectives,
           campaignType: wizardData.campaignType,
+          campaignTypeDetail: wizardData.campaignTypeDetail || null,
           dealType: wizardData.paymentType ? wizardData.paymentType.toLowerCase() : null,
           creatorTiers: wizardData.creatorTiers,
           startDate: wizardData.startDate,
@@ -212,39 +219,38 @@ export default function CampaignsPage() {
 
   const handleCreateCampaign = async () => {
     if (!form.name || !form.brand || form.platforms.length === 0) {
-      return;
+      throw new Error('Please complete the required fields.');
     }
-    try {
-      const res = await fetch(`${API_BASE}/campaigns`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          brand: form.brand,
-          status: 'Draft',
-          platforms: form.platforms,
-          objectives: form.objectives,
-          contentFormat: form.contentFormat,
+    const res = await fetch(`${API_BASE}/campaigns`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: form.name,
+        brand: form.brand,
+        status: 'Draft',
+        platforms: form.platforms,
+        objectives: form.objectives,
+        contentFormat: form.contentFormat,
           creatorTiers: form.creatorTiers,
           campaignType: form.creatorType,
+          campaignTypeDetail: form.campaignTypeDetail,
           dealType: form.dealType,
           targetAudience: form.targetAudience,
           deliverables: form.deliverables,
-          notes: form.notes,
-          startDate: form.startDate,
-          endDate: form.endDate,
-          packageId: form.campaignPackage || null,
-          customPackageLabel: form.customPackage || null,
-        }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        dispatch({ type: 'CREATE_CAMPAIGN', payload: data.data, actor: 'Admin' });
-        closeModal();
-      }
-    } catch (error) {
-      console.error('Failed to create campaign:', error);
+        notes: form.notes,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        packageId: form.campaignPackage || null,
+        customPackageLabel: form.customPackage || null,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data?.error || 'Failed to create campaign.');
     }
+    dispatch({ type: 'CREATE_CAMPAIGN', payload: data.data, actor: 'Admin' });
+    closeModal();
+    return data.data;
   };
 
   return (

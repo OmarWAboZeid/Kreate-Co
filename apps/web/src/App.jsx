@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth.jsx';
+import { useAuth } from './hooks/useAuth.jsx';
 import AuthPage from './pages/AuthPage.jsx';
 import PendingReviewPage from './pages/PendingReviewPage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
@@ -28,6 +29,34 @@ function NotFound() {
   );
 }
 
+function AppEntryRedirect() {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="loading-page">
+        <div className="loading-spinner" />
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (user.status === 'pending') {
+    return <Navigate to="/pending-review" replace />;
+  }
+
+  if (user.status !== 'approved') {
+    return <Navigate to="/" replace />;
+  }
+
+  const role = user.role === 'admin' ? 'admin' : 'brand';
+  return <Navigate to={`/app/${role}/campaigns`} replace />;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -39,7 +68,7 @@ export default function App() {
           <Route path="/tiktok" element={<TikTokAnalyzePage />} />
           <Route path="/tiktok/results" element={<TikTokResultsPage />} />
           <Route path="/tiktok/creators" element={<TikTokCreatorSearchPage />} />
-          <Route path="/app" element={<Navigate to="/app/admin/campaigns" replace />} />
+          <Route path="/app" element={<AppEntryRedirect />} />
           <Route
             path="/app/:role"
             element={

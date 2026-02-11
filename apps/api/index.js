@@ -191,6 +191,7 @@ const mapCampaignRow = (row) => ({
   brandId: row.organization_id,
   status: row.status,
   campaignType: row.campaign_type,
+  campaignTypeDetail: row.campaign_type_detail,
   dealType: row.deal_type,
   platforms: row.platforms || [],
   objectives: row.objectives || [],
@@ -306,6 +307,7 @@ async function requireApprovedUser(req, res) {
 
 const server = http.createServer(async (req, res) => {
   const { method, url } = req;
+  const pathname = url.split('?')[0];
   if (method === 'OPTIONS') {
     return cors(res);
   }
@@ -809,6 +811,124 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  const packageUpdateMatch = pathname.match(/^\/api\/packages\/([0-9a-fA-F-]+)\/?$/);
+  if (packageUpdateMatch && method === 'PUT') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const body = await parseBody(req);
+      const {
+        name,
+        package_type,
+        deal_type,
+        influencer_video_count,
+        ugc_video_count,
+        description,
+        price_amount,
+        currency,
+        customizable,
+        active,
+      } = body;
+
+      if (!name || !package_type || !deal_type || price_amount === undefined) {
+        return json(res, 400, { ok: false, error: 'Missing required package fields' });
+      }
+
+      const parsedInfluencerCount =
+        influencer_video_count === '' || influencer_video_count == null
+          ? null
+          : Number(influencer_video_count);
+      const parsedUgcCount =
+        ugc_video_count === '' || ugc_video_count == null ? null : Number(ugc_video_count);
+      const parsedPrice =
+        price_amount === '' || price_amount == null ? null : Number(price_amount);
+
+      if (parsedPrice == null || Number.isNaN(parsedPrice)) {
+        return json(res, 400, { ok: false, error: 'Invalid price value' });
+      }
+      if (parsedInfluencerCount != null && Number.isNaN(parsedInfluencerCount)) {
+        return json(res, 400, { ok: false, error: 'Invalid influencer video count' });
+      }
+      if (parsedUgcCount != null && Number.isNaN(parsedUgcCount)) {
+        return json(res, 400, { ok: false, error: 'Invalid UGC video count' });
+      }
+
+      const packageId = packageUpdateMatch[1];
+      const result = await pool.query(
+        `
+        UPDATE campaign_packages
+        SET name = $1,
+            package_type = $2,
+            deal_type = $3,
+            influencer_video_count = $4,
+            ugc_video_count = $5,
+            description = $6,
+            price_amount = $7,
+            currency = $8,
+            customizable = $9,
+            active = $10,
+            updated_at = NOW()
+        WHERE id = $11
+        RETURNING id, name, package_type, deal_type, influencer_video_count, ugc_video_count,
+                  description, price_amount, currency, customizable, active, created_at
+        `,
+        [
+          name,
+          package_type,
+          deal_type,
+          parsedInfluencerCount,
+          parsedUgcCount,
+          description || null,
+          parsedPrice,
+          currency || 'USD',
+          customizable === true,
+          active !== false,
+          packageId,
+        ]
+      );
+
+      if (result.rows.length === 0) {
+        return json(res, 404, { ok: false, error: 'Package not found' });
+      }
+
+      const row = result.rows[0];
+      return json(res, 200, {
+        ok: true,
+        data: { ...row, price_amount: row.price_amount != null ? Number(row.price_amount) : null },
+      });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  const packageDeleteMatch = pathname.match(/^\/api\/packages\/([0-9a-fA-F-]+)\/?$/);
+  if (packageDeleteMatch && method === 'DELETE') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const packageId = packageDeleteMatch[1];
+      const result = await pool.query(
+        `DELETE FROM campaign_packages WHERE id = $1 RETURNING id`,
+        [packageId]
+      );
+      if (result.rowCount === 0) {
+        return json(res, 404, { ok: false, error: 'Package not found' });
+      }
+      return json(res, 200, { ok: true, id: result.rows[0].id });
+    } catch (error) {
+      if (error.code === '23503') {
+        return json(res, 409, { ok: false, error: 'Package is in use by a campaign.' });
+      }
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
   if (url === '/api/campaigns' && method === 'GET') {
     const user = await requireApprovedUser(req, res);
     if (!user) return;
@@ -866,6 +986,7 @@ const server = http.createServer(async (req, res) => {
         contentFormat,
         creatorTiers,
         campaignType,
+        campaignTypeDetail,
         dealType,
         targetAudience,
         deliverables,
@@ -932,6 +1053,7 @@ const server = http.createServer(async (req, res) => {
           start_date,
           end_date,
           campaign_type,
+          campaign_type_detail,
           deal_type,
           target_audience,
           deliverables,
@@ -946,7 +1068,7 @@ const server = http.createServer(async (req, res) => {
           ugc_video_count,
           influencer_video_count
         ) VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21
         )
         RETURNING *
         `,
@@ -958,6 +1080,7 @@ const server = http.createServer(async (req, res) => {
           startDate || null,
           endDate || null,
           campaignType || null,
+          campaignTypeDetail || null,
           dealType || null,
           targetAudience || null,
           deliverables || null,
@@ -1002,7 +1125,171 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const campaignCreatorsMatch = url.match(/^\/api\/campaigns\/([0-9a-fA-F-]+)\/creators$/);
+  const campaignUpdateMatch = pathname.match(/^\/api\/campaigns\/([0-9a-fA-F-]+)\/?$/);
+  if (campaignUpdateMatch && method === 'PUT') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin' && user.role !== 'employee') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const campaignId = campaignUpdateMatch[1];
+      const existingResult = await pool.query('SELECT * FROM campaigns WHERE id = $1', [campaignId]);
+      if (existingResult.rows.length === 0) {
+        return json(res, 404, { ok: false, error: 'Campaign not found' });
+      }
+      const existing = existingResult.rows[0];
+
+      const body = await parseBody(req);
+      const {
+        name,
+        status,
+        organizationId,
+        brand,
+        platforms,
+        objectives,
+        contentFormat,
+        creatorTiers,
+        campaignType,
+        campaignTypeDetail,
+        dealType,
+        targetAudience,
+        deliverables,
+        notes,
+        startDate,
+        endDate,
+        packageId,
+        customPackageLabel,
+        ugcVideoCount,
+        influencerVideoCount,
+      } = body;
+
+      let resolvedOrgId = organizationId || existing.organization_id;
+      if (!organizationId && brand) {
+        const orgResult = await pool.query(
+          `SELECT id FROM organizations WHERE org_type = 'BRAND' AND name = $1`,
+          [brand]
+        );
+        if (orgResult.rows.length === 0) {
+          return json(res, 400, { ok: false, error: 'Brand not found' });
+        }
+        resolvedOrgId = orgResult.rows[0].id;
+      }
+
+      const objectivesArray = normalizeTextArray(
+        objectives !== undefined ? objectives : existing.objectives
+      );
+      const platformsArray = normalizeTextArray(
+        platforms !== undefined ? platforms : existing.platforms
+      );
+      const contentFormatsArray = normalizeTextArray(
+        contentFormat !== undefined ? contentFormat : existing.content_formats
+      );
+      const creatorTiersArray = normalizeTextArray(
+        creatorTiers !== undefined ? creatorTiers : existing.creator_tiers
+      );
+
+      const hasPackageId = Object.prototype.hasOwnProperty.call(body, 'packageId');
+      const resolvedPackageId = hasPackageId
+        ? packageId === '' ? null : packageId
+        : existing.package_id;
+      let packagePriceSnapshot = existing.package_price_snapshot;
+      let packageInfluencerCount = existing.influencer_video_count;
+      let packageUgcCount = existing.ugc_video_count;
+
+      if (hasPackageId && resolvedPackageId) {
+        const packageResult = await pool.query(
+          `SELECT price_amount, influencer_video_count, ugc_video_count FROM campaign_packages WHERE id = $1`,
+          [resolvedPackageId]
+        );
+        if (packageResult.rows.length === 0) {
+          return json(res, 400, { ok: false, error: 'Invalid package selected' });
+        }
+        packagePriceSnapshot = packageResult.rows[0].price_amount;
+        packageInfluencerCount = packageResult.rows[0].influencer_video_count;
+        packageUgcCount = packageResult.rows[0].ugc_video_count;
+      }
+
+      const updateResult = await pool.query(
+        `
+        UPDATE campaigns
+        SET organization_id = $1,
+            name = $2,
+            objective = $3,
+            status = $4,
+            start_date = $5,
+            end_date = $6,
+            campaign_type = $7,
+            campaign_type_detail = $8,
+            deal_type = $9,
+            target_audience = $10,
+            deliverables = $11,
+            notes = $12,
+            platforms = $13,
+            objectives = $14,
+            content_formats = $15,
+            creator_tiers = $16,
+            package_id = $17,
+            package_price_snapshot = $18,
+            custom_package_label = $19,
+            ugc_video_count = $20,
+            influencer_video_count = $21,
+            updated_at = NOW()
+        WHERE id = $22
+        RETURNING *
+        `,
+        [
+          resolvedOrgId,
+          name ?? existing.name,
+          objectivesArray.length ? objectivesArray.join(', ') : existing.objective,
+          status ?? existing.status,
+          startDate ?? existing.start_date,
+          endDate ?? existing.end_date,
+          campaignType ?? existing.campaign_type,
+          campaignTypeDetail ?? existing.campaign_type_detail,
+          dealType ?? existing.deal_type,
+          targetAudience ?? existing.target_audience,
+          deliverables ?? existing.deliverables,
+          notes ?? existing.notes,
+          platformsArray,
+          objectivesArray,
+          contentFormatsArray,
+          creatorTiersArray,
+          resolvedPackageId ?? null,
+          packagePriceSnapshot != null ? Number(packagePriceSnapshot) : null,
+          customPackageLabel ?? existing.custom_package_label,
+          ugcVideoCount ?? packageUgcCount ?? existing.ugc_video_count,
+          influencerVideoCount ?? packageInfluencerCount ?? existing.influencer_video_count,
+          campaignId,
+        ]
+      );
+
+      const result = await pool.query(
+        `
+        SELECT
+          c.*,
+          o.name as organization_name,
+          p.name as package_name,
+          p.influencer_video_count as package_influencer_count,
+          p.ugc_video_count as package_ugc_count
+        FROM campaigns c
+        JOIN organizations o ON c.organization_id = o.id
+        LEFT JOIN campaign_packages p ON c.package_id = p.id
+        WHERE c.id = $1
+        `,
+        [updateResult.rows[0].id]
+      );
+
+      const responseRow = result.rows[0];
+      return json(res, 200, { ok: true, data: mapCampaignRow(responseRow) });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  const campaignCreatorsMatch = pathname.match(
+    /^\/api\/campaigns\/([0-9a-fA-F-]+)\/creators\/?$/
+  );
   if (campaignCreatorsMatch && method === 'GET') {
     const user = await requireApprovedUser(req, res);
     if (!user) return;
@@ -1071,8 +1358,8 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const campaignSuggestMatch = url.match(
-    /^\/api\/campaigns\/([0-9a-fA-F-]+)\/creators\/suggest$/
+  const campaignSuggestMatch = pathname.match(
+    /^\/api\/campaigns\/([0-9a-fA-F-]+)\/creators\/suggest\/?$/
   );
   if (campaignSuggestMatch && method === 'POST') {
     const user = await requireApprovedUser(req, res);
@@ -1130,8 +1417,8 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const campaignDecisionMatch = url.match(
-    /^\/api\/campaigns\/([0-9a-fA-F-]+)\/creators\/([0-9a-fA-F-]+)\/decision$/
+  const campaignDecisionMatch = pathname.match(
+    /^\/api\/campaigns\/([0-9a-fA-F-]+)\/creators\/([0-9a-fA-F-]+)\/decision\/?$/
   );
   if (campaignDecisionMatch && method === 'POST') {
     const user = await requireApprovedUser(req, res);
@@ -1208,8 +1495,8 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const campaignWorkflowMatch = url.match(
-    /^\/api\/campaigns\/([0-9a-fA-F-]+)\/creators\/([0-9a-fA-F-]+)\/workflow$/
+  const campaignWorkflowMatch = pathname.match(
+    /^\/api\/campaigns\/([0-9a-fA-F-]+)\/creators\/([0-9a-fA-F-]+)\/workflow\/?$/
   );
   if (campaignWorkflowMatch && method === 'POST') {
     const user = await requireApprovedUser(req, res);
@@ -1402,6 +1689,9 @@ const server = http.createServer(async (req, res) => {
       }
     }
     if (method === 'POST') {
+      if (user.role !== 'admin') {
+        return json(res, 403, { ok: false, error: 'Admin access required' });
+      }
       try {
         const body = await parseBody(req);
         const { name, logo_url } = body;
@@ -1428,12 +1718,60 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const brandDeleteMatch = url.match(/^\/api\/brands\/([0-9a-fA-F-]+)$/);
-  if (method === 'DELETE' && brandDeleteMatch) {
+  const brandByIdMatch = pathname.match(/^\/api\/brands\/([0-9a-fA-F-]+)\/?$/);
+  if (method === 'PUT' && brandByIdMatch) {
     const user = await requireApprovedUser(req, res);
     if (!user) return;
+    if (user.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
     try {
-      const brandId = brandDeleteMatch[1];
+      const brandId = brandByIdMatch[1];
+      const body = await parseBody(req);
+      const { name, logo_url } = body;
+      if (!name || !String(name).trim()) {
+        return json(res, 400, { ok: false, error: 'Brand name is required' });
+      }
+
+      const existing = await pool.query(
+        `
+        SELECT id
+        FROM organizations
+        WHERE org_type = 'BRAND' AND LOWER(name) = LOWER($1) AND id <> $2
+        `,
+        [String(name).trim(), brandId]
+      );
+      if (existing.rows.length > 0) {
+        return json(res, 409, { ok: false, error: 'A brand with this name already exists' });
+      }
+
+      const result = await pool.query(
+        `
+        UPDATE organizations
+        SET name = $1, logo_url = $2
+        WHERE id = $3 AND org_type = 'BRAND'
+        RETURNING id, name, logo_url, created_at
+        `,
+        [String(name).trim(), logo_url || null, brandId]
+      );
+      if (result.rowCount === 0) {
+        return json(res, 404, { ok: false, error: 'Brand not found' });
+      }
+
+      return json(res, 200, { ok: true, data: result.rows[0] });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if (method === 'DELETE' && brandByIdMatch) {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const brandId = brandByIdMatch[1];
       const result = await pool.query(
         `DELETE FROM organizations WHERE id = $1 AND org_type = 'BRAND' RETURNING id`,
         [brandId]
@@ -1482,8 +1820,8 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const orgNotificationsMatch = url.match(
-    /^\/api\/organizations\/([0-9a-fA-F-]+)\/notifications$/
+  const orgNotificationsMatch = pathname.match(
+    /^\/api\/organizations\/([0-9a-fA-F-]+)\/notifications\/?$/
   );
   if (orgNotificationsMatch && method === 'GET') {
     const user = await requireApprovedUser(req, res);
@@ -1545,8 +1883,8 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const orgNotificationReadMatch = url.match(
-    /^\/api\/organizations\/([0-9a-fA-F-]+)\/notifications\/([0-9a-fA-F-]+)\/read$/
+  const orgNotificationReadMatch = pathname.match(
+    /^\/api\/organizations\/([0-9a-fA-F-]+)\/notifications\/([0-9a-fA-F-]+)\/read\/?$/
   );
   if (orgNotificationReadMatch && method === 'POST') {
     const user = await requireApprovedUser(req, res);
@@ -1709,7 +2047,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const userApproveMatch = url.match(/^\/api\/admin\/users\/(\d+)\/approve$/);
+  const userApproveMatch = pathname.match(/^\/api\/admin\/users\/(\d+)\/approve\/?$/);
   if (method === 'POST' && userApproveMatch) {
     const currentUser = await requireApprovedUser(req, res);
     if (!currentUser) return;
@@ -1737,7 +2075,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const userRejectMatch = url.match(/^\/api\/admin\/users\/(\d+)\/reject$/);
+  const userRejectMatch = pathname.match(/^\/api\/admin\/users\/(\d+)\/reject\/?$/);
   if (method === 'POST' && userRejectMatch) {
     const currentUser = await requireApprovedUser(req, res);
     if (!currentUser) return;

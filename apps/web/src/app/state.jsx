@@ -26,6 +26,14 @@ function appReducer(state, action) {
         brands: [...state.brands, action.payload],
       };
     }
+    case 'UPDATE_BRAND': {
+      return {
+        ...state,
+        brands: state.brands.map((brand) =>
+          brand.id === action.payload.id ? { ...brand, ...action.payload } : brand
+        ),
+      };
+    }
     case 'SET_CAMPAIGNS': {
       return {
         ...state,
@@ -148,6 +156,15 @@ function appReducer(state, action) {
             outreach: remainingOutreach,
           },
         },
+      };
+    }
+    case 'UPDATE_CAMPAIGN': {
+      const updated = action.payload;
+      return {
+        ...state,
+        campaigns: state.campaigns.map((campaign) =>
+          campaign.id === updated.id ? { ...campaign, ...updated } : campaign
+        ),
       };
     }
     case 'MOVE_SHORTLIST': {

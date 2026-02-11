@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getJson } from '../api/client.js';
 import CreatorFilters from '../components/CreatorFilters.jsx';
+import CampaignFormModal from '../components/CampaignFormModal.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import Modal from '../components/Modal.jsx';
 import StatusPill from '../components/StatusPill.jsx';
@@ -17,10 +18,17 @@ const formatHandle = (creator) => {
   return raw.startsWith('@') ? raw : `@${raw}`;
 };
 
+const formatCompactNumber = (value) => {
+  if (value == null || value === '') return '—';
+  const num = Number(value);
+  if (Number.isNaN(num)) return '—';
+  return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(num);
+};
+
 export default function CampaignDetailPage() {
   const { role, campaignId } = useParams();
   const navigate = useNavigate();
-  const { campaigns, campaignCreators, contentItems } = useAppState();
+  const { campaigns, campaignCreators, contentItems, brands } = useAppState();
   const dispatch = useAppDispatch();
   const [creatorFilter, setCreatorFilter] = useState('all');
   const [creatorSearch, setCreatorSearch] = useState('');
@@ -30,6 +38,30 @@ export default function CampaignDetailPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [loadingCreatorsState, setLoadingCreatorsState] = useState(false);
   const [brandTab, setBrandTab] = useState('brief');
+  const [adminTab, setAdminTab] = useState('overview');
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    brand: '',
+    platforms: [],
+    startDate: '',
+    endDate: '',
+    description: '',
+    objectives: [],
+    targetAudience: '',
+    creatorType: '',
+    campaignTypeDetail: '',
+    creatorTiers: [],
+    dealType: '',
+    campaignPackage: '',
+    customPackage: '',
+    deliverables: '',
+    contentFormat: [],
+    notes: '',
+  });
+  const [packages, setPackages] = useState([]);
+  const [loadingPackages, setLoadingPackages] = useState(false);
+  const [loadingBrands, setLoadingBrands] = useState(false);
 
   const [ugcCreators, setUgcCreators] = useState([]);
   const [influencers, setInfluencers] = useState([]);
@@ -55,6 +87,7 @@ export default function CampaignDetailPage() {
   const isEmployee = role === 'employee';
   const isBrand = role === 'brand';
   const canManageCreators = isAdmin || isEmployee;
+  const brandNames = brands.map((b) => (typeof b === 'string' ? b : b.name));
 
   useEffect(() => {
     const fetchCreators = async () => {
@@ -74,6 +107,44 @@ export default function CampaignDetailPage() {
     };
     fetchCreators();
   }, []);
+
+  useEffect(() => {
+    if (brands.length > 0 || !isAdmin) return;
+    const fetchBrands = async () => {
+      setLoadingBrands(true);
+      try {
+        const res = await fetch('/api/brands');
+        const data = await res.json();
+        if (data.ok) {
+          dispatch({ type: 'SET_BRANDS', payload: data.data });
+        }
+      } catch (err) {
+        console.error('Failed to fetch brands:', err);
+      } finally {
+        setLoadingBrands(false);
+      }
+    };
+    fetchBrands();
+  }, [brands.length, dispatch, isAdmin]);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    const fetchPackages = async () => {
+      setLoadingPackages(true);
+      try {
+        const res = await fetch('/api/packages');
+        const data = await res.json();
+        if (data.ok) {
+          setPackages(data.data || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch packages:', err);
+      } finally {
+        setLoadingPackages(false);
+      }
+    };
+    fetchPackages();
+  }, [isAdmin]);
 
   const refreshCampaignCreators = async () => {
     if (!campaignId) return;
@@ -99,6 +170,13 @@ export default function CampaignDetailPage() {
   }, [campaignId]);
 
   const campaign = campaigns.find((item) => item.id === campaignId);
+  const brandOptions = useMemo(() => {
+    const options = new Set(brandNames);
+    if (campaign?.brand) {
+      options.add(campaign.brand);
+    }
+    return Array.from(options);
+  }, [brandNames, campaign?.brand]);
 
   const allCreators = useMemo(() => [...ugcCreators, ...influencers], [ugcCreators, influencers]);
 
@@ -261,6 +339,96 @@ export default function CampaignDetailPage() {
     setRejectReason('');
   };
 
+  const openEditModal = () => {
+    if (!campaign) return;
+    const objectivesValue = Array.isArray(campaign.objectives)
+      ? campaign.objectives
+      : campaign.objectives
+        ? [campaign.objectives]
+        : [];
+    setEditForm({
+      name: campaign.name || '',
+      brand: campaign.brand || '',
+      platforms: campaign.platforms || [],
+      startDate: campaign.timeline?.start || campaign.startDate || '',
+      endDate: campaign.timeline?.end || campaign.endDate || '',
+      description: campaign.description || '',
+      objectives: objectivesValue.map((item) => String(item).toLowerCase()),
+      targetAudience: campaign.targetAudience || '',
+      creatorType: campaign.campaignType || '',
+      campaignTypeDetail: campaign.campaignTypeDetail || '',
+      creatorTiers: campaign.creatorTiers || [],
+      dealType: campaign.dealType || '',
+      campaignPackage: campaign.package?.id || '',
+      customPackage: campaign.customPackageLabel || '',
+      deliverables: campaign.deliverables || '',
+      contentFormat: campaign.contentFormat || [],
+      notes: campaign.notes || '',
+    });
+    setShowEditModal(true);
+  };
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
+  };
+
+  const updateEditForm = (field, value) => {
+    setEditForm((prev) => {
+      if (field === 'creatorType' && value !== 'Hybrid') {
+        return { ...prev, creatorType: value, campaignTypeDetail: '' };
+      }
+      return { ...prev, [field]: value };
+    });
+  };
+
+  const toggleEditPlatform = (platform) => {
+    setEditForm((prev) => {
+      const exists = prev.platforms.includes(platform);
+      return {
+        ...prev,
+        platforms: exists
+          ? prev.platforms.filter((item) => item !== platform)
+          : [...prev.platforms, platform],
+      };
+    });
+  };
+
+  const toggleEditContentFormat = (format) => {
+    setEditForm((prev) => {
+      const exists = prev.contentFormat.includes(format);
+      return {
+        ...prev,
+        contentFormat: exists
+          ? prev.contentFormat.filter((item) => item !== format)
+          : [...prev.contentFormat, format],
+      };
+    });
+  };
+
+  const toggleEditObjective = (objective) => {
+    setEditForm((prev) => {
+      const exists = prev.objectives.includes(objective);
+      return {
+        ...prev,
+        objectives: exists
+          ? prev.objectives.filter((item) => item !== objective)
+          : [...prev.objectives, objective],
+      };
+    });
+  };
+
+  const toggleEditCreatorTier = (tier) => {
+    setEditForm((prev) => {
+      const exists = prev.creatorTiers.includes(tier);
+      return {
+        ...prev,
+        creatorTiers: exists
+          ? prev.creatorTiers.filter((item) => item !== tier)
+          : [...prev.creatorTiers, tier],
+      };
+    });
+  };
+
   const handleAddContent = () => {
     if (!contentForm.link || !addContentModal.creator) return;
 
@@ -283,6 +451,41 @@ export default function CampaignDetailPage() {
     closeAddContentModal();
   };
 
+  const handleUpdateCampaign = async () => {
+    if (!campaignId) {
+      throw new Error('Missing campaign id.');
+    }
+    const res = await fetch(`/api/campaigns/${campaignId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: editForm.name,
+        brand: editForm.brand,
+        platforms: editForm.platforms,
+        objectives: editForm.objectives,
+        contentFormat: editForm.contentFormat,
+        creatorTiers: editForm.creatorTiers,
+        campaignType: editForm.creatorType,
+        campaignTypeDetail: editForm.campaignTypeDetail,
+        dealType: editForm.dealType,
+        targetAudience: editForm.targetAudience,
+        deliverables: editForm.deliverables,
+        notes: editForm.notes,
+        startDate: editForm.startDate || null,
+        endDate: editForm.endDate || null,
+        packageId: editForm.campaignPackage || null,
+        customPackageLabel: editForm.customPackage || null,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      throw new Error(data?.error || 'Failed to update campaign.');
+    }
+    dispatch({ type: 'UPDATE_CAMPAIGN', payload: data.data });
+    closeEditModal();
+    return data.data;
+  };
+
   const campaignContent = contentItems.filter((c) => c.campaignId === campaignId);
   const campaignContentByCreator = useMemo(() => {
     const map = new Map();
@@ -303,8 +506,6 @@ export default function CampaignDetailPage() {
   const objectives = Array.isArray(campaign.objectives)
     ? campaign.objectives
     : [campaign.objectives || 'Awareness'];
-  const influencerPlatforms = (campaign.platforms || []).filter((platform) => platform !== 'YouTube');
-  const influencerFormats = (campaign.contentFormat || []).filter((format) => format !== 'Live');
   const platformSummary = (campaign.platforms || []).length
     ? campaign.platforms.join(', ')
     : 'TBD';
@@ -329,6 +530,99 @@ export default function CampaignDetailPage() {
     return buckets;
   }, [shortlistCreators, creatorState.approvals]);
 
+  const briefCard = (
+    <section className="detail-card brand-brief-card">
+      <div className="detail-card-header">
+        <div>
+          <h3>Campaign Summary & Requirements</h3>
+          <p className="section-description">A single view of the full brief.</p>
+        </div>
+        <StatusPill status={campaign.status || 'Draft'} />
+      </div>
+      <div className="detail-card-content">
+        <div className="brand-brief-table">
+          <div className="brand-brief-group">Campaign Summary</div>
+          <div className="brand-brief-row">
+            <span>Campaign Type</span>
+            <strong>{campaignType}</strong>
+          </div>
+          {campaign.campaignTypeDetail ? (
+            <div className="brand-brief-row">
+              <span>Hybrid Detail</span>
+              <strong>{campaign.campaignTypeDetail}</strong>
+            </div>
+          ) : null}
+          <div className="brand-brief-row">
+            <span>Deal Type</span>
+            <strong>{campaign.dealType || campaign.paymentType || 'Paid'}</strong>
+          </div>
+          <div className="brand-brief-row">
+            <span>Start Date</span>
+            <strong>{campaign.timeline?.start || campaign.startDate || 'TBD'}</strong>
+          </div>
+          <div className="brand-brief-row">
+            <span>Package</span>
+            <strong>{campaign.package?.name || campaign.customPackageLabel || 'Custom'}</strong>
+          </div>
+          <div className="brand-brief-row">
+            <span>Platforms</span>
+            <strong>{platformSummary}</strong>
+          </div>
+          <div className="brand-brief-row">
+            <span>Content Formats</span>
+            <strong>{formatSummary}</strong>
+          </div>
+          <div className="brand-brief-row brand-brief-row-wide">
+            <span>Objectives</span>
+            <div className="brand-brief-tags">
+              {objectives.map((obj) => (
+                <span key={obj} className="chip">
+                  {obj}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {showUGC && (
+            <>
+              <div className="brand-brief-group">UGC Requirements</div>
+              <div className="brand-brief-row">
+                <span>Persona</span>
+                <strong>{campaign.ugc?.persona || 'Any'}</strong>
+              </div>
+              <div className="brand-brief-row">
+                <span>Gender</span>
+                <strong>{campaign.ugc?.gender || 'Any'}</strong>
+              </div>
+              <div className="brand-brief-row">
+                <span>Age Range</span>
+                <strong>{campaign.ugc?.ageRange || '18-35'}</strong>
+              </div>
+              <div className="brand-brief-row">
+                <span>Videos</span>
+                <strong>{campaign.ugcCount || 'TBD'}</strong>
+              </div>
+            </>
+          )}
+
+          {showInfluencer && (
+            <>
+              <div className="brand-brief-group">Creator Requirements</div>
+              <div className="brand-brief-row">
+                <span>Creator Tiers</span>
+                <strong>{creatorTierSummary}</strong>
+              </div>
+              <div className="brand-brief-row">
+                <span>Niche</span>
+                <strong>{campaign.influencer?.niche || campaign.criteria?.niche || 'Lifestyle'}</strong>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+
   return (
     <div className="campaign-details-page">
       <div className="campaign-details-header">
@@ -344,7 +638,7 @@ export default function CampaignDetailPage() {
         </div>
         {isAdmin && (
           <div className="campaign-details-actions">
-            <button type="button" className="btn btn-secondary">
+            <button type="button" className="btn btn-secondary" onClick={openEditModal}>
               Edit
             </button>
             <button type="button" className="btn btn-secondary">
@@ -374,206 +668,37 @@ export default function CampaignDetailPage() {
         </div>
       )}
 
-      {isBrand && brandTab === 'brief' ? (
-        <section className="detail-card brand-brief-card">
-          <div className="detail-card-header">
-            <div>
-              <h3>Campaign Summary & Requirements</h3>
-              <p className="section-description">A single view of the full brief.</p>
-            </div>
-            <StatusPill status={campaign.status || 'Draft'} />
-          </div>
-          <div className="detail-card-content">
-            <div className="brand-brief-table">
-              <div className="brand-brief-group">Campaign Summary</div>
-              <div className="brand-brief-row">
-                <span>Campaign Type</span>
-                <strong>{campaignType}</strong>
-              </div>
-              <div className="brand-brief-row">
-                <span>Deal Type</span>
-                <strong>{campaign.dealType || campaign.paymentType || 'Paid'}</strong>
-              </div>
-              <div className="brand-brief-row">
-                <span>Start Date</span>
-                <strong>{campaign.timeline?.start || campaign.startDate || 'TBD'}</strong>
-              </div>
-              <div className="brand-brief-row">
-                <span>Package</span>
-                <strong>{campaign.package?.name || campaign.customPackageLabel || 'Custom'}</strong>
-              </div>
-              <div className="brand-brief-row">
-                <span>Platforms</span>
-                <strong>{platformSummary}</strong>
-              </div>
-              <div className="brand-brief-row">
-                <span>Content Formats</span>
-                <strong>{formatSummary}</strong>
-              </div>
-              <div className="brand-brief-row brand-brief-row-wide">
-                <span>Objectives</span>
-                <div className="brand-brief-tags">
-                  {objectives.map((obj) => (
-                    <span key={obj} className="chip">
-                      {obj}
-                    </span>
-                  ))}
-                </div>
-              </div>
+      {!isBrand && (
+        <div className="brand-tab-bar">
+          <button
+            type="button"
+            className={adminTab === 'overview' ? 'active' : undefined}
+            onClick={() => setAdminTab('overview')}
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            className={adminTab === 'creators' ? 'active' : undefined}
+            onClick={() => setAdminTab('creators')}
+          >
+            Creator Network
+            <span className="tab-count">{shortlistCreators.length}</span>
+          </button>
+          {canManageCreators && (
+            <button
+              type="button"
+              className={adminTab === 'suggest' ? 'active' : undefined}
+              onClick={() => setAdminTab('suggest')}
+            >
+              Suggest Creators
+            </button>
+          )}
+        </div>
+      )}
 
-              {showUGC && (
-                <>
-                  <div className="brand-brief-group">UGC Requirements</div>
-                  <div className="brand-brief-row">
-                    <span>Persona</span>
-                    <strong>{campaign.ugc?.persona || 'Any'}</strong>
-                  </div>
-                  <div className="brand-brief-row">
-                    <span>Gender</span>
-                    <strong>{campaign.ugc?.gender || 'Any'}</strong>
-                  </div>
-                  <div className="brand-brief-row">
-                    <span>Age Range</span>
-                    <strong>{campaign.ugc?.ageRange || '18-35'}</strong>
-                  </div>
-                  <div className="brand-brief-row">
-                    <span>Videos</span>
-                    <strong>{campaign.ugcCount || 'TBD'}</strong>
-                  </div>
-                </>
-              )}
-
-              {showInfluencer && (
-                <>
-                  <div className="brand-brief-group">Creator Requirements</div>
-                  <div className="brand-brief-row">
-                    <span>Creator Tiers</span>
-                    <strong>{creatorTierSummary}</strong>
-                  </div>
-                  <div className="brand-brief-row">
-                    <span>Niche</span>
-                    <strong>{campaign.influencer?.niche || campaign.criteria?.niche || 'Lifestyle'}</strong>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </section>
-      ) : !isBrand ? (
-        <>
-          <section className="detail-card">
-            <div className="detail-card-header">
-              <h3>Campaign Overview</h3>
-            </div>
-            <div className="detail-card-content">
-              <div className="detail-row">
-                <span className="detail-label">Campaign Type</span>
-                <span className="detail-value">{campaignType}</span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Deal Type</span>
-                <span className="detail-value">{campaign.dealType || campaign.paymentType || 'Paid'}</span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Start Date</span>
-                <span className="detail-value">{campaign.timeline?.start || campaign.startDate || 'TBD'}</span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Package</span>
-                <span className="detail-value">
-                  {campaign.package?.name || campaign.customPackageLabel || 'Custom'}
-                </span>
-              </div>
-              <div className="detail-row">
-                <span className="detail-label">Objectives</span>
-                <div className="detail-chips">
-                  {objectives.map((obj) => (
-                    <span key={obj} className="chip">
-                      {obj}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <div className="requirements-columns">
-            {showUGC && (
-              <section className="campaign-section requirements-section">
-                <h3 className="section-title">UGC Requirements</h3>
-                <ul className="requirements-list">
-                  <li className="requirement-item">
-                    <span className="requirement-label">Persona</span>
-                    <span className="requirement-value">{campaign.ugc?.persona || 'Any'}</span>
-                  </li>
-                  <li className="requirement-item">
-                    <span className="requirement-label">Gender</span>
-                    <span className="requirement-value">{campaign.ugc?.gender || 'Any'}</span>
-                  </li>
-                  <li className="requirement-item">
-                    <span className="requirement-label">Age Range</span>
-                    <span className="requirement-value">{campaign.ugc?.ageRange || '18-35'}</span>
-                  </li>
-                  <li className="requirement-item">
-                    <span className="requirement-label">Videos</span>
-                    <span className="requirement-value">{campaign.ugcCount || 'TBD'}</span>
-                  </li>
-                </ul>
-              </section>
-            )}
-
-            {showInfluencer && (
-              <section className="detail-card">
-                <div className="detail-card-header">
-                  <h3>Influencer Requirements</h3>
-                </div>
-                <div className="detail-card-content">
-                  <div className="detail-row">
-                    <span className="detail-label">Creator Tiers</span>
-                    <div className="detail-chips">
-                      {Array.isArray(campaign.creatorTiers) && campaign.creatorTiers.length > 0 ? (
-                        campaign.creatorTiers.map((tier) => (
-                          <span key={tier} className="chip">
-                            {tier}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="chip">Micro</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-label">Niche</span>
-                    <span className="detail-value">
-                      {campaign.influencer?.niche || campaign.criteria?.niche || 'Lifestyle'}
-                    </span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-label">Platforms</span>
-                    <div className="detail-chips">
-                      {influencerPlatforms.map((platform) => (
-                        <span key={platform} className="chip">
-                          {platform}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-label">Content Formats</span>
-                    <div className="detail-chips">
-                      {influencerFormats.map((format) => (
-                        <span key={format} className="chip">
-                          {format}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </section>
-            )}
-          </div>
-        </>
-      ) : null}
+      {isBrand && brandTab === 'brief' ? briefCard : null}
+      {!isBrand && adminTab === 'overview' ? briefCard : null}
 
       {isBrand && brandTab === 'creators' ? (
         <section className="detail-card brand-creator-section">
@@ -726,7 +851,7 @@ export default function CampaignDetailPage() {
             </div>
           </div>
         </section>
-      ) : !isBrand ? (
+      ) : !isBrand && adminTab === 'creators' ? (
         <section className="detail-card creator-network-section">
           <div className="detail-card-header">
             <h3>Creator Network</h3>
@@ -758,39 +883,85 @@ export default function CampaignDetailPage() {
               />
             ) : (
               <div className="creator-network-list">
+                <div className="creator-network-header">
+                  <span>Creator</span>
+                  <span>Followers</span>
+                  <span>ER</span>
+                  <span>Views</span>
+                  <span>Actions</span>
+                </div>
                 {filteredCreators.map((creator) => {
                   const decision = creatorState.approvals[creator.id] || 'Suggested';
                   const outreach = creatorState.outreach[creator.id] || {};
                   const status = outreach.workflowStatus || 'Filming';
                   const finalLink = outreach.finalVideoLink || '';
                   const creatorContent = campaignContentByCreator.get(creator.id) || [];
-                  const canApprove = isBrand && decision === 'Suggested';
                   const handleLabel = formatHandle(creator);
                   const hasFinalLink = Boolean(finalLink);
                   const showBrandWorkflow = isBrand && hasFinalLink;
+                  const followerCount = creator.followers ?? creator.followers_count;
+                  const followerLabel = formatCompactNumber(followerCount);
+                  const engagementLabel = creator.engagementRate
+                    ? `${creator.engagementRate}%`
+                    : creator.engagement_rate
+                      ? `${creator.engagement_rate}%`
+                      : '—';
+                  const viewsLabel = creator.avgViews
+                    ? formatCompactNumber(creator.avgViews)
+                    : creator.avg_views
+                      ? formatCompactNumber(creator.avg_views)
+                      : '—';
+                  const nicheLabel = creator.niche || creator.category || 'General';
 
                   return (
                     <div key={creator.id} className="creator-network-card">
-                      <div className="creator-info">
-                        <div className="creator-avatar">{creator.name.charAt(0).toUpperCase()}</div>
-                        <div className="creator-details">
-                          <h4>{creator.name}</h4>
-                          <p>
-                            {handleLabel || '@creator'} · {creator.niche}
-                          </p>
-                          <div className="creator-status-row">
-                            <StatusPill status={decision} />
-                          </div>
-                          {decision === 'Brand Rejected' && creatorState.rejectionReasons?.[creator.id] && (
-                            <p className="rejection-reason">
-                              <strong>Rejection reason:</strong> {creatorState.rejectionReasons[creator.id]}
+                      <div className="creator-network-row">
+                        <div className="creator-row-main">
+                          <div className="creator-avatar">{creator.name.charAt(0).toUpperCase()}</div>
+                          <div className="creator-row-info">
+                            <div className="creator-row-title">
+                              <h4>{creator.name}</h4>
+                              <StatusPill status={decision} />
+                            </div>
+                            <p>
+                              {handleLabel || '@creator'} · {nicheLabel}
                             </p>
+                            {decision === 'Brand Rejected' &&
+                              creatorState.rejectionReasons?.[creator.id] && (
+                                <p className="rejection-reason">
+                                  <strong>Rejection reason:</strong>{' '}
+                                  {creatorState.rejectionReasons[creator.id]}
+                                </p>
+                              )}
+                          </div>
+                        </div>
+                        <div className="creator-metric">
+                          <span>Followers</span>
+                          <strong>{followerLabel}</strong>
+                        </div>
+                        <div className="creator-metric">
+                          <span>ER</span>
+                          <strong>{engagementLabel}</strong>
+                        </div>
+                        <div className="creator-metric">
+                          <span>Views</span>
+                          <strong>{viewsLabel}</strong>
+                        </div>
+                        <div className="creator-row-actions">
+                          {canManageCreators && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-small"
+                              onClick={() => setAddContentModal({ open: true, creator })}
+                            >
+                              Add Content
+                            </button>
                           )}
                         </div>
                       </div>
 
                       {canManageCreators ? (
-                        <div className="creator-workflow">
+                        <div className="creator-row-extra creator-workflow">
                           <div className="workflow-field">
                             <label>Status</label>
                             <select
@@ -816,7 +987,7 @@ export default function CampaignDetailPage() {
                           </div>
                         </div>
                       ) : showBrandWorkflow ? (
-                        <div className="creator-workflow creator-workflow-readonly">
+                        <div className="creator-row-extra creator-workflow creator-workflow-readonly">
                           <div className="workflow-field">
                             <label>Status</label>
                             <div className="workflow-value">{status}</div>
@@ -836,7 +1007,7 @@ export default function CampaignDetailPage() {
                       ) : null}
 
                       {creatorContent.length > 0 && (
-                        <div className="creator-submitted-content">
+                        <div className="creator-row-extra creator-submitted-content">
                           <h5>Submitted Content ({creatorContent.length})</h5>
                           <div className="submitted-content-list">
                             {creatorContent.map((content) => (
@@ -855,36 +1026,6 @@ export default function CampaignDetailPage() {
                           </div>
                         </div>
                       )}
-
-                      <div className="creator-actions-row">
-                        {canApprove && (
-                          <>
-                            <button
-                              type="button"
-                              className="btn btn-success"
-                              onClick={() => handleDecision(creator.id, 'Brand Approved')}
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-danger"
-                              onClick={() => openRejectModal(creator)}
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
-                        {canManageCreators && (
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            onClick={() => setAddContentModal({ open: true, creator })}
-                          >
-                            Add Content
-                          </button>
-                        )}
-                      </div>
                     </div>
                   );
                 })}
@@ -894,7 +1035,7 @@ export default function CampaignDetailPage() {
         </section>
       ) : null}
 
-      {canManageCreators && (
+      {canManageCreators && (!isBrand && adminTab === 'suggest') && (
         <section className="detail-card suggest-creators-section">
           <div className="detail-card-header">
             <h3>Suggest Creators</h3>
@@ -970,6 +1111,25 @@ export default function CampaignDetailPage() {
           </div>
         </section>
       )}
+
+      <CampaignFormModal
+        open={showEditModal}
+        form={editForm}
+        brands={brandOptions}
+        role={role}
+        packages={packages}
+        loadingPackages={loadingPackages || loadingBrands}
+        title="Edit Campaign"
+        subtitle="Update campaign details for the brand."
+        submitLabel="Save Changes"
+        onClose={closeEditModal}
+        onChange={updateEditForm}
+        onTogglePlatform={toggleEditPlatform}
+        onToggleContentFormat={toggleEditContentFormat}
+        onToggleObjective={toggleEditObjective}
+        onToggleCreatorTier={toggleEditCreatorTier}
+        onSubmit={handleUpdateCampaign}
+      />
 
       <Modal
         open={addContentModal.open}

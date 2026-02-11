@@ -3,7 +3,7 @@ import { useAuth } from '../../hooks/useAuth.jsx';
 import StatusPill from '../components/StatusPill.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 
-export default function UsersPage() {
+export default function UsersPage({ embedded = false }) {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -68,10 +68,12 @@ export default function UsersPage() {
 
   if (loading) {
     return (
-      <div className="page-stack">
-        <div className="page-header">
-          <h2>User Management</h2>
-        </div>
+      <div className={embedded ? '' : 'page-stack'}>
+        {!embedded && (
+          <div className="page-header">
+            <h2>User Management</h2>
+          </div>
+        )}
         <div className="loading-state">Loading users...</div>
       </div>
     );
@@ -79,28 +81,32 @@ export default function UsersPage() {
 
   if (error) {
     return (
-      <div className="page-stack">
-        <div className="page-header">
-          <h2>User Management</h2>
-        </div>
+      <div className={embedded ? '' : 'page-stack'}>
+        {!embedded && (
+          <div className="page-header">
+            <h2>User Management</h2>
+          </div>
+        )}
         <EmptyState title="Error" description={error} />
       </div>
     );
   }
 
   return (
-    <div className="page-stack">
-      <div className="page-header">
-        <div>
-          <h2>User Management</h2>
-          <p className="page-subtitle">Review and manage user access</p>
-        </div>
-        {pendingCount > 0 && (
-          <div className="pending-badge">
-            {pendingCount} pending review
+    <div className={embedded ? '' : 'page-stack'}>
+      {!embedded && (
+        <div className="page-header">
+          <div>
+            <h2>User Management</h2>
+            <p className="page-subtitle">Review and manage user access</p>
           </div>
-        )}
-      </div>
+          {pendingCount > 0 && (
+            <div className="pending-badge">
+              {pendingCount} pending review
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="filter-bar">
         <select className="input" value={filter} onChange={(e) => setFilter(e.target.value)}>

@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth.jsx';
 
 export default function AuthPage({ initialMode = 'login' }) {
   const navigate = useNavigate();
-  const { user, login, register, isLoading } = useAuth();
+  const { user, login, register, logout, isLoading } = useAuth();
   const [mode, setMode] = useState(initialMode);
   const [role, setRole] = useState('brand');
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
@@ -18,9 +18,12 @@ export default function AuthPage({ initialMode = 'login' }) {
       } else if (user.status === 'approved') {
         const targetRole = user.role === 'admin' ? 'admin' : 'brand';
         navigate(`/app/${targetRole}/campaigns`);
+      } else if (user.status === 'rejected') {
+        setError('Your account was not approved. Please contact support.');
+        logout();
       }
     }
-  }, [user, isLoading, navigate]);
+  }, [user, isLoading, navigate, logout]);
 
   const updateForm = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
