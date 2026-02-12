@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const STEPS = {
   NAME: 1,
@@ -47,6 +47,11 @@ const BUDGET_OPTIONS = [
 ];
 
 export default function CampaignWizard({ onClose, onSubmit, brandName }) {
+  const [layoutOffsets, setLayoutOffsets] = useState({
+    top: 0,
+    left: 0,
+    right: 0,
+  });
   const [currentStep, setCurrentStep] = useState(STEPS.NAME);
   const [form, setForm] = useState({
     name: '',
@@ -672,8 +677,51 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
     }
   };
 
+  useEffect(() => {
+    const topbar = document.querySelector('.app-topbar');
+    const appMain = document.querySelector('.app-main');
+    if (!topbar || !appMain) return undefined;
+
+    const updateOffset = () => {
+      const topbarRect = topbar.getBoundingClientRect();
+      const mainRect = appMain.getBoundingClientRect();
+      const nextTop = Math.max(0, Math.ceil(topbarRect.bottom || 0));
+      const nextLeft = Math.max(0, Math.ceil(mainRect.left || 0));
+      const nextRight = Math.max(0, Math.ceil(window.innerWidth - (mainRect.right || window.innerWidth)));
+      setLayoutOffsets((prev) => {
+        if (prev.top === nextTop && prev.left === nextLeft && prev.right === nextRight) {
+          return prev;
+        }
+        return { top: nextTop, left: nextLeft, right: nextRight };
+      });
+    };
+
+    updateOffset();
+    window.addEventListener('resize', updateOffset);
+    window.addEventListener('scroll', updateOffset, { passive: true });
+    let observer;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(updateOffset);
+      observer.observe(topbar);
+      observer.observe(appMain);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateOffset);
+      window.removeEventListener('scroll', updateOffset);
+      if (observer) observer.disconnect();
+    };
+  }, []);
+
   return (
-    <div className="modal-overlay active">
+    <div
+      className="modal-overlay active wizard-overlay"
+      style={{
+        '--wizard-top-offset': `${layoutOffsets.top}px`,
+        '--wizard-left-offset': `${layoutOffsets.left}px`,
+        '--wizard-right-offset': `${layoutOffsets.right}px`,
+      }}
+    >
       <div className="wizard-modal">
         <div className="wizard-header">
           <div className="wizard-progress">

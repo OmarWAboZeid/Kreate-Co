@@ -6,7 +6,6 @@ export default function AuthPage({ initialMode = 'login' }) {
   const navigate = useNavigate();
   const { user, login, register, logout, isLoading } = useAuth();
   const [mode, setMode] = useState(initialMode);
-  const [role, setRole] = useState('brand');
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -47,7 +46,7 @@ export default function AuthPage({ initialMode = 'login' }) {
           setSubmitting(false);
           return;
         }
-        await register(form.email, form.password, form.name, role);
+        await register(form.email, form.password, form.name);
       } else {
         await login(form.email, form.password);
       }
@@ -98,27 +97,7 @@ export default function AuthPage({ initialMode = 'login' }) {
         </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
-          {mode === 'signup' && (
-            <div>
-              <p className="label">I am a</p>
-              <div className="pill-group">
-                <button
-                  type="button"
-                  className={role === 'brand' ? 'active' : undefined}
-                  onClick={() => setRole('brand')}
-                >
-                  Brand
-                </button>
-                <button
-                  type="button"
-                  className={role === 'creator' ? 'active' : undefined}
-                  onClick={() => setRole('creator')}
-                >
-                  Creator
-                </button>
-              </div>
-            </div>
-          )}
+          {mode === 'signup' && <p className="label">Account type: Brand</p>}
 
           {mode === 'signup' && (
             <label>

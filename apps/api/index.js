@@ -29,6 +29,16 @@ const TIGERBEETLE_ADDRESS = process.env.TIGERBEETLE_ADDRESS || 'localhost:3000';
 
 const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
 
+const ensureRuntimeSchema = async () => {
+  if (!pool) return;
+  await pool.query(
+    `
+    ALTER TABLE campaigns
+      ADD COLUMN IF NOT EXISTS campaign_type_detail text
+    `
+  );
+};
+
 const CREATOR_CSV_PATH = path.resolve(__dirname, '../../data/egypt_creators.csv');
 const CREATOR_CSV_HEADER = ['name', 'username', 'profile_url', 'followers_count'];
 
@@ -181,6 +191,192 @@ const readJsonBody = (req) =>
     });
   });
 
+const normalizeTikTokProfileUrl = (value) => {
+  if (!value) return '';
+  let raw = String(value).trim();
+  if (!raw) return '';
+  if (raw.startsWith('@')) {
+    raw = `https://www.tiktok.com/${raw}`;
+  } else if (!/^https?:\/\//i.test(raw) && raw.includes('tiktok.com')) {
+    raw = `https://${raw}`;
+  }
+  try {
+    const parsed = new URL(raw);
+    const pathWithoutTrailingSlash = parsed.pathname.replace(/\/+$/, '');
+    return `${parsed.protocol}//${parsed.host}${pathWithoutTrailingSlash}`.toLowerCase();
+  } catch (error) {
+    return raw.toLowerCase().replace(/\/+$/, '');
+  }
+};
+
+const extractTikTokHandle = (value) => {
+  if (!value) return '';
+  const text = String(value).trim();
+  const fromUrl = text.match(/tiktok\.com\/@([^/?#]+)/i);
+  if (fromUrl) return `@${fromUrl[1]}`;
+  if (/^@[^/\s]+$/.test(text)) return text;
+  return '';
+};
+
+const toFiniteNumber = (value) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+
+const computeTikTokVideoMetrics = (videos) => {
+  if (!Array.isArray(videos) || videos.length === 0) {
+    return { engagementRate: null, avgViews: null };
+  }
+
+  let totalViews = 0;
+  let totalInteractions = 0;
+  videos.forEach((video) => {
+    const stats = video?.stats || video?.statsV2 || {};
+    const views = toFiniteNumber(stats.playCount ?? stats.play_count) || 0;
+    const likes =
+      toFiniteNumber(stats.diggCount ?? stats.likeCount ?? stats.like_count) || 0;
+    const comments = toFiniteNumber(stats.commentCount ?? stats.comment_count) || 0;
+    const shares = toFiniteNumber(stats.shareCount ?? stats.share_count) || 0;
+    const saves = toFiniteNumber(stats.collectCount ?? stats.collect_count) || 0;
+    totalViews += views;
+    totalInteractions += likes + comments + shares + saves;
+  });
+
+  if (totalViews <= 0) {
+    return { engagementRate: null, avgViews: null };
+  }
+
+  return {
+    engagementRate: Number(((totalInteractions / totalViews) * 100).toFixed(2)),
+    avgViews: Math.round(totalViews / videos.length),
+  };
+};
+
+const extractTikTokAnalyzeSummary = (analyzeData, sourceProfileUrl) => {
+  const infoContainer =
+    analyzeData?.data?.user?.info?.userInfo || analyzeData?.data?.user?.info || {};
+  const user = infoContainer?.user || infoContainer?.author || {};
+  const stats =
+    infoContainer?.stats || infoContainer?.statsV2 || infoContainer?.authorStats || {};
+  const videos = analyzeData?.data?.user?.videos || [];
+  const sampleVideo = videos.find((video) => video && typeof video === 'object') || {};
+  const sampleAuthor = sampleVideo.author || sampleVideo.user || {};
+  const sampleAuthorStats =
+    sampleVideo.authorStats || sampleVideo.authorStatsV2 || sampleVideo.stats || {};
+
+  const uniqueIdRaw =
+    user.uniqueId ||
+    user.unique_id ||
+    sampleAuthor.uniqueId ||
+    sampleAuthor.unique_id ||
+    extractTikTokHandle(sourceProfileUrl).replace(/^@/, '');
+  const tiktokHandle = uniqueIdRaw
+    ? `@${String(uniqueIdRaw).trim().replace(/^@/, '')}`
+    : extractTikTokHandle(sourceProfileUrl);
+  const handleNoAt = tiktokHandle ? tiktokHandle.replace(/^@/, '').toLowerCase() : '';
+
+  const followersRaw =
+    stats.followerCount ??
+    stats.followers ??
+    stats.follower_count ??
+    sampleAuthorStats.followerCount ??
+    sampleAuthorStats.followers ??
+    sampleAuthorStats.follower_count;
+  const followersNum = toFiniteNumber(followersRaw);
+  const followers = followersNum == null ? null : Math.round(followersNum);
+
+  const profileImage =
+    user.avatarMedium ||
+    user.avatarLarger ||
+    user.avatarThumb ||
+    sampleAuthor.avatarMedium ||
+    sampleAuthor.avatarLarger ||
+    sampleAuthor.avatarThumb ||
+    '';
+
+  const displayName =
+    (user.nickname && String(user.nickname).trim()) ||
+    (sampleAuthor.nickname && String(sampleAuthor.nickname).trim()) ||
+    '';
+  const normalizedUrl =
+    normalizeTikTokProfileUrl(sourceProfileUrl) ||
+    (handleNoAt ? `https://www.tiktok.com/@${handleNoAt}` : '');
+  const { engagementRate, avgViews } = computeTikTokVideoMetrics(videos);
+
+  return {
+    normalizedUrl,
+    tiktokHandle,
+    handleNoAt,
+    followers,
+    engagementRate,
+    avgViews,
+    profileImage,
+    displayName,
+  };
+};
+
+const persistTikTokAnalyzeMetrics = async (profileUrl, analyzeData) => {
+  if (!pool) {
+    return { attempted: false, updated: 0, reason: 'database_not_configured' };
+  }
+
+  const snapshot = extractTikTokAnalyzeSummary(analyzeData, profileUrl);
+  if (!snapshot.normalizedUrl && !snapshot.tiktokHandle) {
+    return { attempted: false, updated: 0, reason: 'no_creator_identity' };
+  }
+  const hasPersistableData =
+    snapshot.followers != null ||
+    snapshot.engagementRate != null ||
+    snapshot.avgViews != null ||
+    Boolean(snapshot.profileImage) ||
+    Boolean(snapshot.displayName);
+  if (!hasPersistableData) {
+    return { attempted: false, updated: 0, reason: 'no_metrics_available' };
+  }
+
+  const result = await pool.query(
+    `
+    UPDATE creators
+    SET
+      followers = COALESCE($1, followers),
+      engagement_rate = COALESCE($2, engagement_rate),
+      avg_views = COALESCE($3, avg_views),
+      profile_image = COALESCE(NULLIF($4, ''), profile_image),
+      tiktok_handle = COALESCE(NULLIF(tiktok_handle, ''), NULLIF($5, '')),
+      display_name = COALESCE(NULLIF(display_name, ''), NULLIF($6, '')),
+      updated_at = NOW()
+    WHERE creator_type = 'Influencer'
+      AND (
+        LOWER(REGEXP_REPLACE(SPLIT_PART(COALESCE(tiktok_url, ''), '?', 1), '/+$', '')) = $7
+        OR LOWER(COALESCE(tiktok_handle, '')) = $8
+        OR LOWER(REGEXP_REPLACE(COALESCE(tiktok_handle, ''), '^@', '')) = $9
+      )
+    RETURNING id
+    `,
+    [
+      snapshot.followers,
+      snapshot.engagementRate,
+      snapshot.avgViews,
+      snapshot.profileImage,
+      snapshot.tiktokHandle,
+      snapshot.displayName,
+      snapshot.normalizedUrl || '__no_tiktok_url__',
+      (snapshot.tiktokHandle || '').toLowerCase(),
+      snapshot.handleNoAt || '__no_tiktok_handle__',
+    ]
+  );
+
+  return {
+    attempted: true,
+    updated: result.rowCount,
+    metrics: {
+      followers: snapshot.followers,
+      engagementRate: snapshot.engagementRate,
+      avgViews: snapshot.avgViews,
+    },
+  };
+};
+
 const checkDatabaseStatus = () => checkDatabase(pool);
 const checkTigerbeetleStatus = () => checkTigerbeetle(TIGERBEETLE_ADDRESS);
 
@@ -228,8 +424,8 @@ const getBrandMembership = async (userId) => {
     SELECT o.id, o.name
     FROM org_memberships m
     JOIN organizations o ON m.organization_id = o.id
-    WHERE m.identity_id = $1 AND o.org_type = 'BRAND'
-    ORDER BY m.created_at ASC
+    WHERE m.identity_id = $1 AND UPPER(COALESCE(o.org_type, '')) = 'BRAND'
+    ORDER BY m.created_at DESC
     LIMIT 1
     `,
     [userId]
@@ -372,9 +568,26 @@ const server = http.createServer(async (req, res) => {
           console.log('[tiktok] script stdout preview:', stdout.slice(0, 1000));
           try {
             const data = JSON.parse(stdout);
-            console.log('[tiktok] analyze success');
-            console.log('[tiktok] response json:', JSON.stringify({ ok: true, data }, null, 2));
-            return json(res, 200, { ok: true, data, debug: { stderr } });
+            const finalizeResponse = (persistence) => {
+              console.log('[tiktok] analyze success');
+              console.log(
+                '[tiktok] response json:',
+                JSON.stringify({ ok: true, data, persistence }, null, 2)
+              );
+              return json(res, 200, { ok: true, data, debug: { stderr }, persistence });
+            };
+
+            persistTikTokAnalyzeMetrics(profileUrl, data)
+              .then((persistence) => finalizeResponse(persistence))
+              .catch((persistError) => {
+                console.error('[tiktok] failed to persist metrics:', persistError.message);
+                finalizeResponse({
+                  attempted: true,
+                  updated: 0,
+                  error: persistError.message,
+                });
+              });
+            return;
           } catch (parseError) {
             console.error('[tiktok] parse failed:', parseError.message);
             return json(res, 500, {
@@ -938,9 +1151,13 @@ const server = http.createServer(async (req, res) => {
       const brandMembership =
         user.role === 'brand' ? await getBrandMembership(user.id) : null;
 
+      if (user.role === 'brand' && !brandMembership?.id) {
+        return json(res, 200, { ok: true, data: [] });
+      }
+
       const values = [];
       let whereClause = '';
-      const scopedOrgId = brandMembership?.id || organizationId;
+      const scopedOrgId = user.role === 'brand' ? brandMembership.id : organizationId;
       if (scopedOrgId) {
         values.push(scopedOrgId);
         whereClause = `WHERE c.organization_id = $1`;
@@ -1005,7 +1222,11 @@ const server = http.createServer(async (req, res) => {
 
       const brandMembership =
         user.role === 'brand' ? await getBrandMembership(user.id) : null;
-      let resolvedOrgId = brandMembership?.id || organizationId;
+      if (user.role === 'brand' && !brandMembership?.id) {
+        return json(res, 403, { ok: false, error: 'Brand organization is not assigned' });
+      }
+
+      let resolvedOrgId = user.role === 'brand' ? brandMembership.id : organizationId;
       if (!resolvedOrgId && brand) {
         const orgResult = await pool.query(
           `SELECT id FROM organizations WHERE org_type = 'BRAND' AND name = $1`,
@@ -1563,6 +1784,232 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  const creatorByIdMatch = pathname.match(/^\/api\/creators\/([^/]+)\/?$/);
+  if (creatorByIdMatch && method === 'GET') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const creatorId = decodeURIComponent(creatorByIdMatch[1]);
+      const result = await pool.query(
+        `
+        SELECT
+          id,
+          display_name,
+          primary_niche,
+          country,
+          status,
+          creator_type,
+          phone,
+          handle,
+          tiktok_url,
+          instagram_url,
+          instagram_handle,
+          tiktok_handle,
+          followers,
+          category,
+          portfolio_url,
+          age,
+          gender,
+          languages,
+          accepts_gifted_collab,
+          turnaround_time,
+          has_equipment,
+          has_editing_skills,
+          can_voiceover,
+          skills_rating,
+          base_rate,
+          profile_image,
+          has_mock_video,
+          notes,
+          engagement_rate,
+          avg_views,
+          created_at,
+          updated_at
+        FROM creators
+        WHERE id = $1
+        `,
+        [creatorId]
+      );
+      if (result.rowCount === 0) {
+        return json(res, 404, { ok: false, error: 'Creator not found' });
+      }
+      return json(res, 200, { ok: true, data: result.rows[0] });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if (creatorByIdMatch && method === 'PUT') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const creatorId = decodeURIComponent(creatorByIdMatch[1]);
+      const body = await parseBody(req);
+
+      const toNullableText = (value) => {
+        if (value === undefined || value === null) return null;
+        const text = String(value).trim();
+        return text.length ? text : null;
+      };
+
+      const toNullableInteger = (value, fieldName) => {
+        if (value === undefined || value === null || value === '') return null;
+        const num = Number(value);
+        if (!Number.isFinite(num) || !Number.isInteger(num) || num < 0) {
+          throw new Error(`Invalid ${fieldName}`);
+        }
+        return num;
+      };
+
+      const toNullableNumber = (value, fieldName) => {
+        if (value === undefined || value === null || value === '') return null;
+        const num = Number(value);
+        if (!Number.isFinite(num) || num < 0) {
+          throw new Error(`Invalid ${fieldName}`);
+        }
+        return num;
+      };
+
+      const toNullableBoolean = (value, fieldName) => {
+        if (value === undefined || value === null || value === '') return null;
+        if (typeof value === 'boolean') return value;
+        const normalized = String(value).trim().toLowerCase();
+        if (['true', '1', 'yes', 'y'].includes(normalized)) return true;
+        if (['false', '0', 'no', 'n'].includes(normalized)) return false;
+        throw new Error(`Invalid ${fieldName}`);
+      };
+
+      const creatorType = toNullableText(body.creator_type);
+      if (creatorType && !['UGC', 'Influencer'].includes(creatorType)) {
+        return json(res, 400, { ok: false, error: 'Invalid creator_type' });
+      }
+
+      const skillsRating = toNullableNumber(body.skills_rating, 'skills_rating');
+      if (skillsRating != null && skillsRating > 5) {
+        return json(res, 400, { ok: false, error: 'skills_rating must be between 0 and 5' });
+      }
+
+      const values = [
+        toNullableText(body.display_name),
+        toNullableText(body.primary_niche),
+        toNullableText(body.country),
+        toNullableText(body.status),
+        creatorType,
+        toNullableText(body.phone),
+        toNullableText(body.handle),
+        toNullableText(body.tiktok_url),
+        toNullableText(body.instagram_url),
+        toNullableText(body.instagram_handle),
+        toNullableText(body.tiktok_handle),
+        toNullableInteger(body.followers, 'followers'),
+        toNullableText(body.category),
+        toNullableText(body.portfolio_url),
+        toNullableInteger(body.age, 'age'),
+        toNullableText(body.gender),
+        toNullableText(body.languages),
+        toNullableBoolean(body.accepts_gifted_collab, 'accepts_gifted_collab'),
+        toNullableText(body.turnaround_time),
+        toNullableBoolean(body.has_equipment, 'has_equipment'),
+        toNullableBoolean(body.has_editing_skills, 'has_editing_skills'),
+        toNullableBoolean(body.can_voiceover, 'can_voiceover'),
+        skillsRating,
+        toNullableNumber(body.base_rate, 'base_rate'),
+        toNullableText(body.profile_image),
+        toNullableBoolean(body.has_mock_video, 'has_mock_video'),
+        toNullableText(body.notes),
+        toNullableNumber(body.engagement_rate, 'engagement_rate'),
+        toNullableInteger(body.avg_views, 'avg_views'),
+        creatorId,
+      ];
+
+      const result = await pool.query(
+        `
+        UPDATE creators
+        SET
+          display_name = $1,
+          primary_niche = $2,
+          country = $3,
+          status = $4,
+          creator_type = $5,
+          phone = $6,
+          handle = $7,
+          tiktok_url = $8,
+          instagram_url = $9,
+          instagram_handle = $10,
+          tiktok_handle = $11,
+          followers = $12,
+          category = $13,
+          portfolio_url = $14,
+          age = $15,
+          gender = $16,
+          languages = $17,
+          accepts_gifted_collab = $18,
+          turnaround_time = $19,
+          has_equipment = $20,
+          has_editing_skills = $21,
+          can_voiceover = $22,
+          skills_rating = $23,
+          base_rate = $24,
+          profile_image = $25,
+          has_mock_video = $26,
+          notes = $27,
+          engagement_rate = $28,
+          avg_views = $29,
+          updated_at = NOW()
+        WHERE id = $30
+        RETURNING
+          id,
+          display_name,
+          primary_niche,
+          country,
+          status,
+          creator_type,
+          phone,
+          handle,
+          tiktok_url,
+          instagram_url,
+          instagram_handle,
+          tiktok_handle,
+          followers,
+          category,
+          portfolio_url,
+          age,
+          gender,
+          languages,
+          accepts_gifted_collab,
+          turnaround_time,
+          has_equipment,
+          has_editing_skills,
+          can_voiceover,
+          skills_rating,
+          base_rate,
+          profile_image,
+          has_mock_video,
+          notes,
+          engagement_rate,
+          avg_views,
+          created_at,
+          updated_at
+        `,
+        values
+      );
+
+      if (result.rowCount === 0) {
+        return json(res, 404, { ok: false, error: 'Creator not found' });
+      }
+
+      return json(res, 200, { ok: true, data: result.rows[0] });
+    } catch (error) {
+      return json(res, 400, { ok: false, error: error.message });
+    }
+  }
+
   if (url === '/api/influencers' || url.startsWith('/api/influencers?')) {
     const user = await requireApprovedUser(req, res);
     if (!user) return;
@@ -1578,7 +2025,8 @@ const server = http.createServer(async (req, res) => {
       const result = await pool.query(
         `
         SELECT id, name, tiktok_url, instagram_url, instagram_handle, tiktok_handle,
-               followers, niche, phone, region, notes, category, profile_image, created_at
+               followers, niche, phone, region, notes, category, profile_image,
+               engagement_rate, avg_views, gender, created_at
         FROM influencers 
         ORDER BY name ASC
         LIMIT $1 OFFSET $2
@@ -1922,7 +2370,7 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const body = await parseBody(req);
-      const { email, password, name, role } = body;
+      const { email, password, name } = body;
       
       if (!email || !password || !name) {
         return json(res, 400, { ok: false, error: 'Email, password, and name are required' });
@@ -1934,7 +2382,7 @@ const server = http.createServer(async (req, res) => {
       }
       
       const passwordHash = await hashPassword(password);
-      const userRole = role === 'creator' ? 'creator' : 'brand';
+      const userRole = 'brand';
       
       const result = await pool.query(
         `INSERT INTO users (email, password_hash, name, role, status) 
@@ -2038,7 +2486,30 @@ const server = http.createServer(async (req, res) => {
     try {
       
       const result = await pool.query(
-        'SELECT id, email, name, role, status, created_at FROM users ORDER BY created_at DESC'
+        `
+        SELECT
+          u.id,
+          u.email,
+          u.name,
+          u.role,
+          u.status,
+          u.created_at,
+          brand_membership.organization_id AS brand_id,
+          brand_membership.organization_name AS brand_name
+        FROM users u
+        LEFT JOIN LATERAL (
+          SELECT
+            m.organization_id,
+            o.name AS organization_name
+          FROM org_memberships m
+          JOIN organizations o ON o.id = m.organization_id
+          WHERE m.identity_id = u.id
+            AND UPPER(COALESCE(o.org_type, '')) = 'BRAND'
+          ORDER BY m.created_at DESC
+          LIMIT 1
+        ) brand_membership ON TRUE
+        ORDER BY u.created_at DESC
+        `
       );
       return json(res, 200, { ok: true, data: result.rows });
     } catch (error) {
@@ -2047,7 +2518,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const userApproveMatch = pathname.match(/^\/api\/admin\/users\/(\d+)\/approve\/?$/);
+  const userApproveMatch = pathname.match(/^\/api\/admin\/users\/([^/]+)\/approve\/?$/);
   if (method === 'POST' && userApproveMatch) {
     const currentUser = await requireApprovedUser(req, res);
     if (!currentUser) return;
@@ -2055,27 +2526,91 @@ const server = http.createServer(async (req, res) => {
       return json(res, 403, { ok: false, error: 'Admin access required' });
     }
     try {
-      
-      const userId = userApproveMatch[1];
-      const result = await pool.query(
-        `UPDATE users SET status = 'approved', updated_at = NOW() 
-         WHERE id = $1 
-         RETURNING id, email, name, role, status`,
-        [userId]
-      );
-      
-      if (result.rows.length === 0) {
-        return json(res, 404, { ok: false, error: 'User not found' });
+      const userId = decodeURIComponent(userApproveMatch[1]);
+      const body = await parseBody(req);
+      const organizationId = body?.organizationId ? String(body.organizationId).trim() : '';
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        const userResult = await client.query(
+          'SELECT id, role FROM users WHERE id = $1 FOR UPDATE',
+          [userId]
+        );
+        if (userResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return json(res, 404, { ok: false, error: 'User not found' });
+        }
+
+        const currentRole = userResult.rows[0].role || 'brand';
+        const requiresBrandAssignment = currentRole !== 'admin';
+
+        if (requiresBrandAssignment) {
+          if (!organizationId) {
+            await client.query('ROLLBACK');
+            return json(res, 400, {
+              ok: false,
+              error: 'Brand assignment is required before approval',
+            });
+          }
+
+          const orgResult = await client.query(
+            `SELECT id, name FROM organizations WHERE id = $1 AND UPPER(COALESCE(org_type, '')) = 'BRAND'`,
+            [organizationId]
+          );
+          if (orgResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return json(res, 400, { ok: false, error: 'Selected brand organization was not found' });
+          }
+
+          await client.query(
+            `
+            DELETE FROM org_memberships m
+            USING organizations o
+            WHERE m.identity_id = $1
+              AND m.organization_id = o.id
+              AND UPPER(COALESCE(o.org_type, '')) = 'BRAND'
+            `,
+            [userId]
+          );
+
+          await client.query(
+            `
+            INSERT INTO org_memberships (identity_id, organization_id, role)
+            VALUES ($1, $2, $3)
+            `,
+            [userId, organizationId, 'brand_member']
+          );
+        }
+
+        const result = await client.query(
+          `
+          UPDATE users
+          SET status = 'approved',
+              role = CASE WHEN $2 THEN 'brand' ELSE role END,
+              updated_at = NOW()
+          WHERE id = $1
+          RETURNING id, email, name, role, status
+          `,
+          [userId, requiresBrandAssignment]
+        );
+
+        await client.query('COMMIT');
+        return json(res, 200, { ok: true, user: result.rows[0] });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
       }
-      
-      return json(res, 200, { ok: true, user: result.rows[0] });
     } catch (error) {
       console.error('Approve user error:', error);
       return json(res, 500, { ok: false, error: 'Failed to approve user' });
     }
   }
 
-  const userRejectMatch = pathname.match(/^\/api\/admin\/users\/(\d+)\/reject\/?$/);
+  const userRejectMatch = pathname.match(/^\/api\/admin\/users\/([^/]+)\/reject\/?$/);
   if (method === 'POST' && userRejectMatch) {
     const currentUser = await requireApprovedUser(req, res);
     if (!currentUser) return;
@@ -2084,7 +2619,7 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       
-      const userId = userRejectMatch[1];
+      const userId = decodeURIComponent(userRejectMatch[1]);
       const result = await pool.query(
         `UPDATE users SET status = 'rejected', updated_at = NOW() 
          WHERE id = $1 
@@ -2100,6 +2635,202 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       console.error('Reject user error:', error);
       return json(res, 500, { ok: false, error: 'Failed to reject user' });
+    }
+  }
+
+  const userUpdateMatch = pathname.match(/^\/api\/admin\/users\/([^/]+)\/?$/);
+  if (method === 'PUT' && userUpdateMatch) {
+    const currentUser = await requireApprovedUser(req, res);
+    if (!currentUser) return;
+    if (currentUser.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const userId = decodeURIComponent(userUpdateMatch[1]);
+      const body = await parseBody(req);
+
+      const name = typeof body?.name === 'string' ? body.name.trim() : '';
+      const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+      const role = typeof body?.role === 'string' ? body.role.trim().toLowerCase() : '';
+      const status = typeof body?.status === 'string' ? body.status.trim().toLowerCase() : '';
+      const hasOrganizationId = Object.prototype.hasOwnProperty.call(body || {}, 'organizationId');
+      const organizationId =
+        hasOrganizationId && body.organizationId != null
+          ? String(body.organizationId).trim()
+          : '';
+
+      if (!name) {
+        return json(res, 400, { ok: false, error: 'Name is required' });
+      }
+      if (!email) {
+        return json(res, 400, { ok: false, error: 'Email is required' });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return json(res, 400, { ok: false, error: 'Email format is invalid' });
+      }
+
+      const allowedRoles = new Set(['admin', 'brand']);
+      if (!allowedRoles.has(role)) {
+        return json(res, 400, { ok: false, error: 'Invalid role' });
+      }
+
+      const allowedStatuses = new Set(['pending', 'approved', 'rejected']);
+      if (!allowedStatuses.has(status)) {
+        return json(res, 400, { ok: false, error: 'Invalid status' });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        const userResult = await client.query(
+          'SELECT id, role, status FROM users WHERE id = $1 FOR UPDATE',
+          [userId]
+        );
+        if (userResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return json(res, 404, { ok: false, error: 'User not found' });
+        }
+
+        if (currentUser.id === userId) {
+          if (role !== 'admin') {
+            await client.query('ROLLBACK');
+            return json(res, 400, { ok: false, error: 'You cannot change your own role' });
+          }
+          if (status !== 'approved') {
+            await client.query('ROLLBACK');
+            return json(res, 400, { ok: false, error: 'You cannot change your own status' });
+          }
+        }
+
+        const normalizedRole = role;
+        const normalizedStatus = status;
+
+        let finalBrandId = null;
+
+        if (normalizedRole === 'admin') {
+          await client.query(
+            `
+            DELETE FROM org_memberships m
+            USING organizations o
+            WHERE m.identity_id = $1
+              AND m.organization_id = o.id
+              AND UPPER(COALESCE(o.org_type, '')) = 'BRAND'
+            `,
+            [userId]
+          );
+        } else if (hasOrganizationId) {
+          if (organizationId) {
+            const orgResult = await client.query(
+              `SELECT id FROM organizations WHERE id = $1 AND UPPER(COALESCE(org_type, '')) = 'BRAND'`,
+              [organizationId]
+            );
+            if (orgResult.rows.length === 0) {
+              await client.query('ROLLBACK');
+              return json(res, 400, { ok: false, error: 'Selected brand organization was not found' });
+            }
+          }
+
+          await client.query(
+            `
+            DELETE FROM org_memberships m
+            USING organizations o
+            WHERE m.identity_id = $1
+              AND m.organization_id = o.id
+              AND UPPER(COALESCE(o.org_type, '')) = 'BRAND'
+            `,
+            [userId]
+          );
+
+          if (organizationId) {
+            await client.query(
+              `
+              INSERT INTO org_memberships (identity_id, organization_id, role)
+              VALUES ($1, $2, $3)
+              `,
+              [userId, organizationId, 'brand_member']
+            );
+          }
+          finalBrandId = organizationId || null;
+        } else {
+          const existingBrandResult = await client.query(
+            `
+            SELECT m.organization_id
+            FROM org_memberships m
+            JOIN organizations o ON o.id = m.organization_id
+            WHERE m.identity_id = $1
+              AND UPPER(COALESCE(o.org_type, '')) = 'BRAND'
+            ORDER BY m.created_at DESC
+            LIMIT 1
+            `,
+            [userId]
+          );
+          finalBrandId = existingBrandResult.rows[0]?.organization_id || null;
+        }
+
+        if (normalizedRole !== 'admin' && normalizedStatus === 'approved' && !finalBrandId) {
+          await client.query('ROLLBACK');
+          return json(res, 400, {
+            ok: false,
+            error: 'Brand assignment is required for approved brand users',
+          });
+        }
+
+        await client.query(
+          `
+          UPDATE users
+          SET name = $2,
+              email = $3,
+              role = $4,
+              status = $5,
+              updated_at = NOW()
+          WHERE id = $1
+          `,
+          [userId, name, email, normalizedRole, normalizedStatus]
+        );
+
+        const result = await client.query(
+          `
+          SELECT
+            u.id,
+            u.email,
+            u.name,
+            u.role,
+            u.status,
+            u.created_at,
+            brand_membership.organization_id AS brand_id,
+            brand_membership.organization_name AS brand_name
+          FROM users u
+          LEFT JOIN LATERAL (
+            SELECT
+              m.organization_id,
+              o.name AS organization_name
+            FROM org_memberships m
+            JOIN organizations o ON o.id = m.organization_id
+            WHERE m.identity_id = u.id
+              AND UPPER(COALESCE(o.org_type, '')) = 'BRAND'
+            ORDER BY m.created_at DESC
+            LIMIT 1
+          ) brand_membership ON TRUE
+          WHERE u.id = $1
+          `,
+          [userId]
+        );
+
+        await client.query('COMMIT');
+        return json(res, 200, { ok: true, user: result.rows[0] });
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    } catch (error) {
+      if (error?.code === '23505') {
+        return json(res, 409, { ok: false, error: 'Email is already in use' });
+      }
+      console.error('Update user error:', error);
+      return json(res, 500, { ok: false, error: 'Failed to update user' });
     }
   }
 
@@ -2153,9 +2884,19 @@ function serveStatic(req, res, urlPath) {
   }
 }
 
-server.listen(PORT, () => {
-  console.log(`[dummy-api] listening on http://localhost:${PORT}`);
-});
+const startServer = async () => {
+  try {
+    await ensureRuntimeSchema();
+  } catch (error) {
+    console.error('[schema] failed to ensure runtime schema:', error.message);
+  }
+
+  server.listen(PORT, () => {
+    console.log(`[dummy-api] listening on http://localhost:${PORT}`);
+  });
+};
+
+startServer();
 
 const shutdown = () => {
   server.close(() => {

@@ -106,40 +106,39 @@ async def run(args: argparse.Namespace) -> None:
         if args.username:
             sys.stderr.write(f"Fetching user info: {args.username}\n")
             user = api.user(username=args.username)
+            results["user"]["videos"] = []
             try:
                 results["user"]["info"] = await user.info()
             except Exception as exc:  # noqa: BLE001
                 results["user"]["info_error"] = str(exc)
                 results["user"]["info_trace"] = traceback.format_exc()
-                results["user"]["videos"] = []
-                sys.stderr.write("User info failed; skipping video fetch.\n")
-                user = None
+                sys.stderr.write("User info failed; continuing with video fetch attempts.\n")
 
-            if user is not None:
-                results["user"]["videos"] = []
+            try:
                 sys.stderr.write(f"Fetching user videos: {args.user_videos}\n")
                 async for video in user.videos(count=args.user_videos):
                     results["user"]["videos"].append(video.as_dict)
+            except Exception as exc:  # noqa: BLE001 - report API errors
+                results["user"]["videos_error"] = str(exc)
+                results["user"]["videos_trace"] = traceback.format_exc()
 
-            if user is not None:
-                try:
-                    results["user"]["liked"] = []
-                    sys.stderr.write(f"Fetching user liked videos: {args.user_likes}\n")
-                    async for video in user.liked(count=args.user_likes):
-                        results["user"]["liked"].append(video.as_dict)
-                except Exception as exc:  # noqa: BLE001 - report API privacy errors
-                    results["user"]["liked_error"] = str(exc)
-                    results["user"]["liked_trace"] = traceback.format_exc()
+            try:
+                results["user"]["liked"] = []
+                sys.stderr.write(f"Fetching user liked videos: {args.user_likes}\n")
+                async for video in user.liked(count=args.user_likes):
+                    results["user"]["liked"].append(video.as_dict)
+            except Exception as exc:  # noqa: BLE001 - report API privacy errors
+                results["user"]["liked_error"] = str(exc)
+                results["user"]["liked_trace"] = traceback.format_exc()
 
-            if user is not None:
-                try:
-                    results["user"]["playlists"] = []
-                    sys.stderr.write(f"Fetching user playlists: {args.user_playlists}\n")
-                    async for playlist in user.playlists(count=args.user_playlists):
-                        results["user"]["playlists"].append(playlist.as_dict)
-                except Exception as exc:  # noqa: BLE001 - report API errors
-                    results["user"]["playlists_error"] = str(exc)
-                    results["user"]["playlists_trace"] = traceback.format_exc()
+            try:
+                results["user"]["playlists"] = []
+                sys.stderr.write(f"Fetching user playlists: {args.user_playlists}\n")
+                async for playlist in user.playlists(count=args.user_playlists):
+                    results["user"]["playlists"].append(playlist.as_dict)
+            except Exception as exc:  # noqa: BLE001 - report API errors
+                results["user"]["playlists_error"] = str(exc)
+                results["user"]["playlists_trace"] = traceback.format_exc()
 
             if args.hashtag:
                 sys.stderr.write(f"Fetching hashtag info: {args.hashtag}\n")

@@ -8,7 +8,13 @@ import {
   UGC_EXPERIENCE_LEVELS,
 } from '../config/options.js';
 
-export default function CreatorFilters({ type, filters, onChange, niches = NICHES }) {
+export default function CreatorFilters({
+  type,
+  filters,
+  onChange,
+  niches = NICHES,
+  disableEngagementRate = false,
+}) {
   const updateFilter = (field) => (event) => {
     onChange({ ...filters, [field]: event.target.value });
   };
@@ -110,8 +116,11 @@ export default function CreatorFilters({ type, filters, onChange, niches = NICHE
         className="input"
         value={filters.engagementRate}
         onChange={updateFilter('engagementRate')}
+        disabled={disableEngagementRate}
       >
-        <option value="">Engagement Rate</option>
+        <option value="">
+          {disableEngagementRate ? 'Engagement Rate (No data yet)' : 'Engagement Rate'}
+        </option>
         {INFLUENCER_ENGAGEMENT_RATES.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}

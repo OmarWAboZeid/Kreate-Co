@@ -4,7 +4,7 @@ import CampaignFormModal from '../components/CampaignFormModal.jsx';
 import CampaignGrid from '../components/CampaignGrid.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import CampaignWizard from '../components/CampaignWizard.jsx';
-import { storage, useAppDispatch, useAppState } from '../state.jsx';
+import { useAppDispatch, useAppState } from '../state.jsx';
 
 const API_BASE = '/api';
 
@@ -75,7 +75,7 @@ export default function CampaignsPage() {
       }
     };
     fetchCampaigns();
-  }, [dispatch]);
+  }, [dispatch, role]);
 
   useEffect(() => {
     const fetchPackages = async () => {
@@ -96,12 +96,9 @@ export default function CampaignsPage() {
   }, []);
 
   const brandNames = brands.map((b) => (typeof b === 'string' ? b : b.name));
-  const brandFilter = role === 'brand' ? storage.getBrand() || brandNames[0] : null;
+  const brandFilter = role === 'brand' ? brandNames[0] || null : null;
   const visibleCampaigns = useMemo(() => {
     let filtered = campaigns;
-    if (brandFilter) {
-      filtered = filtered.filter((campaign) => campaign.brand === brandFilter);
-    }
     if ((role === 'admin' || role === 'employee') && adminBrandFilter) {
       filtered = filtered.filter((campaign) => campaign.brand === adminBrandFilter);
     }
