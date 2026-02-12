@@ -324,12 +324,12 @@ function appReducer(state, action) {
       return {
         ...state,
         campaigns: state.campaigns.map((campaign) =>
-          campaign.id === campaignId ? { ...campaign, status: 'Active' } : campaign
+          campaign.id === campaignId ? { ...campaign, status: 'Published Campaign' } : campaign
         ),
         notifications: addNotification(state.notifications, {
           id: makeId('note'),
           role: 'brand',
-          message: 'Campaign is now active.',
+          message: 'Campaign is now published.',
           channel: 'Email',
           createdAt: nowStamp(),
           read: false,
@@ -337,7 +337,7 @@ function appReducer(state, action) {
         activity: addActivityForCampaign(
           state.activity,
           campaignId,
-          createActivity({ action: 'Campaign activated', actor: 'System' })
+          createActivity({ action: 'Campaign published', actor: 'System' })
         ),
       };
     }

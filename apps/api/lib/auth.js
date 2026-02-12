@@ -57,9 +57,28 @@ async function getSessionUser(pool, req) {
   if (!sessionId) return null;
 
   const result = await pool.query(
-    `SELECT u.id, u.email, u.name, u.role, u.status, u.created_at
+    `SELECT
+       u.id,
+       u.email,
+       u.name,
+       u.role,
+       u.status,
+       u.created_at,
+       brand_membership.organization_id AS brand_id,
+       brand_membership.organization_name AS brand_name
      FROM sessions s
      JOIN users u ON s.user_id = u.id
+     LEFT JOIN LATERAL (
+       SELECT
+         m.organization_id,
+         o.name AS organization_name
+       FROM org_memberships m
+       JOIN organizations o ON o.id = m.organization_id
+       WHERE m.identity_id = u.id
+         AND UPPER(COALESCE(o.org_type, '')) = 'BRAND'
+       ORDER BY m.created_at DESC
+       LIMIT 1
+     ) brand_membership ON TRUE
      WHERE s.id = $1 AND s.expires_at > NOW()`,
     [sessionId]
   );

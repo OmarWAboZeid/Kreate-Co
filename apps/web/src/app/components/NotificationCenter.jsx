@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { storage, useAppDispatch, useAppState } from '../state.jsx';
+import { useAppDispatch, useAppState } from '../state.jsx';
 
 export default function NotificationCenter({ role }) {
   const { brands } = useAppState();
@@ -8,6 +8,7 @@ export default function NotificationCenter({ role }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [sessionRole, setSessionRole] = useState(null);
+  const [sessionBrandId, setSessionBrandId] = useState(null);
   const isBrand = role === 'brand';
   const isAdminView = role === 'admin' || role === 'employee';
 
@@ -19,6 +20,7 @@ export default function NotificationCenter({ role }) {
         const data = await res.json();
         if (active && data.ok) {
           setSessionRole(data.data?.role || null);
+          setSessionBrandId(data.data?.brand_id || null);
         }
       } catch (err) {
         console.error('Failed to fetch session user:', err);
@@ -46,21 +48,24 @@ export default function NotificationCenter({ role }) {
     fetchBrands();
   }, [brands.length, dispatch, isBrand]);
 
-  const selectedBrandName =
-    isBrand ? storage.getBrand() || brands[0]?.name : null;
-  const organizationId =
-    isBrand
-      ? brands.find((brand) => brand.name === selectedBrandName)?.id
-      : null;
   const canAdminNotifications = sessionRole
     ? sessionRole === 'admin' || sessionRole === 'employee'
     : isAdminView;
   const isImpersonatingBrand = isBrand && canAdminNotifications;
+  const organizationId = isBrand
+    ? sessionRole === 'brand'
+      ? sessionBrandId
+      : isImpersonatingBrand
+        ? brands[0]?.id || null
+        : null
+    : null;
   const notificationsUrl =
-    isBrand && organizationId
-      ? isImpersonatingBrand
-        ? `/api/notifications?organizationId=${organizationId}&limit=50`
-        : `/api/organizations/${organizationId}/notifications?limit=50`
+    isBrand
+      ? organizationId
+        ? isImpersonatingBrand
+          ? `/api/notifications?organizationId=${organizationId}&limit=50`
+          : `/api/organizations/${organizationId}/notifications?limit=50`
+        : null
       : canAdminNotifications && isAdminView
         ? '/api/notifications?limit=50'
         : null;

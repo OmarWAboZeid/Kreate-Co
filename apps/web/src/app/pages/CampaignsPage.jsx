@@ -11,6 +11,7 @@ const API_BASE = '/api';
 const defaultForm = {
   name: '',
   brand: '',
+  status: 'Draft',
   platforms: [],
   startDate: '',
   endDate: '',
@@ -118,7 +119,7 @@ export default function CampaignsPage() {
       });
     }
     return filtered;
-  }, [brandFilter, campaigns, role, adminBrandFilter, searchQuery, statusFilter]);
+  }, [campaigns, role, adminBrandFilter, searchQuery, statusFilter]);
 
   const openModal = () => {
     if (role === 'brand' && brandFilter) {
@@ -224,7 +225,7 @@ export default function CampaignsPage() {
       body: JSON.stringify({
         name: form.name,
         brand: form.brand,
-        status: 'Draft',
+        status: role === 'admin' ? form.status || 'Draft' : 'Draft',
         platforms: form.platforms,
         objectives: form.objectives,
         contentFormat: form.contentFormat,
@@ -282,9 +283,8 @@ export default function CampaignsPage() {
         >
           <option value="">Status</option>
           <option value="Draft">Draft</option>
-          <option value="Submitted">Submitted</option>
           <option value="In Review">In Review</option>
-          <option value="Active">Active</option>
+          <option value="Published Campaign">Published Campaign</option>
         </select>
         {(role === 'admin' || role === 'employee') && (
           <select

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 const PLATFORM_OPTIONS = ['TikTok', 'Instagram', 'Facebook'];
 const CONTENT_FORMAT_OPTIONS = ['Reel', 'Post', 'Story'];
 const DEAL_TYPES = ['Collab', 'Paid', 'Mix'];
+const CAMPAIGN_STATUSES = ['Draft', 'In Review', 'Published Campaign'];
 const OBJECTIVES = ['Awareness', 'Sales', 'Launch', 'Content Bank'];
 const CREATOR_TIERS = [
   { value: 'nano', label: 'Nano Influencers' },
@@ -35,11 +36,22 @@ export default function CampaignFormModal({
   onToggleCreatorTier,
   onSubmit,
 }) {
+  const [layoutOffsets, setLayoutOffsets] = useState({
+    top: 0,
+    left: 0,
+    right: 0,
+  });
   const showCreatorTiers = form.creatorType === 'Influencer' || form.creatorType === 'Hybrid';
   const modalTitle = title || 'Create New Campaign';
   const modalSubtitle = subtitle || 'Fill in the details to launch your campaign';
   const actionLabel = submitLabel || 'Create Campaign';
   const selectedPackage = packages.find((pkg) => pkg.id === form.campaignPackage);
+  const statusOptions = useMemo(() => {
+    if (form.status && !CAMPAIGN_STATUSES.includes(form.status)) {
+      return [form.status, ...CAMPAIGN_STATUSES];
+    }
+    return CAMPAIGN_STATUSES;
+  }, [form.status]);
   const [touched, setTouched] = useState({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -53,10 +65,52 @@ export default function CampaignFormModal({
     setIsSubmitting(false);
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const topbar = document.querySelector('.app-topbar');
+    const appMain = document.querySelector('.app-main');
+
+    const updateOffset = () => {
+      const topbarRect = topbar?.getBoundingClientRect();
+      const mainRect = appMain?.getBoundingClientRect();
+      const nextTop = Math.max(0, Math.ceil(topbarRect?.bottom || 0));
+      const nextLeft = Math.max(0, Math.ceil(mainRect?.left || 0));
+      const nextRight = Math.max(
+        0,
+        Math.ceil(window.innerWidth - (mainRect?.right || window.innerWidth))
+      );
+      setLayoutOffsets((prev) => {
+        if (prev.top === nextTop && prev.left === nextLeft && prev.right === nextRight) {
+          return prev;
+        }
+        return { top: nextTop, left: nextLeft, right: nextRight };
+      });
+    };
+
+    updateOffset();
+    window.addEventListener('resize', updateOffset);
+    window.addEventListener('scroll', updateOffset, { passive: true });
+
+    let observer;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(updateOffset);
+      if (topbar) observer.observe(topbar);
+      if (appMain) observer.observe(appMain);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateOffset);
+      window.removeEventListener('scroll', updateOffset);
+      if (observer) observer.disconnect();
+    };
+  }, [open]);
+
   const errors = useMemo(() => {
     const nextErrors = {};
     if (!form.name?.trim()) nextErrors.name = 'Campaign name is required.';
     if (!form.brand?.trim()) nextErrors.brand = 'Brand is required.';
+    if (role === 'admin' && !form.status?.trim()) nextErrors.status = 'Campaign status is required.';
     if (!form.creatorType) nextErrors.creatorType = 'Select a campaign type.';
     if (!form.dealType) nextErrors.dealType = 'Select a deal type.';
     if (!form.campaignPackage) nextErrors.campaignPackage = 'Select a package.';
@@ -142,7 +196,14 @@ export default function CampaignFormModal({
   if (!open) return null;
 
   return (
-    <div className="modal-overlay active campaign-modal-overlay">
+    <div
+      className="modal-overlay active campaign-modal-overlay"
+      style={{
+        '--campaign-modal-top-offset': `${layoutOffsets.top}px`,
+        '--campaign-modal-left-offset': `${layoutOffsets.left}px`,
+        '--campaign-modal-right-offset': `${layoutOffsets.right}px`,
+      }}
+    >
       <div className="campaign-modal">
         <div className="campaign-modal-header">
           <div>
@@ -202,6 +263,28 @@ export default function CampaignFormModal({
                     ))}
                   </select>
                   {fieldError('brand') && <p className="field-error">{fieldError('brand')}</p>}
+                </label>
+              )}
+
+              {role === 'admin' && (
+                <label className="campaign-field">
+                  <span>Campaign Status *</span>
+                  <select
+                    className={`input ${fieldError('status') ? 'input-error' : ''}`}
+                    value={form.status || 'Draft'}
+                    onChange={(event) => {
+                      onChange('status', event.target.value);
+                      markTouched('status');
+                    }}
+                    data-field="status"
+                  >
+                    {statusOptions.map((statusOption) => (
+                      <option key={statusOption} value={statusOption}>
+                        {statusOption}
+                      </option>
+                    ))}
+                  </select>
+                  {fieldError('status') && <p className="field-error">{fieldError('status')}</p>}
                 </label>
               )}
 

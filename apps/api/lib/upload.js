@@ -117,9 +117,17 @@ async function getObjectFile(objectPath) {
 
 async function streamObject(file, res) {
   const [metadata] = await file.getMetadata();
-  res.setHeader('Content-Type', metadata.contentType || 'application/octet-stream');
+  const contentType = metadata.contentType || 'application/octet-stream';
+  const isVideo = String(contentType).toLowerCase().startsWith('video/');
+
+  res.setHeader('Content-Type', contentType);
   res.setHeader('Content-Length', metadata.size);
-  res.setHeader('Cache-Control', 'public, max-age=31536000');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', 'inline');
+  res.setHeader('Cache-Control', isVideo ? 'private, no-store, max-age=0' : 'public, max-age=31536000');
+  if (isVideo) {
+    res.setHeader('Accept-Ranges', 'none');
+  }
   const stream = file.createReadStream();
   stream.on('error', (err) => {
     console.error('Stream error:', err);

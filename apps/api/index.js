@@ -172,6 +172,28 @@ const normalizeList = (value) => {
 
 const normalizeTextArray = (value) => normalizeList(value);
 
+const CAMPAIGN_STATUS_MAP = Object.freeze({
+  draft: 'Draft',
+  'in review': 'In Review',
+  published: 'Published Campaign',
+  'published campaign': 'Published Campaign',
+  submitted: 'In Review',
+  active: 'Published Campaign',
+});
+
+const normalizeCampaignStatus = (value, options = {}) => {
+  const { fallback = 'Draft' } = options;
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+  const normalizedKey = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ');
+  return CAMPAIGN_STATUS_MAP[normalizedKey] || fallback;
+};
+
 const readJsonBody = (req) =>
   new Promise((resolve, reject) => {
     let body = '';
@@ -385,7 +407,7 @@ const mapCampaignRow = (row) => ({
   name: row.name,
   brand: row.organization_name,
   brandId: row.organization_id,
-  status: row.status,
+  status: normalizeCampaignStatus(row.status, { fallback: 'Draft' }),
   campaignType: row.campaign_type,
   campaignTypeDetail: row.campaign_type_detail,
   dealType: row.deal_type,
@@ -1216,6 +1238,20 @@ const server = http.createServer(async (req, res) => {
         influencerVideoCount,
       } = body;
 
+      const normalizedStatus = normalizeCampaignStatus(status, { fallback: null });
+      if (
+        status !== undefined &&
+        status !== null &&
+        status !== '' &&
+        normalizedStatus == null
+      ) {
+        return json(res, 400, { ok: false, error: 'Invalid campaign status' });
+      }
+      if (user.role !== 'admin' && normalizedStatus && normalizedStatus !== 'Draft') {
+        return json(res, 403, { ok: false, error: 'Only admin can set campaign status' });
+      }
+      const resolvedStatus = user.role === 'admin' ? normalizedStatus || 'Draft' : 'Draft';
+
       if (!name) {
         return json(res, 400, { ok: false, error: 'Campaign name is required' });
       }
@@ -1297,7 +1333,7 @@ const server = http.createServer(async (req, res) => {
           resolvedOrgId,
           name,
           objectivesArray.length ? objectivesArray.join(', ') : null,
-          status || 'Draft',
+          resolvedStatus,
           startDate || null,
           endDate || null,
           campaignType || null,
@@ -1384,6 +1420,18 @@ const server = http.createServer(async (req, res) => {
         ugcVideoCount,
         influencerVideoCount,
       } = body;
+      const hasStatusUpdate = Object.prototype.hasOwnProperty.call(body, 'status');
+      let resolvedStatus = existing.status;
+      if (hasStatusUpdate) {
+        const normalizedStatus = normalizeCampaignStatus(status, { fallback: null });
+        if (normalizedStatus == null) {
+          return json(res, 400, { ok: false, error: 'Invalid campaign status' });
+        }
+        if (user.role !== 'admin') {
+          return json(res, 403, { ok: false, error: 'Only admin can update campaign status' });
+        }
+        resolvedStatus = normalizedStatus;
+      }
 
       let resolvedOrgId = organizationId || existing.organization_id;
       if (!organizationId && brand) {
@@ -1463,7 +1511,7 @@ const server = http.createServer(async (req, res) => {
           resolvedOrgId,
           name ?? existing.name,
           objectivesArray.length ? objectivesArray.join(', ') : existing.objective,
-          status ?? existing.status,
+          resolvedStatus,
           startDate ?? existing.start_date,
           endDate ?? existing.end_date,
           campaignType ?? existing.campaign_type,
@@ -2122,15 +2170,27 @@ const server = http.createServer(async (req, res) => {
     if (!user) return;
     if (method === 'GET') {
       try {
-        const brandMembership =
-          user.role === 'brand' ? await getBrandMembership(user.id) : null;
-        const result = await pool.query(
-          `SELECT id, name, logo_url, created_at
-           FROM organizations
-           WHERE org_type = 'BRAND'
-           ORDER BY CASE WHEN id = $1 THEN 0 ELSE 1 END, name ASC`,
-          [brandMembership?.id || null]
-        );
+        let result;
+        if (user.role === 'brand') {
+          const brandMembership = await getBrandMembership(user.id);
+          if (!brandMembership?.id) {
+            return json(res, 200, { ok: true, data: [] });
+          }
+          result = await pool.query(
+            `SELECT id, name, logo_url, created_at
+             FROM organizations
+             WHERE org_type = 'BRAND' AND id = $1
+             ORDER BY name ASC`,
+            [brandMembership.id]
+          );
+        } else {
+          result = await pool.query(
+            `SELECT id, name, logo_url, created_at
+             FROM organizations
+             WHERE org_type = 'BRAND'
+             ORDER BY name ASC`
+          );
+        }
         return json(res, 200, { ok: true, data: result.rows });
       } catch (error) {
         return json(res, 500, { ok: false, error: error.message });

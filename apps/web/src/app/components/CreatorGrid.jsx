@@ -133,6 +133,7 @@ export default function CreatorGrid({
   onOpenProfile,
   canEdit = false,
   onEditCreator,
+  renderActions,
 }) {
   if (creators.length === 0) {
     return (
@@ -144,7 +145,7 @@ export default function CreatorGrid({
   }
 
   const columns = getColumns(type, creators);
-  const gridTemplateColumns = `minmax(260px, 2fr) repeat(${columns.length}, minmax(100px, 0.8fr)) minmax(110px, 0.7fr)`;
+  const gridTemplateColumns = `minmax(var(--creator-col-main-min, 260px), 2fr) repeat(${columns.length}, minmax(var(--creator-col-metric-min, 100px), 0.8fr)) minmax(var(--creator-col-actions-min, 150px), 0.95fr)`;
   const gridStyle = { '--creator-grid-columns': gridTemplateColumns };
 
   return (
@@ -181,6 +182,7 @@ export default function CreatorGrid({
               </div>
             ))}
             <div className="creator-list-v3-actions">
+              {renderActions ? renderActions(creator, type === 'ugc' ? 'ugc' : 'influencer') : null}
               {canEdit && onEditCreator && (
                 <button
                   type="button"
