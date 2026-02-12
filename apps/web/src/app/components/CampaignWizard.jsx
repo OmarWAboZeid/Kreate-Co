@@ -94,6 +94,9 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
     });
   };
 
+  const getPaymentTypeLabel = (paymentType) =>
+    paymentType === 'Collab' ? 'Barter/Gifted' : paymentType;
+
   const getNextStep = () => {
     switch (currentStep) {
       case STEPS.NAME:
@@ -103,6 +106,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
       case STEPS.START_DATE:
         return STEPS.CAMPAIGN_TYPE;
       case STEPS.CAMPAIGN_TYPE:
+        if (form.campaignType === 'UGC') return STEPS.UGC_PERSONA;
         return STEPS.PAYMENT_TYPE;
       case STEPS.PAYMENT_TYPE:
         if (form.campaignType === 'UGC') return STEPS.UGC_PERSONA;
@@ -144,6 +148,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return STEPS.PAYMENT_TYPE;
       case STEPS.UGC_PERSONA:
         if (form.campaignType === 'Hybrid') return STEPS.CREATOR_TIERS;
+        if (form.campaignType === 'UGC') return STEPS.CAMPAIGN_TYPE;
         return STEPS.PAYMENT_TYPE;
       case STEPS.UGC_GENDER:
         return STEPS.UGC_PERSONA;
@@ -250,12 +255,12 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
       STEPS.OBJECTIVES,
       STEPS.START_DATE,
       STEPS.CAMPAIGN_TYPE,
-      STEPS.PAYMENT_TYPE,
     ];
 
     if (!form.campaignType) {
       return [
         ...baseSteps,
+        STEPS.PAYMENT_TYPE,
         STEPS.CREATOR_TIERS,
         STEPS.UGC_PERSONA,
         STEPS.UGC_GENDER,
@@ -282,6 +287,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
     if (form.campaignType === 'Influencer') {
       return [
         ...baseSteps,
+        STEPS.PAYMENT_TYPE,
         STEPS.CREATOR_TIERS,
         STEPS.INFLUENCER_NICHE,
         STEPS.INFLUENCER_PLATFORMS,
@@ -292,6 +298,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
 
     return [
       ...baseSteps,
+      STEPS.PAYMENT_TYPE,
       STEPS.CREATOR_TIERS,
       STEPS.UGC_PERSONA,
       STEPS.UGC_GENDER,
@@ -316,7 +323,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>What's your campaign called?</h3>
-            <p>Give your campaign a memorable name</p>
             <input
               className="input wizard-input"
               value={form.name}
@@ -331,7 +337,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>What's your main objective?</h3>
-            <p>Select the primary goal for this campaign</p>
             <div className="wizard-options">
               {OBJECTIVES.map((obj) => (
                 <button
@@ -351,7 +356,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>When should this campaign start?</h3>
-            <p>Pick a launch date</p>
             <input
               className="input wizard-input"
               type="date"
@@ -365,7 +369,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>What type of campaign is this?</h3>
-            <p>Choose the creator type for your campaign</p>
             <div className="wizard-options">
               <button
                 type="button"
@@ -373,7 +376,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                 onClick={() => updateForm('campaignType', 'UGC')}
               >
                 <span className="wizard-option-title">UGC</span>
-                <span className="wizard-option-desc">User-generated content creators</span>
               </button>
               <button
                 type="button"
@@ -381,7 +383,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                 onClick={() => updateForm('campaignType', 'Influencer')}
               >
                 <span className="wizard-option-title">Influencer</span>
-                <span className="wizard-option-desc">Social media influencers</span>
               </button>
               <button
                 type="button"
@@ -389,7 +390,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                 onClick={() => updateForm('campaignType', 'Hybrid')}
               >
                 <span className="wizard-option-title">Hybrid</span>
-                <span className="wizard-option-desc">Both UGC and Influencers</span>
               </button>
             </div>
           </div>
@@ -399,15 +399,13 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>How will creators be compensated?</h3>
-            <p>Select the payment arrangement</p>
             <div className="wizard-options">
               <button
                 type="button"
                 className={`wizard-option-card ${form.paymentType === 'Collab' ? 'active' : ''}`}
                 onClick={() => updateForm('paymentType', 'Collab')}
               >
-                <span className="wizard-option-title">Collab</span>
-                <span className="wizard-option-desc">Product gifting only</span>
+                <span className="wizard-option-title">Barter/Gifted</span>
               </button>
               <button
                 type="button"
@@ -415,7 +413,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                 onClick={() => updateForm('paymentType', 'Paid')}
               >
                 <span className="wizard-option-title">Paid</span>
-                <span className="wizard-option-desc">Monetary compensation</span>
               </button>
               <button
                 type="button"
@@ -423,7 +420,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                 onClick={() => updateForm('paymentType', 'Mix')}
               >
                 <span className="wizard-option-title">Mix</span>
-                <span className="wizard-option-desc">Product + payment</span>
               </button>
             </div>
           </div>
@@ -433,7 +429,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>What influencer tiers do you prefer?</h3>
-            <p>Select one or more tiers (multi-select)</p>
             <div className="wizard-options-grid">
               {CREATOR_TIERS.map((tier) => (
                 <button
@@ -443,18 +438,9 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                   onClick={() => toggleCreatorTier(tier.value)}
                 >
                   <span className="wizard-option-title">{tier.label}</span>
-                  <span className="wizard-option-desc">{tier.desc}</span>
                 </button>
               ))}
             </div>
-            {form.creatorTiers.length > 0 && (
-              <p className="selected-count">
-                Selected:{' '}
-                {form.creatorTiers
-                  .map((t) => CREATOR_TIERS.find((ct) => ct.value === t)?.label)
-                  .join(', ')}
-              </p>
-            )}
           </div>
         );
 
@@ -462,7 +448,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>Describe your ideal creator persona</h3>
-            <p>What kind of person should represent your brand?</p>
             <textarea
               className="input wizard-textarea"
               value={form.ugcPersona}
@@ -477,7 +462,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>Preferred creator gender?</h3>
-            <p>Select the gender preference for your campaign</p>
             <div className="wizard-options">
               {['Female', 'Male', 'Any'].map((gender) => (
                 <button
@@ -496,8 +480,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
       case STEPS.UGC_AGE:
         return (
           <div className="wizard-step">
-            <h3>What age range are you targeting?</h3>
-            <p>Select the preferred age range for creators</p>
+            <h3>What's the age of the creators you're looking for?</h3>
             <div className="wizard-options">
               {['18-24', '25-34', '35-44', '45+', 'Any'].map((age) => (
                 <button
@@ -517,7 +500,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>How many videos do you need?</h3>
-            <p>Select the number of UGC videos for this campaign</p>
             <div className="wizard-options">
               {UGC_VIDEO_OPTIONS.map((opt) => (
                 <button
@@ -546,7 +528,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>What niche should influencers be in?</h3>
-            <p>Select the content category</p>
             <div className="wizard-options">
               {NICHES.map((niche) => (
                 <button
@@ -566,7 +547,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>Which platforms should they post on?</h3>
-            <p>Select one or more platforms (multi-select)</p>
             <div className="wizard-options">
               {PLATFORMS.map((platform) => (
                 <button
@@ -579,9 +559,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                 </button>
               ))}
             </div>
-            {form.influencerPlatforms.length > 0 && (
-              <p className="selected-count">Selected: {form.influencerPlatforms.join(', ')}</p>
-            )}
           </div>
         );
 
@@ -589,7 +566,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>What's your budget for creators?</h3>
-            <p>Select your approximate budget range</p>
             <div className="wizard-options">
               {BUDGET_OPTIONS.map((opt) => (
                 <button
@@ -609,7 +585,6 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return (
           <div className="wizard-step">
             <h3>Review your campaign</h3>
-            <p>Make sure everything looks good before submitting</p>
             <div className="wizard-review">
               <div className="review-section">
                 <h4>Campaign Details</h4>
@@ -629,10 +604,12 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                   <span>Campaign Type</span>
                   <strong>{form.campaignType}</strong>
                 </div>
-                <div className="review-item">
-                  <span>Payment Type</span>
-                  <strong>{form.paymentType}</strong>
-                </div>
+                {form.paymentType && (
+                  <div className="review-item">
+                    <span>Payment Type</span>
+                    <strong>{getPaymentTypeLabel(form.paymentType)}</strong>
+                  </div>
+                )}
               </div>
 
               {(form.campaignType === 'UGC' || form.campaignType === 'Hybrid') && (
