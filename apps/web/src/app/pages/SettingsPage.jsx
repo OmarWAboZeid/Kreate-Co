@@ -294,7 +294,7 @@ export default function SettingsPage() {
         open={showPackageModal}
         onClose={closePackageModal}
         title={editingPackage ? 'Edit Package' : 'Add Package'}
-        description="Define package structure, pricing, and availability."
+        description="Define package structure and pricing."
         size="large"
       >
         <form className="modal-form" onSubmit={handlePackageSubmit}>
@@ -371,24 +371,6 @@ export default function SettingsPage() {
                 onChange={(event) => updatePackageForm('description', event.target.value)}
                 placeholder="Optional package description"
               />
-            </label>
-          </div>
-          <div className="package-form-toggle">
-            <label>
-              <input
-                type="checkbox"
-                checked={packageForm.customizable}
-                onChange={(event) => updatePackageForm('customizable', event.target.checked)}
-              />
-              <span>Customizable</span>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={packageForm.active}
-                onChange={(event) => updatePackageForm('active', event.target.checked)}
-              />
-              <span>Active</span>
             </label>
           </div>
           {packageError && <p className="error-text">{packageError}</p>}

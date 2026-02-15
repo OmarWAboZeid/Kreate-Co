@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { handleAvatarError, resolveAvatarSrc } from '../utils/avatar.js';
 
 const formatCompactNumber = (value) => {
   if (value == null || value === '') return '—';
@@ -54,7 +55,7 @@ export default function CreatorProfileModal({ creator, type, onClose }) {
         <div className="profile-modal-header">
           <div className="profile-modal-avatar">
             {creator.profile_image ? (
-              <img src={creator.profile_image} alt={displayName} />
+              <img src={resolveAvatarSrc(creator.profile_image)} alt={displayName} onError={handleAvatarError} />
             ) : (
               initials
             )}

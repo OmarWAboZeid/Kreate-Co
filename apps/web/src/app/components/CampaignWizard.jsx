@@ -118,12 +118,14 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         return STEPS.CREATOR_TIERS;
       case STEPS.CREATOR_TIERS:
         if (form.campaignType === 'Hybrid') return STEPS.UGC_PERSONA;
+        if (form.campaignType === 'Influencer') return STEPS.UGC_AGE;
         return STEPS.INFLUENCER_NICHE;
       case STEPS.UGC_PERSONA:
         return STEPS.UGC_GENDER;
       case STEPS.UGC_GENDER:
         return STEPS.UGC_AGE;
       case STEPS.UGC_AGE:
+        if (form.campaignType === 'Influencer') return STEPS.INFLUENCER_NICHE;
         return STEPS.UGC_VIDEOS;
       case STEPS.UGC_VIDEOS:
         if (form.campaignType === 'Hybrid') return STEPS.INFLUENCER_NICHE;
@@ -158,11 +160,13 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
       case STEPS.UGC_GENDER:
         return STEPS.UGC_PERSONA;
       case STEPS.UGC_AGE:
+        if (form.campaignType === 'Influencer') return STEPS.CREATOR_TIERS;
         return STEPS.UGC_GENDER;
       case STEPS.UGC_VIDEOS:
         return STEPS.UGC_AGE;
       case STEPS.INFLUENCER_NICHE:
         if (form.campaignType === 'Hybrid') return STEPS.UGC_VIDEOS;
+        if (form.campaignType === 'Influencer') return STEPS.UGC_AGE;
         return STEPS.CREATOR_TIERS;
       case STEPS.INFLUENCER_PLATFORMS:
         return STEPS.INFLUENCER_NICHE;
@@ -232,6 +236,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
       startDate: form.startDate,
       campaignType: form.campaignType,
       paymentType: form.paymentType,
+      creatorAgeRange: form.ugcAgeRange || null,
       creatorTiers: form.creatorTiers,
       ugcCount: ugcCount || null,
       ugc:
@@ -248,6 +253,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
               niche: form.influencerNiche,
               platforms: form.influencerPlatforms,
               tiers: form.creatorTiers,
+              ageRange: form.ugcAgeRange,
               budget: form.influencerBudget,
             }
           : null,
@@ -294,6 +300,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
         ...baseSteps,
         STEPS.PAYMENT_TYPE,
         STEPS.CREATOR_TIERS,
+        STEPS.UGC_AGE,
         STEPS.INFLUENCER_NICHE,
         STEPS.INFLUENCER_PLATFORMS,
         STEPS.INFLUENCER_BUDGET,
@@ -651,6 +658,10 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                         .map((t) => CREATOR_TIERS.find((ct) => ct.value === t)?.label)
                         .join(', ')}
                     </strong>
+                  </div>
+                  <div className="review-item">
+                    <span>Age Range</span>
+                    <strong>{form.ugcAgeRange}</strong>
                   </div>
                   <div className="review-item">
                     <span>Niche</span>

@@ -198,6 +198,9 @@ export default function CampaignsPage() {
           campaignType: wizardData.campaignType,
           campaignTypeDetail: wizardData.campaignTypeDetail || null,
           dealType: wizardData.paymentType ? wizardData.paymentType.toLowerCase() : null,
+          targetAudience: wizardData.creatorAgeRange
+            ? `Creator age range: ${wizardData.creatorAgeRange}`
+            : null,
           creatorTiers: wizardData.creatorTiers,
           startDate: wizardData.startDate,
           ugcVideoCount: wizardData.ugcCount || null,

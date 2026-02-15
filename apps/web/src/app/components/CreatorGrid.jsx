@@ -1,4 +1,5 @@
 import EmptyState from './EmptyState.jsx';
+import { handleAvatarError, resolveAvatarSrc } from '../utils/avatar.js';
 
 const formatCompactNumber = (value) => {
   if (value == null || value === '') return '—';
@@ -163,11 +164,11 @@ export default function CreatorGrid({
           <div key={creator.id} className="creator-list-v3-row" style={gridStyle}>
             <div className="creator-list-v3-main">
               <div className="creator-list-v3-avatar">
-                {creator.profile_image ? (
-                  <img src={creator.profile_image} alt={formatCreatorLabel(creator)} />
-                ) : (
-                  <img src="/assets/default-avatar.png" alt={formatCreatorLabel(creator)} />
-                )}
+                <img
+                  src={resolveAvatarSrc(creator.profile_image)}
+                  alt={formatCreatorLabel(creator)}
+                  onError={handleAvatarError}
+                />
               </div>
               <div className="creator-list-v3-info">
                 <h4>{formatCreatorLabel(creator)}</h4>

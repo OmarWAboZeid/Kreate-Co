@@ -1,4 +1,5 @@
 import EmptyState from './EmptyState.jsx';
+import { handleAvatarError, resolveAvatarSrc } from '../utils/avatar.js';
 
 export default function BrandRecommendations({
   loading,
@@ -45,10 +46,7 @@ export default function BrandRecommendations({
           >
             <div className="brand-creator-main" onClick={() => onToggleExpand(creator.id)}>
               <div className="brand-creator-avatar">
-                <img
-                  src={creator.profile_image || '/assets/default-avatar.png'}
-                  alt={creator.name}
-                />
+                <img src={resolveAvatarSrc(creator.profile_image)} alt={creator.name} onError={handleAvatarError} />
               </div>
               <div className="brand-creator-info">
                 <h4>{creator.name}</h4>

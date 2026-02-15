@@ -3,7 +3,7 @@ export const roleConfig = {
     label: 'Admin',
     nav: [
       { to: 'campaigns', label: 'Campaigns' },
-      { to: 'creators', label: 'Creator Network' },
+      { to: 'creators', label: 'Creators' },
       { to: 'analytics', label: 'Analytics' },
       { to: 'settings', label: 'Settings' },
     ],

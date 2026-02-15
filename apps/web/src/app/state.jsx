@@ -20,6 +20,18 @@ function appReducer(state, action) {
         brands: action.payload,
       };
     }
+    case 'SET_CREATORS': {
+      return {
+        ...state,
+        creators: action.payload || [],
+      };
+    }
+    case 'SET_CONTENT_ITEMS': {
+      return {
+        ...state,
+        contentItems: action.payload || [],
+      };
+    }
     case 'ADD_BRAND': {
       return {
         ...state,

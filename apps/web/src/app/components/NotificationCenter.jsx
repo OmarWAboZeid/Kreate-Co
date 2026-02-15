@@ -7,6 +7,7 @@ export default function NotificationCenter({ role }) {
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [sessionRole, setSessionRole] = useState(null);
   const [sessionBrandId, setSessionBrandId] = useState(null);
   const isBrand = role === 'brand';
@@ -108,6 +109,36 @@ export default function NotificationCenter({ role }) {
     });
   };
 
+  const clearAllNotifications = async () => {
+    if (clearing || notifications.length === 0) return;
+    const confirmed = window.confirm('Clear all notifications?');
+    if (!confirmed) return;
+
+    let clearUrl = null;
+    if (isBrand && organizationId) {
+      clearUrl = isImpersonatingBrand
+        ? `/api/notifications/clear?organizationId=${organizationId}`
+        : `/api/organizations/${organizationId}/notifications/clear`;
+    } else if (canAdminNotifications && isAdminView) {
+      clearUrl = '/api/notifications/clear';
+    }
+    if (!clearUrl) return;
+
+    setClearing(true);
+    try {
+      const res = await fetch(clearUrl, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || 'Failed to clear notifications');
+      }
+      setNotifications([]);
+    } catch (err) {
+      console.error('Failed to clear notifications:', err);
+    } finally {
+      setClearing(false);
+    }
+  };
+
   return (
     <div className="notif">
       <button className="notif-trigger" type="button" onClick={() => setOpen((prev) => !prev)}>
@@ -118,9 +149,19 @@ export default function NotificationCenter({ role }) {
         <div className="notif-panel">
           <div className="notif-header">
             <strong>Inbox</strong>
-            <button type="button" className="link-button" onClick={() => setOpen(false)}>
-              Close
-            </button>
+            <div className="notif-header-actions">
+              <button
+                type="button"
+                className="link-button"
+                onClick={clearAllNotifications}
+                disabled={clearing || notifications.length === 0}
+              >
+                {clearing ? 'Clearing...' : 'Clear all'}
+              </button>
+              <button type="button" className="link-button" onClick={() => setOpen(false)}>
+                Close
+              </button>
+            </div>
           </div>
           {loading ? (
             <p className="notif-empty">Loading...</p>

@@ -9,6 +9,7 @@ import EmptyState from '../components/EmptyState.jsx';
 import Modal from '../components/Modal.jsx';
 import StatusPill from '../components/StatusPill.jsx';
 import { useAppDispatch, useAppState } from '../state.jsx';
+import { handleAvatarError, resolveAvatarSrc } from '../utils/avatar.js';
 
 const makeId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -229,6 +230,27 @@ export default function CampaignDetailPage() {
   useEffect(() => {
     refreshCampaignCreators();
   }, [campaignId]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const fetchContentItems = async () => {
+      try {
+        const res = await fetch('/api/content?limit=1000');
+        const data = await res.json();
+        if (!ignore && data.ok) {
+          dispatch({ type: 'SET_CONTENT_ITEMS', payload: data.data || [] });
+        }
+      } catch (err) {
+        console.error('Failed to fetch content items:', err);
+      }
+    };
+
+    fetchContentItems();
+    return () => {
+      ignore = true;
+    };
+  }, [dispatch, campaignId]);
 
   const campaign = campaigns.find((item) => item.id === campaignId);
   const brandOptions = useMemo(() => {
@@ -854,9 +876,10 @@ export default function CampaignDetailPage() {
                     <td>
                       <div className="creator-cell">
                         <img
-                          src={row.creator?.profile_image || '/assets/default-avatar.png'}
+                          src={resolveAvatarSrc(row.creator?.profile_image)}
                           alt={row.creatorName}
                           className="creator-avatar-sm"
+                          onError={handleAvatarError}
                         />
                         <span className="creator-name">{row.creatorName}</span>
                       </div>
@@ -886,6 +909,86 @@ export default function CampaignDetailPage() {
       </div>
     </section>
   );
+
+  const brandCreatorTypeSections = [
+    { key: 'influencer', type: 'influencer', label: 'Influencer Creators', tone: 'influencer' },
+    { key: 'ugc', type: 'ugc', label: 'UGC Creators', tone: 'ugc' },
+  ];
+
+  const renderBrandPendingActions = (creator) => (
+    <>
+      <button
+        type="button"
+        className="btn btn-success btn-small"
+        onClick={() => handleDecision(creator.id, 'Brand Approved')}
+      >
+        Approve
+      </button>
+      <button
+        type="button"
+        className="btn btn-danger btn-small"
+        onClick={() => openRejectModal(creator)}
+      >
+        Reject
+      </button>
+    </>
+  );
+
+  const renderBrandApprovedActions = (creator) => {
+    const finalLink = creatorState.outreach?.[creator.id]?.finalVideoLink || '';
+    if (!finalLink) return null;
+    if (isLikelyVideoUrl(finalLink)) {
+      return (
+        <button
+          type="button"
+          className="btn btn-secondary btn-small"
+          onClick={() =>
+            openVideoPreview(finalLink, `${creator.name || 'Creator'} - submitted video`)
+          }
+        >
+          Preview Video
+        </button>
+      );
+    }
+    return (
+      <a
+        className="btn btn-secondary btn-small"
+        href={finalLink}
+        target="_blank"
+        rel="noreferrer"
+      >
+        View Link
+      </a>
+    );
+  };
+
+  const renderBrandCreatorTypeSections = (typedCreators, renderActions) =>
+    brandCreatorTypeSections.map((section) => {
+      const creatorsByType = typedCreators?.[section.key] || [];
+      if (creatorsByType.length === 0) return null;
+
+      return (
+        <div
+          key={section.key}
+          className={`brand-creator-type-section brand-creator-type-section-${section.tone}`}
+        >
+          <div className="brand-creator-type-header">
+            <span className={`brand-creator-type-pill brand-creator-type-pill-${section.tone}`}>
+              {section.label}
+            </span>
+            <span className="brand-creator-type-count">
+              {creatorsByType.length} {creatorsByType.length === 1 ? 'creator' : 'creators'}
+            </span>
+          </div>
+          <CreatorGrid
+            creators={creatorsByType}
+            type={section.type}
+            onOpenProfile={openCreatorProfile}
+            renderActions={renderActions}
+          />
+        </div>
+      );
+    });
 
   const briefCard = (
     <section className="detail-card brand-brief-card">
@@ -1019,7 +1122,7 @@ export default function CampaignDetailPage() {
             className={brandTab === 'creators' ? 'active' : undefined}
             onClick={() => setBrandTab('creators')}
           >
-            Creator Approvals
+            Creator Review
             <span className="tab-count">{brandCreatorBuckets.pending.length}</span>
           </button>
           <button
@@ -1046,8 +1149,15 @@ export default function CampaignDetailPage() {
             className={adminTab === 'creators' ? 'active' : undefined}
             onClick={() => setAdminTab('creators')}
           >
-            Creator Network
+            Creators
             <span className="tab-count">{shortlistCreators.length}</span>
+          </button>
+          <button
+            type="button"
+            className={adminTab === 'analytics' ? 'active' : undefined}
+            onClick={() => setAdminTab('analytics')}
+          >
+            Analytics
           </button>
           {canManageCreators && (
             <button
@@ -1064,14 +1174,15 @@ export default function CampaignDetailPage() {
       {isBrand && brandTab === 'brief' ? briefCard : null}
       {isBrand && brandTab === 'analytics' ? creatorAnalyticsCard : null}
       {!isBrand && adminTab === 'overview' ? briefCard : null}
+      {!isBrand && adminTab === 'analytics' ? creatorAnalyticsCard : null}
 
       {isBrand && brandTab === 'creators' ? (
         <section className="detail-card brand-creator-section">
           <div className="detail-card-header">
             <div>
-              <h3>Creator Approvals</h3>
+              <h3>Creator Review</h3>
               <p className="section-description">
-                Review suggested creators and approve the best fits.
+                Review suggested creators, compare profiles, and approve the strongest match.
               </p>
             </div>
             <div className="brand-approval-stats">
@@ -1086,7 +1197,7 @@ export default function CampaignDetailPage() {
               </span>
             </div>
           </div>
-          <div className="detail-card-content">
+          <div className="detail-card-content brand-creator-content">
             <div className="creator-network-filters">
               <input
                 type="text"
@@ -1115,161 +1226,38 @@ export default function CampaignDetailPage() {
             ) : (
               <div className="brand-creator-list">
                 {filteredCreatorBuckets.pending.length > 0 && (
-                  <div className="brand-creator-group">
+                  <div className="brand-creator-group brand-creator-group-pending">
                     <div className="brand-creator-group-header">
                       <h4>Awaiting your approval</h4>
                       <span>{filteredCreatorBuckets.pending.length} creators</span>
                     </div>
-                    {filteredCreatorBucketsByType.pending.influencer.length > 0 && (
-                      <CreatorGrid
-                        creators={filteredCreatorBucketsByType.pending.influencer}
-                        type="influencer"
-                        onOpenProfile={openCreatorProfile}
-                        renderActions={(creator) => (
-                          <>
-                            <button
-                              type="button"
-                              className="btn btn-success btn-small"
-                              onClick={() => handleDecision(creator.id, 'Brand Approved')}
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-danger btn-small"
-                              onClick={() => openRejectModal(creator)}
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
-                      />
-                    )}
-                    {filteredCreatorBucketsByType.pending.ugc.length > 0 && (
-                      <CreatorGrid
-                        creators={filteredCreatorBucketsByType.pending.ugc}
-                        type="ugc"
-                        onOpenProfile={openCreatorProfile}
-                        renderActions={(creator) => (
-                          <>
-                            <button
-                              type="button"
-                              className="btn btn-success btn-small"
-                              onClick={() => handleDecision(creator.id, 'Brand Approved')}
-                            >
-                              Approve
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-danger btn-small"
-                              onClick={() => openRejectModal(creator)}
-                            >
-                              Reject
-                            </button>
-                          </>
-                        )}
-                      />
+                    {renderBrandCreatorTypeSections(
+                      filteredCreatorBucketsByType.pending,
+                      renderBrandPendingActions
                     )}
                   </div>
                 )}
 
                 {filteredCreatorBuckets.approved.length > 0 && (
-                  <div className="brand-creator-group">
+                  <div className="brand-creator-group brand-creator-group-approved">
                     <div className="brand-creator-group-header">
                       <h4>Approved creators</h4>
                       <span>{filteredCreatorBuckets.approved.length} creators</span>
                     </div>
-                    {filteredCreatorBucketsByType.approved.influencer.length > 0 && (
-                      <CreatorGrid
-                        creators={filteredCreatorBucketsByType.approved.influencer}
-                        type="influencer"
-                        onOpenProfile={openCreatorProfile}
-                        renderActions={(creator) => {
-                          const finalLink = creatorState.outreach?.[creator.id]?.finalVideoLink || '';
-                          if (!finalLink) return null;
-                          if (isLikelyVideoUrl(finalLink)) {
-                            return (
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-small"
-                                onClick={() =>
-                                  openVideoPreview(finalLink, `${creator.name || 'Creator'} - submitted video`)
-                                }
-                              >
-                                Preview Video
-                              </button>
-                            );
-                          }
-                          return (
-                            <a
-                              className="btn btn-secondary btn-small"
-                              href={finalLink}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              View Link
-                            </a>
-                          );
-                        }}
-                      />
-                    )}
-                    {filteredCreatorBucketsByType.approved.ugc.length > 0 && (
-                      <CreatorGrid
-                        creators={filteredCreatorBucketsByType.approved.ugc}
-                        type="ugc"
-                        onOpenProfile={openCreatorProfile}
-                        renderActions={(creator) => {
-                          const finalLink = creatorState.outreach?.[creator.id]?.finalVideoLink || '';
-                          if (!finalLink) return null;
-                          if (isLikelyVideoUrl(finalLink)) {
-                            return (
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-small"
-                                onClick={() =>
-                                  openVideoPreview(finalLink, `${creator.name || 'Creator'} - submitted video`)
-                                }
-                              >
-                                Preview Video
-                              </button>
-                            );
-                          }
-                          return (
-                            <a
-                              className="btn btn-secondary btn-small"
-                              href={finalLink}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              View Link
-                            </a>
-                          );
-                        }}
-                      />
+                    {renderBrandCreatorTypeSections(
+                      filteredCreatorBucketsByType.approved,
+                      renderBrandApprovedActions
                     )}
                   </div>
                 )}
 
                 {filteredCreatorBuckets.rejected.length > 0 && (
-                  <div className="brand-creator-group">
+                  <div className="brand-creator-group brand-creator-group-rejected">
                     <div className="brand-creator-group-header">
                       <h4>Rejected creators</h4>
                       <span>{filteredCreatorBuckets.rejected.length} creators</span>
                     </div>
-                    {filteredCreatorBucketsByType.rejected.influencer.length > 0 && (
-                      <CreatorGrid
-                        creators={filteredCreatorBucketsByType.rejected.influencer}
-                        type="influencer"
-                        onOpenProfile={openCreatorProfile}
-                      />
-                    )}
-                    {filteredCreatorBucketsByType.rejected.ugc.length > 0 && (
-                      <CreatorGrid
-                        creators={filteredCreatorBucketsByType.rejected.ugc}
-                        type="ugc"
-                        onOpenProfile={openCreatorProfile}
-                      />
-                    )}
+                    {renderBrandCreatorTypeSections(filteredCreatorBucketsByType.rejected)}
                   </div>
                 )}
               </div>
@@ -1279,7 +1267,7 @@ export default function CampaignDetailPage() {
       ) : !isBrand && adminTab === 'creators' ? (
         <section className="detail-card creator-network-section">
           <div className="detail-card-header">
-            <h3>Creator Network</h3>
+            <h3>Creators</h3>
             <div className="creator-network-filters">
               <input
                 type="text"

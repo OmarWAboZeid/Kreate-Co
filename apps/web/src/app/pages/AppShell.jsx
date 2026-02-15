@@ -180,12 +180,6 @@ function ShellInner() {
     return null;
   }
 
-  const handleRoleChange = (nextRole) => {
-    if (nextRole === role) return;
-    const nextPath = location.pathname.replace(`/app/${role}`, `/app/${nextRole}`);
-    navigate(nextPath);
-  };
-
   const handleLogout = async () => {
     await logout();
     navigate('/', { replace: true });
@@ -211,25 +205,6 @@ function ShellInner() {
             </NavLink>
           ))}
         </nav>
-        <div className="app-sidebar-footer">
-          <p>Role</p>
-          <div className="role-switch">
-            <button
-              type="button"
-              className={role === 'admin' ? 'active' : undefined}
-              onClick={() => handleRoleChange('admin')}
-            >
-              Admin
-            </button>
-            <button
-              type="button"
-              className={role === 'brand' ? 'active' : undefined}
-              onClick={() => handleRoleChange('brand')}
-            >
-              Brand
-            </button>
-          </div>
-        </div>
       </aside>
 
       <div className="app-main">

@@ -1,4 +1,5 @@
 import Modal from './Modal.jsx';
+import { handleAvatarError, resolveAvatarSrc } from '../utils/avatar.js';
 
 const CREATOR_TYPE_OPTIONS = ['UGC', 'Influencer'];
 const STATUS_OPTIONS = ['active', 'inactive', 'draft'];
@@ -279,9 +280,13 @@ export default function CreatorEditModal({
               <div className="creator-image-upload-row">
                 <div className="creator-image-preview">
                   {form.profile_image ? (
-                    <img src={form.profile_image} alt={textValue(form.display_name) || 'Creator'} />
+                    <img
+                      src={resolveAvatarSrc(form.profile_image)}
+                      alt={textValue(form.display_name) || 'Creator'}
+                      onError={handleAvatarError}
+                    />
                   ) : (
-                    <img src="/assets/default-avatar.png" alt="Creator preview" />
+                    <img src={resolveAvatarSrc('')} alt="Creator preview" onError={handleAvatarError} />
                   )}
                 </div>
                 <div className="creator-image-upload-controls">

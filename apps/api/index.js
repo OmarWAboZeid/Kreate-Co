@@ -337,12 +337,173 @@ const extractTikTokAnalyzeSummary = (analyzeData, sourceProfileUrl) => {
   };
 };
 
-const persistTikTokAnalyzeMetrics = async (profileUrl, analyzeData) => {
+const normalizeGenderValue = (value) => {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') {
+    if (value === 1) return 'Male';
+    if (value === 2) return 'Female';
+    return null;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return null;
+  if (['1', 'm', 'male', 'man'].includes(normalized)) return 'Male';
+  if (['2', 'f', 'female', 'woman'].includes(normalized)) return 'Female';
+  return null;
+};
+
+const extractAgeFromText = (text) => {
+  if (!text) return null;
+  const direct = String(text).match(/\b([1-9][0-9])\s*(?:yo|y\/o|yrs?|years?\s*old)\b/i);
+  if (direct) return Number(direct[1]);
+  return null;
+};
+
+const inferNicheFromBio = (bio) => {
+  const value = String(bio || '').toLowerCase();
+  if (!value) return null;
+  const matches = [];
+  const rules = [
+    { key: 'Beauty', pattern: /(beauty|makeup|skincare|cosmetic)/ },
+    { key: 'Fashion', pattern: /(fashion|style|outfit|ootd)/ },
+    { key: 'Fitness', pattern: /(fitness|gym|workout|wellness|health)/ },
+    { key: 'Food', pattern: /(food|recipe|cooking|chef|restaurant)/ },
+    { key: 'Tech', pattern: /(tech|gadget|ai|software)/ },
+    { key: 'Travel', pattern: /(travel|tour|trip|wander)/ },
+    { key: 'Lifestyle', pattern: /(lifestyle|daily|vlog|life)/ },
+    { key: 'Parenting', pattern: /(mom|dad|parent|family)/ },
+  ];
+  rules.forEach((rule) => {
+    if (rule.pattern.test(value)) {
+      matches.push(rule.key);
+    }
+  });
+  return matches.length > 0 ? matches.join(', ') : null;
+};
+
+const extractTikTokAnalyzeProfile = (analyzeData) => {
+  const infoContainer =
+    analyzeData?.data?.user?.info?.userInfo || analyzeData?.data?.user?.info || {};
+  const user = infoContainer?.user || infoContainer?.author || {};
+  const bio =
+    user.signature ||
+    user.desc ||
+    user.bioDescription ||
+    '';
+  const rawGender =
+    user.gender ??
+    user.sex ??
+    user.secret ??
+    infoContainer.gender ??
+    infoContainer.sex;
+  const gender = normalizeGenderValue(rawGender);
+  const rawAge =
+    user.age ??
+    user.userAge ??
+    infoContainer.age ??
+    infoContainer.userAge;
+  let age = toFiniteNumber(rawAge);
+  if (age != null) {
+    age = Math.round(age);
+    if (age < 13 || age > 99) {
+      age = null;
+    }
+  }
+  if (age == null) {
+    age = extractAgeFromText(bio);
+  }
+  const country =
+    user.region ||
+    user.country ||
+    infoContainer.region ||
+    infoContainer.country ||
+    null;
+  return {
+    gender,
+    age,
+    country: country ? String(country).trim() : null,
+    bio: bio ? String(bio).trim() : '',
+    primaryNiche: inferNicheFromBio(bio),
+  };
+};
+
+const getCreatorCardById = async (creatorId) => {
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      display_name AS name,
+      tiktok_url,
+      instagram_url,
+      instagram_handle,
+      tiktok_handle,
+      followers,
+      primary_niche AS niche,
+      phone,
+      COALESCE(country, '') AS region,
+      notes,
+      category,
+      profile_image,
+      engagement_rate,
+      avg_views,
+      gender,
+      created_at
+    FROM creators
+    WHERE id = $1
+    `,
+    [creatorId]
+  );
+  return sanitizeCreatorProfileImage(result.rows[0] || null);
+};
+
+const runTikTokAnalyzeScript = (profileUrl) =>
+  new Promise((resolve, reject) => {
+    const msToken =
+      process.env.MS_TOKEN ||
+      process.env.ms_token ||
+      'kPnvn2AsOob08XX5ZyqZKM62iCrboQdfl44n2NpE5hbA3blfnebUIQ3BaE0IYO405Gz7uYqH-7hxrtmpAUWAJ7UDRIyT9LT6oXsuTIOFwAnZUgXYze8Ljg8FZ8bspi74LsPXMLJzmyasoNHFfMzcQHa_';
+    if (!msToken) {
+      reject(new Error('MS_TOKEN is not set on the server'));
+      return;
+    }
+    const scriptPath = path.resolve(__dirname, '../../scripts/tiktok_fetch_all.py');
+    const args = [scriptPath, '--profile-url', profileUrl, '--trending', '0'];
+    execFile(
+      'python3',
+      args,
+      {
+        env: { ...process.env, MS_TOKEN: msToken, ms_token: msToken },
+        maxBuffer: 10 * 1024 * 1024,
+        timeout: 120000,
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          const err = new Error(error.message || 'TikTok analyze script failed');
+          err.stderr = stderr;
+          err.stdout = stdout;
+          reject(err);
+          return;
+        }
+        try {
+          const data = JSON.parse(stdout);
+          resolve({ data, stderr });
+        } catch (parseError) {
+          const err = new Error('Failed to parse script output');
+          err.stderr = stderr;
+          err.stdout = stdout;
+          reject(err);
+        }
+      }
+    );
+  });
+
+const persistTikTokAnalyzeMetrics = async (profileUrl, analyzeData, options = {}) => {
+  const allowCreate = Boolean(options.allowCreate);
   if (!pool) {
     return { attempted: false, updated: 0, reason: 'database_not_configured' };
   }
 
   const snapshot = extractTikTokAnalyzeSummary(analyzeData, profileUrl);
+  const profile = extractTikTokAnalyzeProfile(analyzeData);
   if (!snapshot.normalizedUrl && !snapshot.tiktokHandle) {
     return { attempted: false, updated: 0, reason: 'no_creator_identity' };
   }
@@ -366,12 +527,18 @@ const persistTikTokAnalyzeMetrics = async (profileUrl, analyzeData) => {
       profile_image = COALESCE(NULLIF($4, ''), profile_image),
       tiktok_handle = COALESCE(NULLIF(tiktok_handle, ''), NULLIF($5, '')),
       display_name = COALESCE(NULLIF(display_name, ''), NULLIF($6, '')),
+      tiktok_url = COALESCE(NULLIF(tiktok_url, ''), NULLIF($7, '')),
+      gender = COALESCE(NULLIF(gender, ''), NULLIF($10, '')),
+      age = COALESCE(age, $11),
+      country = COALESCE(NULLIF(country, ''), NULLIF($12, '')),
+      primary_niche = COALESCE(NULLIF(primary_niche, ''), NULLIF($13, '')),
+      notes = COALESCE(NULLIF(notes, ''), NULLIF($14, '')),
       updated_at = NOW()
     WHERE creator_type = 'Influencer'
       AND (
-        LOWER(REGEXP_REPLACE(SPLIT_PART(COALESCE(tiktok_url, ''), '?', 1), '/+$', '')) = $7
-        OR LOWER(COALESCE(tiktok_handle, '')) = $8
-        OR LOWER(REGEXP_REPLACE(COALESCE(tiktok_handle, ''), '^@', '')) = $9
+        LOWER(REGEXP_REPLACE(SPLIT_PART(COALESCE(tiktok_url, ''), '?', 1), '/+$', '')) = $8
+        OR LOWER(COALESCE(tiktok_handle, '')) = $9
+        OR LOWER(REGEXP_REPLACE(COALESCE(tiktok_handle, ''), '^@', '')) = $15
       )
     RETURNING id
     `,
@@ -382,15 +549,105 @@ const persistTikTokAnalyzeMetrics = async (profileUrl, analyzeData) => {
       snapshot.profileImage,
       snapshot.tiktokHandle,
       snapshot.displayName,
+      snapshot.normalizedUrl || null,
       snapshot.normalizedUrl || '__no_tiktok_url__',
       (snapshot.tiktokHandle || '').toLowerCase(),
+      profile.gender,
+      profile.age,
+      profile.country,
+      profile.primaryNiche,
+      profile.bio ? `Imported from TikTok: ${profile.bio.slice(0, 360)}` : null,
       snapshot.handleNoAt || '__no_tiktok_handle__',
     ]
   );
 
+  const updatedCreatorId = result.rows[0]?.id || null;
+  if (updatedCreatorId) {
+    const creator = await getCreatorCardById(updatedCreatorId);
+    return {
+      attempted: true,
+      updated: result.rowCount,
+      created: false,
+      creatorId: updatedCreatorId,
+      creator,
+      metrics: {
+        followers: snapshot.followers,
+        engagementRate: snapshot.engagementRate,
+        avgViews: snapshot.avgViews,
+      },
+    };
+  }
+
+  if (!allowCreate) {
+    return {
+      attempted: true,
+      updated: result.rowCount,
+      created: false,
+      creatorId: null,
+      creator: null,
+      metrics: {
+        followers: snapshot.followers,
+        engagementRate: snapshot.engagementRate,
+        avgViews: snapshot.avgViews,
+      },
+    };
+  }
+
+  const displayName =
+    snapshot.displayName ||
+    (snapshot.tiktokHandle ? snapshot.tiktokHandle.replace(/^@/, '') : '') ||
+    'TikTok Creator';
+  const notes = profile.bio
+    ? `Imported from TikTok: ${profile.bio.slice(0, 360)}`
+    : 'Imported from TikTok profile link.';
+  const insertResult = await pool.query(
+    `
+    INSERT INTO creators (
+      display_name,
+      primary_niche,
+      country,
+      status,
+      creator_type,
+      handle,
+      tiktok_url,
+      tiktok_handle,
+      followers,
+      age,
+      gender,
+      profile_image,
+      notes,
+      engagement_rate,
+      avg_views
+    )
+    VALUES (
+      $1, $2, $3, 'active', 'Influencer', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+    )
+    RETURNING id
+    `,
+    [
+      displayName,
+      profile.primaryNiche,
+      profile.country,
+      snapshot.tiktokHandle,
+      snapshot.normalizedUrl || null,
+      snapshot.tiktokHandle || null,
+      snapshot.followers,
+      profile.age,
+      profile.gender,
+      snapshot.profileImage || null,
+      notes,
+      snapshot.engagementRate,
+      snapshot.avgViews,
+    ]
+  );
+  const createdCreatorId = insertResult.rows[0]?.id || null;
+  const creator = createdCreatorId ? await getCreatorCardById(createdCreatorId) : null;
   return {
     attempted: true,
     updated: result.rowCount,
+    created: Boolean(createdCreatorId),
+    creatorId: createdCreatorId,
+    creator,
     metrics: {
       followers: snapshot.followers,
       engagementRate: snapshot.engagementRate,
@@ -439,6 +696,96 @@ const mapCampaignRow = (row) => ({
     : null,
   createdAt: row.created_at ? row.created_at.toISOString().slice(0, 10) : null,
 });
+
+const CONTENT_STATUS_MAP = Object.freeze({
+  pending: 'Pending Review',
+  pending_review: 'Pending Review',
+  'pending review': 'Pending Review',
+  draft: 'Pending Review',
+  approved: 'Approved',
+  published: 'Published',
+  'revision requested': 'Revision Requested',
+  revision_requested: 'Revision Requested',
+  rejected: 'Rejected',
+});
+
+const normalizeContentStatus = (value) => {
+  if (value == null || value === '') return 'Pending Review';
+  const key = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ');
+  return CONTENT_STATUS_MAP[key] || 'Pending Review';
+};
+
+const inferContentPlatform = (assetUrl, contentType) => {
+  const source = `${assetUrl || ''} ${contentType || ''}`.toLowerCase();
+  if (source.includes('tiktok')) return 'TikTok';
+  if (source.includes('instagram')) return 'Instagram';
+  if (source.includes('facebook')) return 'Facebook';
+  if (source.includes('youtube')) return 'YouTube';
+  return 'TikTok';
+};
+
+const mapContentRow = (row) => {
+  const assetUrl = row.asset_url || '';
+  const metrics = {
+    views: toFiniteNumber(row.views) || 0,
+    likes: toFiniteNumber(row.likes) || 0,
+    comments: toFiniteNumber(row.comments) || 0,
+    shares: toFiniteNumber(row.shares) || 0,
+    saves: toFiniteNumber(row.saves) || 0,
+    reach: toFiniteNumber(row.reach) || 0,
+  };
+  return {
+    id: row.asset_id || row.submission_id,
+    submissionId: row.submission_id,
+    campaignId: row.campaign_id,
+    creatorId: row.creator_id,
+    platform: inferContentPlatform(assetUrl, row.asset_content_type),
+    type: row.asset_content_type || 'Video',
+    caption: row.asset_caption || '',
+    hashtags: '',
+    assets: assetUrl ? [{ type: 'link', label: 'Submitted content', url: assetUrl }] : [],
+    status: normalizeContentStatus(row.submission_status),
+    revisionCount: Number(row.version_count || 0),
+    feedback: [],
+    notes: row.submission_notes || '',
+    createdAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : null,
+    submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString().slice(0, 10) : '',
+    metrics,
+  };
+};
+
+const sanitizeProfileImageUrl = (value) => {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    const expRaw = parsed.searchParams.get('x-expires');
+    const exp = Number(expRaw);
+    if (Number.isFinite(exp) && Date.now() >= exp * 1000) {
+      return null;
+    }
+    return raw;
+  } catch (error) {
+    return raw;
+  }
+};
+
+const sanitizeCreatorProfileImage = (row) => {
+  if (!row || typeof row !== 'object' || !Object.prototype.hasOwnProperty.call(row, 'profile_image')) {
+    return row;
+  }
+  return { ...row, profile_image: sanitizeProfileImageUrl(row.profile_image) };
+};
+
+const sanitizeCreatorProfileImageList = (rows) => {
+  if (!Array.isArray(rows)) return rows;
+  return rows.map(sanitizeCreatorProfileImage);
+};
 
 const getBrandMembership = async (userId) => {
   const result = await pool.query(
@@ -531,97 +878,91 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/tiktok/analyze' && method === 'POST') {
-    let body = '';
-    req.on('data', (chunk) => {
-      body += chunk.toString();
-    });
-    req.on('end', () => {
-      let payload;
-      try {
-        payload = JSON.parse(body || '{}');
-      } catch (error) {
-        return json(res, 400, { ok: false, error: 'Invalid JSON body' });
-      }
-
+    try {
+      const payload = await parseBody(req);
       const profileUrl = payload.url || '';
       if (!profileUrl) {
         return json(res, 400, { ok: false, error: 'Missing url' });
       }
+      const { data, stderr } = await runTikTokAnalyzeScript(profileUrl);
+      let persistence;
+      try {
+        persistence = await persistTikTokAnalyzeMetrics(profileUrl, data);
+      } catch (persistError) {
+        persistence = {
+          attempted: true,
+          updated: 0,
+          error: persistError.message,
+        };
+      }
+      return json(res, 200, { ok: true, data, debug: { stderr }, persistence });
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        return json(res, 400, { ok: false, error: 'Invalid JSON body' });
+      }
+      return json(res, 500, {
+        ok: false,
+        error: error?.message || 'Failed to analyze TikTok profile',
+        stderr: error?.stderr || '',
+      });
+    }
+    return;
+  }
 
-      const msToken = process.env.MS_TOKEN || process.env.ms_token || 'kPnvn2AsOob08XX5ZyqZKM62iCrboQdfl44n2NpE5hbA3blfnebUIQ3BaE0IYO405Gz7uYqH-7hxrtmpAUWAJ7UDRIyT9LT6oXsuTIOFwAnZUgXYze8Ljg8FZ8bspi74LsPXMLJzmyasoNHFfMzcQHa_';
-      if (!msToken) {
-        return json(res, 500, { ok: false, error: 'MS_TOKEN is not set on the server' });
+  if (url === '/api/creators/import-link' && method === 'POST') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const body = await parseBody(req);
+      const profileUrl = String(body?.url || '').trim();
+      if (!profileUrl) {
+        return json(res, 400, { ok: false, error: 'Creator profile link is required' });
+      }
+      if (!/tiktok\.com\/@/i.test(profileUrl)) {
+        return json(res, 400, {
+          ok: false,
+          error: 'Please provide a valid TikTok profile link',
+        });
       }
 
-      console.log(`[tiktok] analyze requested: ${profileUrl}`);
-      console.log(
-        `[tiktok] ms_token source: ${process.env.MS_TOKEN ? 'MS_TOKEN' : 'ms_token'}`
-      );
-      console.log(`[tiktok] ms_token: ${msToken}`);
-      console.log(`[tiktok] ms_token length: ${msToken.length}`);
-      const scriptPath = path.resolve(__dirname, '../../scripts/tiktok_fetch_all.py');
-      const args = [scriptPath, '--profile-url', profileUrl, '--trending', '0'];
+      const { data, stderr } = await runTikTokAnalyzeScript(profileUrl);
+      const persistence = await persistTikTokAnalyzeMetrics(profileUrl, data, { allowCreate: true });
+      if (!persistence.attempted) {
+        return json(res, 422, {
+          ok: false,
+          error: `Unable to import creator (${persistence.reason || 'unknown_reason'})`,
+        });
+      }
+      if (!persistence.creatorId) {
+        return json(res, 422, {
+          ok: false,
+          error: 'Creator could not be imported from this link',
+        });
+      }
 
-      execFile(
-        'python3',
-        args,
-        {
-          env: { ...process.env, MS_TOKEN: msToken, ms_token: msToken },
-          maxBuffer: 10 * 1024 * 1024,
-          timeout: 120000,
+      return json(res, 200, {
+        ok: true,
+        data: persistence.creator,
+        meta: {
+          action: persistence.created ? 'created' : 'updated',
+          creatorId: persistence.creatorId,
+          metrics: persistence.metrics,
+          stderrPreview: stderr ? String(stderr).slice(0, 500) : '',
         },
-        (error, stdout, stderr) => {
-          if (error) {
-            console.error('[tiktok] analyze failed:', error.message);
-            if (stderr) {
-              console.log('[tiktok] script stderr length:', stderr.length);
-              console.log('[tiktok] script stderr preview:', stderr.slice(0, 1000));
-            }
-            if (stdout) {
-              console.log('[tiktok] script stdout length:', stdout.length);
-              console.log('[tiktok] script stdout preview:', stdout.slice(0, 1000));
-            }
-            return json(res, 500, { ok: false, error: error.message, stderr });
-          }
-          if (stderr) {
-            console.log('[tiktok] script output:', stderr.trim());
-          }
-          console.log('[tiktok] script stdout length:', stdout.length);
-          console.log('[tiktok] script stdout preview:', stdout.slice(0, 1000));
-          try {
-            const data = JSON.parse(stdout);
-            const finalizeResponse = (persistence) => {
-              console.log('[tiktok] analyze success');
-              console.log(
-                '[tiktok] response json:',
-                JSON.stringify({ ok: true, data, persistence }, null, 2)
-              );
-              return json(res, 200, { ok: true, data, debug: { stderr }, persistence });
-            };
-
-            persistTikTokAnalyzeMetrics(profileUrl, data)
-              .then((persistence) => finalizeResponse(persistence))
-              .catch((persistError) => {
-                console.error('[tiktok] failed to persist metrics:', persistError.message);
-                finalizeResponse({
-                  attempted: true,
-                  updated: 0,
-                  error: persistError.message,
-                });
-              });
-            return;
-          } catch (parseError) {
-            console.error('[tiktok] parse failed:', parseError.message);
-            return json(res, 500, {
-              ok: false,
-              error: 'Failed to parse script output',
-              raw: stdout,
-            });
-          }
-        }
-      );
-    });
-    return;
+      });
+    } catch (error) {
+      if (error instanceof SyntaxError) {
+        return json(res, 400, { ok: false, error: 'Invalid JSON body' });
+      }
+      return json(res, 500, {
+        ok: false,
+        error: error?.message || 'Failed to import creator from link',
+        stderr: error?.stderr || '',
+      });
+    }
   }
 
   if (url === '/api/tiktok/creators/search' && method === 'POST') {
@@ -1816,6 +2157,47 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (finalVideoLink && finalVideoLink !== previousFinalLink) {
+        const existingAsset = await pool.query(
+          `
+          SELECT a.id
+          FROM content_assets a
+          JOIN content_submissions s ON s.id = a.content_submission_id
+          WHERE s.campaign_id = $1
+            AND s.creator_id = $2
+            AND a.published_url = $3
+          LIMIT 1
+          `,
+          [campaignId, creatorId, finalVideoLink]
+        );
+
+        if (existingAsset.rowCount === 0) {
+          const submissionResult = await pool.query(
+            `
+            INSERT INTO content_submissions
+              (campaign_id, creator_id, status, version_count, notes, created_at, updated_at)
+            VALUES ($1, $2, 'Pending Review', 1, $3, NOW(), NOW())
+            RETURNING id
+            `,
+            [campaignId, creatorId, body.notes || 'Submitted from creator workflow']
+          );
+          const submissionId = submissionResult.rows[0]?.id;
+          if (submissionId) {
+            await pool.query(
+              `
+              INSERT INTO content_assets
+                (content_submission_id, content_type, caption, published_url, published_at, created_at)
+              VALUES ($1, $2, $3, $4, NOW(), NOW())
+              `,
+              [
+                submissionId,
+                body.submissionType || body.type || 'Video',
+                body.notes || null,
+                finalVideoLink,
+              ]
+            );
+          }
+        }
+
         const campaignContext = await getCampaignContext(campaignId);
         const creatorName = await getCreatorDisplayName(creatorId);
         await createOrgNotification(
@@ -1827,6 +2209,90 @@ const server = http.createServer(async (req, res) => {
       }
 
       return json(res, 200, { ok: true });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if (url === '/api/content' || url.startsWith('/api/content?')) {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (method !== 'GET') {
+      return json(res, 405, { ok: false, error: 'Method not allowed' });
+    }
+    if (!['admin', 'employee', 'brand'].includes(user.role)) {
+      return json(res, 403, { ok: false, error: 'Forbidden' });
+    }
+    try {
+      const urlObj = new URL(url, `http://localhost:${PORT}`);
+      const campaignId = urlObj.searchParams.get('campaignId');
+      const parsedLimit = parseInt(urlObj.searchParams.get('limit') || '250', 10);
+      const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 1000) : 250;
+      const values = [];
+      const conditions = [];
+
+      if (campaignId) {
+        values.push(campaignId);
+        conditions.push(`s.campaign_id = $${values.length}`);
+      }
+
+      if (user.role === 'brand') {
+        const membership = await getBrandMembership(user.id);
+        if (!membership?.id) {
+          return json(res, 200, { ok: true, data: [] });
+        }
+        values.push(membership.id);
+        conditions.push(`c.organization_id = $${values.length}`);
+      }
+
+      values.push(limit);
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+      const limitIdx = values.length;
+
+      const result = await pool.query(
+        `
+        SELECT
+          s.id AS submission_id,
+          s.campaign_id,
+          s.creator_id,
+          s.status AS submission_status,
+          s.version_count,
+          s.notes AS submission_notes,
+          s.created_at AS submitted_at,
+          a.id AS asset_id,
+          a.content_type AS asset_content_type,
+          a.caption AS asset_caption,
+          a.published_url AS asset_url,
+          latest.views,
+          latest.likes,
+          latest.comments,
+          latest.shares,
+          latest.saves,
+          latest.reach
+        FROM content_submissions s
+        JOIN campaigns c ON c.id = s.campaign_id
+        LEFT JOIN content_assets a ON a.content_submission_id = s.id
+        LEFT JOIN LATERAL (
+          SELECT
+            cas.views,
+            cas.likes,
+            cas.comments,
+            cas.shares,
+            cas.saves,
+            cas.reach
+          FROM content_analytics_snapshots cas
+          WHERE cas.content_asset_id = a.id
+          ORDER BY cas.captured_at DESC NULLS LAST, cas.created_at DESC
+          LIMIT 1
+        ) latest ON true
+        ${whereClause}
+        ORDER BY s.created_at DESC
+        LIMIT $${limitIdx}
+        `,
+        values
+      );
+
+      return json(res, 200, { ok: true, data: result.rows.map(mapContentRow) });
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });
     }
@@ -1884,7 +2350,7 @@ const server = http.createServer(async (req, res) => {
       if (result.rowCount === 0) {
         return json(res, 404, { ok: false, error: 'Creator not found' });
       }
-      return json(res, 200, { ok: true, data: result.rows[0] });
+      return json(res, 200, { ok: true, data: sanitizeCreatorProfileImage(result.rows[0]) });
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });
     }
@@ -2052,7 +2518,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, 404, { ok: false, error: 'Creator not found' });
       }
 
-      return json(res, 200, { ok: true, data: result.rows[0] });
+      return json(res, 200, { ok: true, data: sanitizeCreatorProfileImage(result.rows[0]) });
     } catch (error) {
       return json(res, 400, { ok: false, error: error.message });
     }
@@ -2084,7 +2550,7 @@ const server = http.createServer(async (req, res) => {
 
       return json(res, 200, {
         ok: true,
-        data: result.rows,
+        data: sanitizeCreatorProfileImageList(result.rows),
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
       });
     } catch (error) {
@@ -2092,7 +2558,154 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (url === '/api/ugc-creators' || url.startsWith('/api/ugc-creators?')) {
+  if (method === 'POST' && url === '/api/ugc-creators') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const body = await parseBody(req);
+
+      const toNullableText = (value) => {
+        if (value === undefined || value === null) return null;
+        const text = String(value).trim();
+        return text.length ? text : null;
+      };
+
+      const toNullableInteger = (value, fieldName) => {
+        if (value === undefined || value === null || value === '') return null;
+        const num = Number(value);
+        if (!Number.isFinite(num) || !Number.isInteger(num) || num < 0) {
+          throw new Error(`Invalid ${fieldName}`);
+        }
+        return num;
+      };
+
+      const toNullableNumber = (value, fieldName) => {
+        if (value === undefined || value === null || value === '') return null;
+        const num = Number(value);
+        if (!Number.isFinite(num) || num < 0) {
+          throw new Error(`Invalid ${fieldName}`);
+        }
+        return num;
+      };
+
+      const toBoolean = (value) => {
+        if (value === undefined || value === null || value === '') return false;
+        if (typeof value === 'boolean') return value;
+        const normalized = String(value).trim().toLowerCase();
+        if (['true', '1', 'yes', 'y'].includes(normalized)) return true;
+        if (['false', '0', 'no', 'n'].includes(normalized)) return false;
+        return false;
+      };
+
+      const payload = {
+        name: toNullableText(body.name),
+        phone: toNullableText(body.phone),
+        handle: toNullableText(body.handle),
+        niche: toNullableText(body.niche),
+        has_mock_video: toBoolean(body.has_mock_video),
+        portfolio_url: toNullableText(body.portfolio_url),
+        age: toNullableInteger(body.age, 'age'),
+        gender: toNullableText(body.gender),
+        languages: toNullableText(body.languages),
+        accepts_gifted_collab: toBoolean(body.accepts_gifted_collab),
+        turnaround_time: toNullableText(body.turnaround_time),
+        has_equipment: toBoolean(body.has_equipment),
+        has_editing_skills: toBoolean(body.has_editing_skills),
+        can_voiceover: toBoolean(body.can_voiceover),
+        skills_rating: toNullableNumber(body.skills_rating, 'skills_rating'),
+        base_rate: toNullableNumber(body.base_rate, 'base_rate'),
+        region: toNullableText(body.region),
+        notes: toNullableText(body.notes),
+        profile_image: toNullableText(body.profile_image),
+      };
+
+      if (!payload.name) return json(res, 400, { ok: false, error: 'name is required' });
+      if (!payload.handle) return json(res, 400, { ok: false, error: 'handle is required' });
+      if (!payload.niche) return json(res, 400, { ok: false, error: 'niche is required' });
+      if (payload.age == null) return json(res, 400, { ok: false, error: 'age is required' });
+      if (!payload.gender) return json(res, 400, { ok: false, error: 'gender is required' });
+      if (!payload.languages) return json(res, 400, { ok: false, error: 'languages is required' });
+      if (!payload.turnaround_time) {
+        return json(res, 400, { ok: false, error: 'turnaround_time is required' });
+      }
+      if (payload.skills_rating == null) {
+        return json(res, 400, { ok: false, error: 'skills_rating is required' });
+      }
+      if (payload.skills_rating > 5) {
+        return json(res, 400, { ok: false, error: 'skills_rating must be between 0 and 5' });
+      }
+      if (payload.base_rate == null) {
+        return json(res, 400, { ok: false, error: 'base_rate is required' });
+      }
+
+      const result = await pool.query(
+        `
+        INSERT INTO ugc_creators (
+          name,
+          phone,
+          handle,
+          niche,
+          has_mock_video,
+          portfolio_url,
+          age,
+          gender,
+          languages,
+          accepts_gifted_collab,
+          turnaround_time,
+          has_equipment,
+          has_editing_skills,
+          can_voiceover,
+          skills_rating,
+          base_rate,
+          region,
+          notes,
+          profile_image,
+          created_at
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW()
+        )
+        RETURNING
+          id, name, phone, handle, niche, has_mock_video, portfolio_url, age, gender,
+          languages, accepts_gifted_collab, turnaround_time, has_equipment,
+          has_editing_skills, can_voiceover, skills_rating, base_rate, region, notes,
+          profile_image, created_at
+        `,
+        [
+          payload.name,
+          payload.phone,
+          payload.handle,
+          payload.niche,
+          payload.has_mock_video,
+          payload.portfolio_url,
+          payload.age,
+          payload.gender,
+          payload.languages,
+          payload.accepts_gifted_collab,
+          payload.turnaround_time,
+          payload.has_equipment,
+          payload.has_editing_skills,
+          payload.can_voiceover,
+          payload.skills_rating,
+          payload.base_rate,
+          payload.region,
+          payload.notes,
+          payload.profile_image,
+        ]
+      );
+
+      return json(res, 201, {
+        ok: true,
+        data: sanitizeCreatorProfileImage(result.rows[0]),
+      });
+    } catch (error) {
+      return json(res, 400, { ok: false, error: error.message });
+    }
+  }
+
+  if (method === 'GET' && (url === '/api/ugc-creators' || url.startsWith('/api/ugc-creators?'))) {
     const user = await requireApprovedUser(req, res);
     if (!user) return;
     try {
@@ -2119,7 +2732,7 @@ const server = http.createServer(async (req, res) => {
 
       return json(res, 200, {
         ok: true,
-        data: result.rows,
+        data: sanitizeCreatorProfileImageList(result.rows),
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
       });
     } catch (error) {
@@ -2323,6 +2936,56 @@ const server = http.createServer(async (req, res) => {
         values
       );
       return json(res, 200, { ok: true, data: result.rows });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if ((url === '/api/notifications/clear' || url.startsWith('/api/notifications/clear?')) && method === 'POST') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin' && user.role !== 'employee') {
+      return json(res, 403, { ok: false, error: 'Forbidden' });
+    }
+    try {
+      const urlObj = new URL(url, `http://localhost:${PORT}`);
+      const organizationId = urlObj.searchParams.get('organizationId');
+      let result;
+      if (organizationId) {
+        result = await pool.query(
+          `DELETE FROM organization_notifications WHERE organization_id = $1`,
+          [organizationId]
+        );
+      } else {
+        result = await pool.query(`DELETE FROM organization_notifications`);
+      }
+      return json(res, 200, { ok: true, deleted: result.rowCount || 0 });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  const orgNotificationsClearMatch = pathname.match(
+    /^\/api\/organizations\/([0-9a-fA-F-]+)\/notifications\/clear\/?$/
+  );
+  if (orgNotificationsClearMatch && method === 'POST') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    try {
+      const organizationId = orgNotificationsClearMatch[1];
+      if (user.role === 'brand') {
+        const brandMembership = await getBrandMembership(user.id);
+        if (!brandMembership || brandMembership.id !== organizationId) {
+          return json(res, 403, { ok: false, error: 'Forbidden' });
+        }
+      } else if (user.role !== 'admin' && user.role !== 'employee') {
+        return json(res, 403, { ok: false, error: 'Forbidden' });
+      }
+      const result = await pool.query(
+        `DELETE FROM organization_notifications WHERE organization_id = $1`,
+        [organizationId]
+      );
+      return json(res, 200, { ok: true, deleted: result.rowCount || 0 });
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });
     }

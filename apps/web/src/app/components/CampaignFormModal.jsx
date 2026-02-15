@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 
 const PLATFORM_OPTIONS = ['TikTok', 'Instagram', 'Facebook'];
-const CONTENT_FORMAT_OPTIONS = ['Reel', 'Post', 'Story'];
+const CONTENT_FORMAT_OPTIONS = [
+  { value: 'Reel', label: 'Video' },
+  { value: 'Post', label: 'Post' },
+  { value: 'Story', label: 'Story' },
+];
 const DEAL_TYPES = ['Collab', 'Paid', 'Mix'];
 const CAMPAIGN_STATUSES = ['Draft', 'In Review', 'Published Campaign'];
 const OBJECTIVES = ['Awareness', 'Sales', 'Launch', 'Content Bank'];
@@ -513,15 +517,17 @@ export default function CampaignFormModal({
                   <div className="pill-group" data-field="contentFormat">
                     {CONTENT_FORMAT_OPTIONS.map((format) => (
                       <button
-                        key={format}
+                        key={format.value}
                         type="button"
-                        className={form.contentFormat.includes(format) ? 'active' : undefined}
+                        className={
+                          form.contentFormat.includes(format.value) ? 'active' : undefined
+                        }
                         onClick={() => {
-                          onToggleContentFormat(format);
+                          onToggleContentFormat(format.value);
                           markTouched('contentFormat');
                         }}
                       >
-                        {format}
+                        {format.label}
                       </button>
                     ))}
                   </div>
@@ -578,7 +584,7 @@ export default function CampaignFormModal({
                     onChange('deliverables', event.target.value);
                     markTouched('deliverables');
                   }}
-                  placeholder="e.g. 3 Reels, 5 Stories, 1 static post per creator"
+                  placeholder="e.g. 3 Videos, 5 Stories, 1 static post per creator"
                   rows={2}
                   data-field="deliverables"
                 />

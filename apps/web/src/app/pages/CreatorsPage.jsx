@@ -8,6 +8,7 @@ import CreatorGrid from '../components/CreatorGrid.jsx';
 import CreatorProfileModal from '../components/CreatorProfileModal.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import RejectionModal from '../components/RejectionModal.jsx';
+import UgcCreatorCreateModal from '../components/UgcCreatorCreateModal.jsx';
 import { getJson } from '../api/client.js';
 import { NICHES, WORKFLOW_STATUSES } from '../config/options.js';
 
@@ -121,6 +122,28 @@ const normalizeCreatorForm = (creator) => ({
     creator?.avg_views === null || creator?.avg_views === undefined ? '' : String(creator.avg_views),
 });
 
+const defaultUgcCreatorForm = () => ({
+  name: '',
+  phone: '',
+  handle: '',
+  niche: '',
+  has_mock_video: false,
+  portfolio_url: '',
+  age: '',
+  gender: '',
+  languages: '',
+  accepts_gifted_collab: false,
+  turnaround_time: '',
+  has_equipment: false,
+  has_editing_skills: false,
+  can_voiceover: false,
+  skills_rating: '',
+  base_rate: '',
+  region: '',
+  notes: '',
+  profile_image: '',
+});
+
 export default function CreatorsPage() {
   const { role } = useParams();
   const isAdmin = role === 'admin';
@@ -152,6 +175,19 @@ export default function CreatorsPage() {
   });
 
   const [error, setError] = useState(null);
+  const [linkImport, setLinkImport] = useState({
+    url: '',
+    loading: false,
+    error: '',
+    success: '',
+  });
+  const [ugcCreateModal, setUgcCreateModal] = useState({
+    open: false,
+    saving: false,
+    imageUploading: false,
+    error: '',
+    form: defaultUgcCreatorForm(),
+  });
   const [editModal, setEditModal] = useState({
     open: false,
     loading: false,
@@ -494,6 +530,126 @@ export default function CreatorsPage() {
     }
   };
 
+  const openUgcCreateModal = () => {
+    if (!isAdmin) return;
+    setUgcCreateModal({
+      open: true,
+      saving: false,
+      imageUploading: false,
+      error: '',
+      form: defaultUgcCreatorForm(),
+    });
+  };
+
+  const closeUgcCreateModal = () => {
+    setUgcCreateModal({
+      open: false,
+      saving: false,
+      imageUploading: false,
+      error: '',
+      form: defaultUgcCreatorForm(),
+    });
+  };
+
+  const updateUgcCreateField = (field, value) => {
+    setUgcCreateModal((prev) => ({
+      ...prev,
+      error: '',
+      form: { ...prev.form, [field]: value },
+    }));
+  };
+
+  const handleUploadUgcCreateImage = async (file) => {
+    if (!file) return;
+    if (!String(file.type || '').startsWith('image/')) {
+      setUgcCreateModal((prev) => ({
+        ...prev,
+        error: 'Please select an image file.',
+      }));
+      return;
+    }
+    setUgcCreateModal((prev) => ({
+      ...prev,
+      imageUploading: true,
+      error: '',
+    }));
+    try {
+      const imagePath = await uploadCreatorImage(file);
+      setUgcCreateModal((prev) => ({
+        ...prev,
+        imageUploading: false,
+        error: '',
+        form: { ...prev.form, profile_image: imagePath },
+      }));
+    } catch (err) {
+      setUgcCreateModal((prev) => ({
+        ...prev,
+        imageUploading: false,
+        error: err?.message || 'Failed to upload creator image.',
+      }));
+    }
+  };
+
+  const submitUgcCreator = async () => {
+    const form = ugcCreateModal.form;
+    if (!form) return;
+    if (ugcCreateModal.imageUploading) {
+      setUgcCreateModal((prev) => ({
+        ...prev,
+        error: 'Image upload is in progress. Please wait.',
+      }));
+      return;
+    }
+
+    const requiredFields = [
+      ['name', 'Name is required.'],
+      ['handle', 'Handle is required.'],
+      ['niche', 'Niche is required.'],
+      ['age', 'Age is required.'],
+      ['gender', 'Gender is required.'],
+      ['languages', 'Languages are required.'],
+      ['turnaround_time', 'Turnaround time is required.'],
+      ['skills_rating', 'Skills rating is required.'],
+      ['base_rate', 'Base rate is required.'],
+    ];
+
+    for (const [field, message] of requiredFields) {
+      if (!String(form[field] ?? '').trim()) {
+        setUgcCreateModal((prev) => ({ ...prev, error: message }));
+        return;
+      }
+    }
+
+    setUgcCreateModal((prev) => ({ ...prev, saving: true, error: '' }));
+    try {
+      const payload = {
+        ...form,
+        age: Number(form.age),
+        skills_rating: Number(form.skills_rating),
+        base_rate: Number(form.base_rate),
+      };
+      const res = await fetch(`${API_BASE}/ugc-creators`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || 'Failed to add UGC creator.');
+      }
+      closeUgcCreateModal();
+      setActiveTab('ugc');
+      await fetchCreators();
+    } catch (err) {
+      setUgcCreateModal((prev) => ({
+        ...prev,
+        saving: false,
+        error: err?.message || 'Failed to add UGC creator.',
+      }));
+    }
+  };
+
   const saveEditedCreator = async () => {
     if (!editModal.form?.id) return;
     if (editModal.imageUploading) {
@@ -528,6 +684,95 @@ export default function CreatorsPage() {
     }
   };
 
+  const importCreatorFromLink = async () => {
+    if (!isAdmin) return;
+    const profileUrl = linkImport.url.trim();
+    if (!profileUrl) {
+      setLinkImport((prev) => ({
+        ...prev,
+        error: 'Please enter a TikTok profile link.',
+        success: '',
+      }));
+      return;
+    }
+    setLinkImport((prev) => ({
+      ...prev,
+      loading: true,
+      error: '',
+      success: '',
+    }));
+    try {
+      const res = await fetch(`${API_BASE}/creators/import-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ url: profileUrl }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || 'Failed to import creator.');
+      }
+      const importedName = data?.data?.name || 'Creator';
+      const action = data?.meta?.action === 'created' ? 'added' : 'updated';
+      setLinkImport({
+        url: '',
+        loading: false,
+        error: '',
+        success: `${importedName} ${action} successfully.`,
+      });
+      setActiveTab('influencer');
+      await fetchCreators();
+    } catch (err) {
+      setLinkImport((prev) => ({
+        ...prev,
+        loading: false,
+        error: err?.message || 'Failed to import creator.',
+        success: '',
+      }));
+    }
+  };
+
+  const importActions = isAdmin ? (
+    <div className="page-header-actions creator-import-actions">
+      <div className="creator-import-row">
+        <input
+          type="text"
+          className="input"
+          placeholder="Paste TikTok profile link"
+          value={linkImport.url}
+          onChange={(event) =>
+            setLinkImport((prev) => ({
+              ...prev,
+              url: event.target.value,
+              error: '',
+              success: '',
+            }))
+          }
+        />
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={importCreatorFromLink}
+          disabled={linkImport.loading}
+        >
+          {linkImport.loading ? 'Importing...' : 'Import Creator'}
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={openUgcCreateModal}
+          disabled={linkImport.loading}
+        >
+          Add UGC Creator
+        </button>
+      </div>
+      {linkImport.error ? <p className="creator-import-feedback error">{linkImport.error}</p> : null}
+      {linkImport.success ? (
+        <p className="creator-import-feedback success">{linkImport.success}</p>
+      ) : null}
+    </div>
+  ) : null;
+
   if (role === 'creator') {
     return (
       <EmptyState
@@ -542,7 +787,7 @@ export default function CreatorsPage() {
       <div className="page-stack">
         <div className="page-header">
           <div>
-            <h2>Creator Network</h2>
+            <h2>Creators</h2>
             <p>Review creators suggested by our team for your campaigns.</p>
           </div>
         </div>
@@ -587,9 +832,10 @@ export default function CreatorsPage() {
       <div className="page-stack">
         <div className="page-header">
           <div>
-            <h2>Creator Network</h2>
+            <h2>Creators</h2>
             <p>Loading creator profiles...</p>
           </div>
+          {importActions}
         </div>
         <div className="loading-spinner"></div>
       </div>
@@ -608,9 +854,10 @@ export default function CreatorsPage() {
     <div className="page-stack">
       <div className="page-header">
         <div>
-          <h2>Creator Network</h2>
+          <h2>Creators</h2>
           <p>Review all creator profiles and performance context.</p>
         </div>
+        {importActions}
       </div>
 
       <div className="tabs-container">
@@ -729,6 +976,17 @@ export default function CreatorsPage() {
         onChange={updateEditField}
         onUploadImage={handleUploadCreatorImage}
         onSubmit={saveEditedCreator}
+      />
+      <UgcCreatorCreateModal
+        open={ugcCreateModal.open}
+        saving={ugcCreateModal.saving}
+        uploadingImage={ugcCreateModal.imageUploading}
+        form={ugcCreateModal.form}
+        error={ugcCreateModal.error}
+        onClose={closeUgcCreateModal}
+        onChange={updateUgcCreateField}
+        onUploadImage={handleUploadUgcCreateImage}
+        onSubmit={submitUgcCreator}
       />
     </div>
   );
