@@ -29,6 +29,20 @@ const TIGERBEETLE_ADDRESS = process.env.TIGERBEETLE_ADDRESS || 'localhost:3000';
 
 const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
 
+const CREATOR_STAGE_SEED = {
+  UGC: ['Sourced', 'Brief Sent', 'Filming', 'Submitted', 'Approved', 'Published'],
+  Influencer: ['Sourced', 'Outreach', 'Contracted', 'Posted', 'Reporting'],
+  Hybrid: ['Sourced', 'In Progress', 'Submitted', 'Approved', 'Published'],
+};
+
+const normalizeCampaignType = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'ugc') return 'UGC';
+  if (normalized === 'influencer') return 'Influencer';
+  if (normalized === 'hybrid') return 'Hybrid';
+  return null;
+};
+
 const ensureRuntimeSchema = async () => {
   if (!pool) return;
   await pool.query(
@@ -37,6 +51,47 @@ const ensureRuntimeSchema = async () => {
       ADD COLUMN IF NOT EXISTS campaign_type_detail text
     `
   );
+  await pool.query(
+    `
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS logo_url text
+    `
+  );
+  await pool.query(
+    `
+    ALTER TABLE creators
+      ADD COLUMN IF NOT EXISTS ugc_video_urls text[] NOT NULL DEFAULT '{}'::text[]
+    `
+  );
+  await pool.query(
+    `
+    CREATE TABLE IF NOT EXISTS creator_stage_definitions (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      campaign_type text NOT NULL CHECK (campaign_type IN ('UGC', 'Influencer', 'Hybrid')),
+      label text NOT NULL,
+      sort_order integer NOT NULL DEFAULT 0,
+      active boolean NOT NULL DEFAULT true,
+      created_at timestamptz NOT NULL DEFAULT NOW(),
+      updated_at timestamptz NOT NULL DEFAULT NOW(),
+      UNIQUE (campaign_type, label)
+    )
+    `
+  );
+
+  for (const [campaignType, labels] of Object.entries(CREATOR_STAGE_SEED)) {
+    for (let index = 0; index < labels.length; index += 1) {
+      const label = labels[index];
+      await pool.query(
+        `
+        INSERT INTO creator_stage_definitions
+          (campaign_type, label, sort_order, active)
+        VALUES ($1, $2, $3, true)
+        ON CONFLICT (campaign_type, label) DO NOTHING
+        `,
+        [campaignType, label, index + 1]
+      );
+    }
+  }
 };
 
 const CREATOR_CSV_PATH = path.resolve(__dirname, '../../data/egypt_creators.csv');
@@ -173,16 +228,18 @@ const normalizeList = (value) => {
 const normalizeTextArray = (value) => normalizeList(value);
 
 const CAMPAIGN_STATUS_MAP = Object.freeze({
-  draft: 'Draft',
-  'in review': 'In Review',
-  published: 'Published Campaign',
-  'published campaign': 'Published Campaign',
-  submitted: 'In Review',
-  active: 'Published Campaign',
+  planning: 'Planning',
+  draft: 'Planning',
+  'in progress': 'In Progress',
+  'in review': 'In Progress',
+  submitted: 'In Progress',
+  active: 'In Progress',
+  published: 'Published',
+  'published campaign': 'Published',
 });
 
 const normalizeCampaignStatus = (value, options = {}) => {
-  const { fallback = 'Draft' } = options;
+  const { fallback = 'Planning' } = options;
   if (value === undefined || value === null || value === '') {
     return fallback;
   }
@@ -664,7 +721,7 @@ const mapCampaignRow = (row) => ({
   name: row.name,
   brand: row.organization_name,
   brandId: row.organization_id,
-  status: normalizeCampaignStatus(row.status, { fallback: 'Draft' }),
+  status: normalizeCampaignStatus(row.status, { fallback: 'Planning' }),
   campaignType: row.campaign_type,
   campaignTypeDetail: row.campaign_type_detail,
   dealType: row.deal_type,
@@ -851,6 +908,41 @@ const getCreatorDisplayName = async (creatorId) => {
     [creatorId]
   );
   return result.rows[0]?.display_name || 'Creator';
+};
+
+const getCreatorStagesByType = async (campaignType) => {
+  const normalizedType = normalizeCampaignType(campaignType);
+  if (!normalizedType) return [];
+
+  const result = await pool.query(
+    `
+    SELECT label
+    FROM creator_stage_definitions
+    WHERE campaign_type = $1 AND active = true
+    ORDER BY sort_order ASC, label ASC
+    `,
+    [normalizedType]
+  );
+
+  if (result.rows.length > 0) {
+    return result.rows.map((row) => row.label).filter(Boolean);
+  }
+
+  return CREATOR_STAGE_SEED[normalizedType] || [];
+};
+
+const getDefaultCreatorStageForCampaign = async (campaignId) => {
+  const campaignTypeResult = await pool.query(
+    `
+    SELECT campaign_type
+    FROM campaigns
+    WHERE id = $1
+    `,
+    [campaignId]
+  );
+  const campaignType = normalizeCampaignType(campaignTypeResult.rows[0]?.campaign_type) || 'Hybrid';
+  const stageOptions = await getCreatorStagesByType(campaignType);
+  return stageOptions[0] || 'Sourced';
 };
 
 async function requireApprovedUser(req, res) {
@@ -1505,6 +1597,114 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if ((url === '/api/creator-stages' || url.startsWith('/api/creator-stages?')) && method === 'GET') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    try {
+      const urlObj = new URL(url, `http://localhost:${PORT}`);
+      const campaignTypeFilter = normalizeCampaignType(urlObj.searchParams.get('campaignType'));
+      const includeInactive = urlObj.searchParams.get('includeInactive') === 'true';
+
+      const conditions = [];
+      const values = [];
+      if (campaignTypeFilter) {
+        values.push(campaignTypeFilter);
+        conditions.push(`campaign_type = $${values.length}`);
+      }
+      if (!includeInactive) {
+        conditions.push('active = true');
+      }
+      const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+      const result = await pool.query(
+        `
+        SELECT id, campaign_type, label, sort_order, active, created_at, updated_at
+        FROM creator_stage_definitions
+        ${whereClause}
+        ORDER BY campaign_type ASC, sort_order ASC, label ASC
+        `,
+        values
+      );
+
+      return json(res, 200, { ok: true, data: result.rows });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if (url === '/api/creator-stages' && method === 'POST') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const body = await parseBody(req);
+      const campaignType = normalizeCampaignType(body.campaignType || body.campaign_type);
+      const label = String(body.label || '').trim();
+      if (!campaignType) {
+        return json(res, 400, { ok: false, error: 'campaignType is required' });
+      }
+      if (!label) {
+        return json(res, 400, { ok: false, error: 'label is required' });
+      }
+
+      const nextOrderResult = await pool.query(
+        `
+        SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_sort_order
+        FROM creator_stage_definitions
+        WHERE campaign_type = $1
+        `,
+        [campaignType]
+      );
+      const nextSortOrder = Number(nextOrderResult.rows[0]?.next_sort_order || 1);
+
+      const result = await pool.query(
+        `
+        INSERT INTO creator_stage_definitions
+          (campaign_type, label, sort_order, active)
+        VALUES
+          ($1, $2, $3, true)
+        RETURNING id, campaign_type, label, sort_order, active, created_at, updated_at
+        `,
+        [campaignType, label, nextSortOrder]
+      );
+
+      return json(res, 201, { ok: true, data: result.rows[0] });
+    } catch (error) {
+      if (error.code === '23505') {
+        return json(res, 409, { ok: false, error: 'Status already exists for this campaign type.' });
+      }
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  const creatorStageDeleteMatch = pathname.match(/^\/api\/creator-stages\/([0-9a-fA-F-]+)\/?$/);
+  if (creatorStageDeleteMatch && method === 'DELETE') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const stageId = creatorStageDeleteMatch[1];
+      const result = await pool.query(
+        `
+        DELETE FROM creator_stage_definitions
+        WHERE id = $1
+        RETURNING id
+        `,
+        [stageId]
+      );
+      if (result.rowCount === 0) {
+        return json(res, 404, { ok: false, error: 'Status not found' });
+      }
+      return json(res, 200, { ok: true, id: result.rows[0].id });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
   if (url === '/api/campaigns' && method === 'GET') {
     const user = await requireApprovedUser(req, res);
     if (!user) return;
@@ -1588,10 +1788,10 @@ const server = http.createServer(async (req, res) => {
       ) {
         return json(res, 400, { ok: false, error: 'Invalid campaign status' });
       }
-      if (user.role !== 'admin' && normalizedStatus && normalizedStatus !== 'Draft') {
+      if (user.role !== 'admin' && normalizedStatus && normalizedStatus !== 'Planning') {
         return json(res, 403, { ok: false, error: 'Only admin can set campaign status' });
       }
-      const resolvedStatus = user.role === 'admin' ? normalizedStatus || 'Draft' : 'Draft';
+      const resolvedStatus = user.role === 'admin' ? normalizedStatus || 'Planning' : 'Planning';
 
       if (!name) {
         return json(res, 400, { ok: false, error: 'Campaign name is required' });
@@ -1953,7 +2153,7 @@ const server = http.createServer(async (req, res) => {
 
       const outreach = participantsResult.rows.reduce((acc, row) => {
         acc[row.creator_id] = {
-          workflowStatus: row.workflow_status || 'Filming',
+          workflowStatus: row.workflow_status || '',
           finalVideoLink: row.final_video_link || '',
         };
         return acc;
@@ -2027,6 +2227,76 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  const campaignUnsuggestMatch = pathname.match(
+    /^\/api\/campaigns\/([0-9a-fA-F-]+)\/creators\/([0-9a-fA-F-]+)\/suggest\/?$/
+  );
+  if (campaignUnsuggestMatch && method === 'DELETE') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin' && user.role !== 'employee') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const campaignId = campaignUnsuggestMatch[1];
+      const creatorId = campaignUnsuggestMatch[2];
+      const organizationId = await getCampaignOrganizationId(campaignId);
+      if (!organizationId) {
+        return json(res, 404, { ok: false, error: 'Campaign not found' });
+      }
+      const hasAccess = await ensureOrgAccess(user, organizationId);
+      if (!hasAccess) {
+        return json(res, 403, { ok: false, error: 'Forbidden' });
+      }
+
+      const inviteResult = await pool.query(
+        `
+        SELECT brand_decision
+        FROM campaign_invitations
+        WHERE campaign_id = $1 AND creator_id = $2
+        `,
+        [campaignId, creatorId]
+      );
+      if (inviteResult.rowCount === 0) {
+        return json(res, 404, { ok: false, error: 'Creator is not suggested for this campaign' });
+      }
+      const decision = String(inviteResult.rows[0]?.brand_decision || 'pending').toLowerCase();
+      if (decision !== 'pending') {
+        return json(res, 409, {
+          ok: false,
+          error: 'Cannot undo suggestion after brand decision. Ask brand to reset decision first.',
+        });
+      }
+
+      await pool.query(
+        `
+        DELETE FROM campaign_participants
+        WHERE campaign_id = $1 AND creator_id = $2
+        `,
+        [campaignId, creatorId]
+      );
+      await pool.query(
+        `
+        DELETE FROM campaign_invitations
+        WHERE campaign_id = $1 AND creator_id = $2
+        `,
+        [campaignId, creatorId]
+      );
+
+      const campaignContext = await getCampaignContext(campaignId);
+      const creatorName = await getCreatorDisplayName(creatorId);
+      await createOrgNotification(
+        campaignContext?.organization_id,
+        `Creator removed from ${campaignContext?.name || 'campaign'}: ${creatorName}`,
+        'In-app',
+        user.id
+      );
+
+      return json(res, 200, { ok: true });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
   const campaignDecisionMatch = pathname.match(
     /^\/api\/campaigns\/([0-9a-fA-F-]+)\/creators\/([0-9a-fA-F-]+)\/decision\/?$/
   );
@@ -2051,18 +2321,19 @@ const server = http.createServer(async (req, res) => {
       if (!['approved', 'rejected', 'pending'].includes(decision)) {
         return json(res, 400, { ok: false, error: 'Invalid decision' });
       }
+      const resolvedNote = decision === 'rejected' ? note : null;
 
       const updateResult = await pool.query(
         `
         UPDATE campaign_invitations
         SET brand_decision = $1,
             brand_decision_note = $2,
-            brand_decided_at = NOW(),
-            brand_decided_by_user_id = $3
+            brand_decided_at = CASE WHEN $1 = 'pending' THEN NULL ELSE NOW() END,
+            brand_decided_by_user_id = CASE WHEN $1 = 'pending' THEN NULL ELSE $3 END
         WHERE campaign_id = $4 AND creator_id = $5
         RETURNING id
         `,
-        [decision, note, user.id, campaignId, creatorId]
+        [decision, resolvedNote, user.id, campaignId, creatorId]
       );
 
       if (updateResult.rows.length === 0) {
@@ -2072,7 +2343,7 @@ const server = http.createServer(async (req, res) => {
       const campaignContext = await getCampaignContext(campaignId);
       const creatorName = await getCreatorDisplayName(creatorId);
       const decisionLabel =
-        decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : 'updated';
+        decision === 'approved' ? 'approved' : decision === 'rejected' ? 'rejected' : 'reset';
       await createOrgNotification(
         campaignContext?.organization_id,
         `Creator ${decisionLabel} for ${campaignContext?.name || 'campaign'}: ${creatorName}`,
@@ -2081,18 +2352,19 @@ const server = http.createServer(async (req, res) => {
       );
 
       if (decision === 'approved') {
+        const defaultCreatorStage = await getDefaultCreatorStageForCampaign(campaignId);
         await pool.query(
           `
           INSERT INTO campaign_participants
             (campaign_id, creator_id, state, created_at, accepted_at, workflow_status, created_by_user_id)
-          SELECT $1, $2, 'active', NOW(), NOW(), 'Filming', $3
+          SELECT $1, $2, 'active', NOW(), NOW(), $3, $4
           WHERE NOT EXISTS (
             SELECT 1 FROM campaign_participants WHERE campaign_id = $1 AND creator_id = $2
           )
           `,
-          [campaignId, creatorId, user.id]
+          [campaignId, creatorId, defaultCreatorStage, user.id]
         );
-      } else if (decision === 'rejected') {
+      } else if (decision === 'rejected' || decision === 'pending') {
         await pool.query(
           `DELETE FROM campaign_participants WHERE campaign_id = $1 AND creator_id = $2`,
           [campaignId, creatorId]
@@ -2126,8 +2398,28 @@ const server = http.createServer(async (req, res) => {
       const body = await parseBody(req);
       const workflowStatus = body.workflowStatus;
       const finalVideoLink = body.finalVideoLink;
+      const normalizedWorkflowStatus =
+        workflowStatus === undefined ? undefined : String(workflowStatus || '').trim();
       if (workflowStatus === undefined && finalVideoLink === undefined) {
         return json(res, 400, { ok: false, error: 'Nothing to update' });
+      }
+
+      if (workflowStatus !== undefined) {
+        if (!normalizedWorkflowStatus) {
+          return json(res, 400, { ok: false, error: 'workflowStatus cannot be empty' });
+        }
+        const campaignTypeResult = await pool.query(
+          `SELECT campaign_type FROM campaigns WHERE id = $1`,
+          [campaignId]
+        );
+        const campaignType = normalizeCampaignType(campaignTypeResult.rows[0]?.campaign_type) || 'Hybrid';
+        const allowedStatuses = await getCreatorStagesByType(campaignType);
+        if (allowedStatuses.length > 0 && !allowedStatuses.includes(normalizedWorkflowStatus)) {
+          return json(res, 400, {
+            ok: false,
+            error: `Invalid workflowStatus for ${campaignType} campaign`,
+          });
+        }
       }
 
       const existingResult = await pool.query(
@@ -2149,7 +2441,7 @@ const server = http.createServer(async (req, res) => {
         WHERE campaign_id = $3 AND creator_id = $4
         RETURNING id
         `,
-        [workflowStatus || null, finalVideoLink || null, campaignId, creatorId]
+        [normalizedWorkflowStatus || null, finalVideoLink || null, campaignId, creatorId]
       );
 
       if (updateResult.rows.length === 0) {
@@ -2331,13 +2623,12 @@ const server = http.createServer(async (req, res) => {
           accepts_gifted_collab,
           turnaround_time,
           has_equipment,
-          has_editing_skills,
           can_voiceover,
-          skills_rating,
           base_rate,
           profile_image,
           has_mock_video,
           notes,
+          ugc_video_urls,
           engagement_rate,
           avg_views,
           created_at,
@@ -2399,14 +2690,17 @@ const server = http.createServer(async (req, res) => {
         throw new Error(`Invalid ${fieldName}`);
       };
 
+      const toTextArray = (value) => {
+        if (value === undefined || value === null || value === '') return [];
+        const items = Array.isArray(value) ? value : String(value).split(',');
+        return items
+          .map((item) => String(item == null ? '' : item).trim())
+          .filter(Boolean);
+      };
+
       const creatorType = toNullableText(body.creator_type);
       if (creatorType && !['UGC', 'Influencer'].includes(creatorType)) {
         return json(res, 400, { ok: false, error: 'Invalid creator_type' });
-      }
-
-      const skillsRating = toNullableNumber(body.skills_rating, 'skills_rating');
-      if (skillsRating != null && skillsRating > 5) {
-        return json(res, 400, { ok: false, error: 'skills_rating must be between 0 and 5' });
       }
 
       const values = [
@@ -2430,13 +2724,12 @@ const server = http.createServer(async (req, res) => {
         toNullableBoolean(body.accepts_gifted_collab, 'accepts_gifted_collab'),
         toNullableText(body.turnaround_time),
         toNullableBoolean(body.has_equipment, 'has_equipment'),
-        toNullableBoolean(body.has_editing_skills, 'has_editing_skills'),
         toNullableBoolean(body.can_voiceover, 'can_voiceover'),
-        skillsRating,
         toNullableNumber(body.base_rate, 'base_rate'),
         toNullableText(body.profile_image),
         toNullableBoolean(body.has_mock_video, 'has_mock_video'),
         toNullableText(body.notes),
+        toTextArray(body.ugc_video_urls),
         toNullableNumber(body.engagement_rate, 'engagement_rate'),
         toNullableInteger(body.avg_views, 'avg_views'),
         creatorId,
@@ -2466,17 +2759,16 @@ const server = http.createServer(async (req, res) => {
           accepts_gifted_collab = $18,
           turnaround_time = $19,
           has_equipment = $20,
-          has_editing_skills = $21,
-          can_voiceover = $22,
-          skills_rating = $23,
-          base_rate = $24,
-          profile_image = $25,
-          has_mock_video = $26,
-          notes = $27,
-          engagement_rate = $28,
-          avg_views = $29,
+          can_voiceover = $21,
+          base_rate = $22,
+          profile_image = $23,
+          has_mock_video = $24,
+          notes = $25,
+          ugc_video_urls = $26,
+          engagement_rate = $27,
+          avg_views = $28,
           updated_at = NOW()
-        WHERE id = $30
+        WHERE id = $29
         RETURNING
           id,
           display_name,
@@ -2499,13 +2791,12 @@ const server = http.createServer(async (req, res) => {
           accepts_gifted_collab,
           turnaround_time,
           has_equipment,
-          has_editing_skills,
           can_voiceover,
-          skills_rating,
           base_rate,
           profile_image,
           has_mock_video,
           notes,
+          ugc_video_urls,
           engagement_rate,
           avg_views,
           created_at,
@@ -2607,15 +2898,14 @@ const server = http.createServer(async (req, res) => {
         niche: toNullableText(body.niche),
         has_mock_video: toBoolean(body.has_mock_video),
         portfolio_url: toNullableText(body.portfolio_url),
+        ugc_video_urls: normalizeTextArray(body.ugc_video_urls),
         age: toNullableInteger(body.age, 'age'),
         gender: toNullableText(body.gender),
         languages: toNullableText(body.languages),
         accepts_gifted_collab: toBoolean(body.accepts_gifted_collab),
         turnaround_time: toNullableText(body.turnaround_time),
         has_equipment: toBoolean(body.has_equipment),
-        has_editing_skills: toBoolean(body.has_editing_skills),
         can_voiceover: toBoolean(body.can_voiceover),
-        skills_rating: toNullableNumber(body.skills_rating, 'skills_rating'),
         base_rate: toNullableNumber(body.base_rate, 'base_rate'),
         region: toNullableText(body.region),
         notes: toNullableText(body.notes),
@@ -2631,47 +2921,59 @@ const server = http.createServer(async (req, res) => {
       if (!payload.turnaround_time) {
         return json(res, 400, { ok: false, error: 'turnaround_time is required' });
       }
-      if (payload.skills_rating == null) {
-        return json(res, 400, { ok: false, error: 'skills_rating is required' });
-      }
-      if (payload.skills_rating > 5) {
-        return json(res, 400, { ok: false, error: 'skills_rating must be between 0 and 5' });
-      }
       if (payload.base_rate == null) {
         return json(res, 400, { ok: false, error: 'base_rate is required' });
       }
 
       const result = await pool.query(
         `
-        INSERT INTO ugc_creators (
-          name,
+        INSERT INTO creators (
+          display_name,
           phone,
           handle,
-          niche,
+          primary_niche,
           has_mock_video,
           portfolio_url,
+          ugc_video_urls,
           age,
           gender,
           languages,
           accepts_gifted_collab,
           turnaround_time,
           has_equipment,
-          has_editing_skills,
           can_voiceover,
-          skills_rating,
           base_rate,
-          region,
+          country,
+          notes,
+          profile_image,
+          status,
+          creator_type,
+          created_at,
+          updated_at
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'active','UGC',NOW(),NOW()
+        )
+        RETURNING
+          id,
+          display_name AS name,
+          phone,
+          handle,
+          primary_niche AS niche,
+          has_mock_video,
+          portfolio_url,
+          ugc_video_urls,
+          age,
+          gender,
+          languages,
+          accepts_gifted_collab,
+          turnaround_time,
+          has_equipment,
+          can_voiceover,
+          base_rate,
+          COALESCE(country, '') AS region,
           notes,
           profile_image,
           created_at
-        ) VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW()
-        )
-        RETURNING
-          id, name, phone, handle, niche, has_mock_video, portfolio_url, age, gender,
-          languages, accepts_gifted_collab, turnaround_time, has_equipment,
-          has_editing_skills, can_voiceover, skills_rating, base_rate, region, notes,
-          profile_image, created_at
         `,
         [
           payload.name,
@@ -2680,15 +2982,14 @@ const server = http.createServer(async (req, res) => {
           payload.niche,
           payload.has_mock_video,
           payload.portfolio_url,
+          payload.ugc_video_urls,
           payload.age,
           payload.gender,
           payload.languages,
           payload.accepts_gifted_collab,
           payload.turnaround_time,
           payload.has_equipment,
-          payload.has_editing_skills,
           payload.can_voiceover,
-          payload.skills_rating,
           payload.base_rate,
           payload.region,
           payload.notes,
@@ -2714,16 +3015,34 @@ const server = http.createServer(async (req, res) => {
       const limit = parseInt(urlObj.searchParams.get('limit')) || 20;
       const offset = (page - 1) * limit;
 
-      const countResult = await pool.query('SELECT COUNT(*) FROM ugc_creators');
+      const countResult = await pool.query(`SELECT COUNT(*) FROM creators WHERE creator_type = 'UGC'`);
       const total = parseInt(countResult.rows[0].count);
 
       const result = await pool.query(
         `
-        SELECT id, name, phone, handle, niche, has_mock_video, portfolio_url, age, gender, 
-               languages, accepts_gifted_collab, turnaround_time, has_equipment, 
-               has_editing_skills, can_voiceover, skills_rating, base_rate, region, notes,
-               profile_image, created_at
-        FROM ugc_creators 
+        SELECT
+          id,
+          display_name AS name,
+          phone,
+          handle,
+          primary_niche AS niche,
+          has_mock_video,
+          portfolio_url,
+          ugc_video_urls,
+          age,
+          gender,
+          languages,
+          accepts_gifted_collab,
+          turnaround_time,
+          has_equipment,
+          can_voiceover,
+          base_rate,
+          COALESCE(country, '') AS region,
+          notes,
+          profile_image,
+          created_at
+        FROM creators
+        WHERE creator_type = 'UGC'
         ORDER BY name ASC
         LIMIT $1 OFFSET $2
       `,
@@ -3110,7 +3429,7 @@ const server = http.createServer(async (req, res) => {
       const result = await pool.query(
         `INSERT INTO users (email, password_hash, name, role, status) 
          VALUES ($1, $2, $3, $4, 'pending') 
-         RETURNING id, email, name, role, status, created_at`,
+         RETURNING id, email, name, role, status, logo_url, created_at`,
         [email.toLowerCase(), passwordHash, name, userRole]
       );
       
@@ -3131,6 +3450,58 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { ok: true, data: user });
   }
 
+  if (method === 'PUT' && url === '/api/me') {
+    const currentUser = await requireApprovedUser(req, res);
+    if (!currentUser) return;
+    try {
+      const body = await parseBody(req);
+      const name = typeof body?.name === 'string' ? body.name.trim() : '';
+      const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+      const hasLogoUrl = Object.prototype.hasOwnProperty.call(body || {}, 'logo_url');
+      const logoUrl = hasLogoUrl
+        ? body.logo_url != null && String(body.logo_url).trim() !== ''
+          ? String(body.logo_url).trim()
+          : null
+        : currentUser.logo_url || null;
+
+      if (!name) {
+        return json(res, 400, { ok: false, error: 'Name is required' });
+      }
+      if (!email) {
+        return json(res, 400, { ok: false, error: 'Email is required' });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return json(res, 400, { ok: false, error: 'Email format is invalid' });
+      }
+
+      const conflictCheck = await pool.query(
+        'SELECT id FROM users WHERE email = $1 AND id <> $2 LIMIT 1',
+        [email, currentUser.id]
+      );
+      if (conflictCheck.rows.length > 0) {
+        return json(res, 409, { ok: false, error: 'Email is already in use' });
+      }
+
+      await pool.query(
+        `
+        UPDATE users
+        SET name = $2,
+            email = $3,
+            logo_url = $4,
+            updated_at = NOW()
+        WHERE id = $1
+        `,
+        [currentUser.id, name, email, logoUrl]
+      );
+
+      const refreshedUser = await getSessionUser(pool, req);
+      return json(res, 200, { ok: true, data: refreshedUser });
+    } catch (error) {
+      console.error('Update current user error:', error);
+      return json(res, 500, { ok: false, error: 'Failed to update profile' });
+    }
+  }
+
   if (method === 'POST' && url === '/api/auth/login') {
     if (!pool) {
       return json(res, 503, { ok: false, error: 'Database not configured' });
@@ -3144,7 +3515,7 @@ const server = http.createServer(async (req, res) => {
       }
       
       const result = await pool.query(
-        'SELECT id, email, password_hash, name, role, status, created_at FROM users WHERE email = $1',
+        'SELECT id, email, password_hash, name, role, status, logo_url, created_at FROM users WHERE email = $1',
         [email.toLowerCase()]
       );
       

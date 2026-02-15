@@ -51,10 +51,19 @@ const formatPercent = (numerator, denominator) => {
 
 const normalizeStatusLabel = (status) => {
   const raw = String(status || '').trim().toLowerCase();
-  if (!raw || raw === 'draft') return 'Draft';
-  if (raw === 'in review' || raw === 'in_review' || raw === 'submitted') return 'In Review';
-  if (raw.includes('published')) return 'Published Campaign';
-  return 'Draft';
+  if (!raw || raw === 'planning' || raw === 'draft') return 'Planning';
+  if (
+    raw === 'in review' ||
+    raw === 'in_review' ||
+    raw === 'in progress' ||
+    raw === 'in_progress' ||
+    raw === 'submitted' ||
+    raw === 'active'
+  ) {
+    return 'In Progress';
+  }
+  if (raw.includes('published')) return 'Published';
+  return 'Planning';
 };
 
 const getPlatformLabel = (platform) => {
@@ -244,9 +253,9 @@ export default function AnalyticsPage() {
 
   const campaignStatusRows = useMemo(() => {
     const base = {
-      Draft: 0,
-      'In Review': 0,
-      'Published Campaign': 0,
+      Planning: 0,
+      'In Progress': 0,
+      Published: 0,
     };
     visibleCampaigns.forEach((campaign) => {
       const label = normalizeStatusLabel(campaign.status);
@@ -255,9 +264,9 @@ export default function AnalyticsPage() {
 
     const totalCampaigns = Math.max(visibleCampaigns.length, 1);
     return [
-      { label: 'Draft', count: base.Draft, tone: 'draft' },
-      { label: 'In Review', count: base['In Review'], tone: 'review' },
-      { label: 'Published Campaign', count: base['Published Campaign'], tone: 'published' },
+      { label: 'Planning', count: base.Planning, tone: 'planning' },
+      { label: 'In Progress', count: base['In Progress'], tone: 'in-progress' },
+      { label: 'Published', count: base.Published, tone: 'published' },
     ].map((row) => ({
       ...row,
       percent: Number(((row.count / totalCampaigns) * 100).toFixed(1)),
@@ -336,7 +345,7 @@ export default function AnalyticsPage() {
     {
       label: 'Total Campaigns',
       value: formatMetricNumber(aggregateTotals.campaigns),
-      hint: `${campaignStatusRows.find((row) => row.label === 'Published Campaign')?.count || 0} published`,
+      hint: `${campaignStatusRows.find((row) => row.label === 'Published')?.count || 0} published`,
     },
     {
       label: 'Selected Creators',

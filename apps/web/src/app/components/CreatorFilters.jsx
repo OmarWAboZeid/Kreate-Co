@@ -5,7 +5,6 @@ import {
   INFLUENCER_PLATFORMS,
   NICHES,
   UGC_AGE_OPTIONS,
-  UGC_EXPERIENCE_LEVELS,
 } from '../config/options.js';
 
 export default function CreatorFilters({
@@ -14,6 +13,7 @@ export default function CreatorFilters({
   onChange,
   niches = NICHES,
   disableEngagementRate = false,
+  hideSearch = false,
 }) {
   const updateFilter = (field) => (event) => {
     onChange({ ...filters, [field]: event.target.value });
@@ -22,12 +22,14 @@ export default function CreatorFilters({
   if (type === 'ugc') {
     return (
       <div className="filters-bar filters-bar-wrap">
-        <input
-          className="input"
-          placeholder="Search UGC creators"
-          value={filters.search}
-          onChange={updateFilter('search')}
-        />
+        {!hideSearch ? (
+          <input
+            className="input"
+            placeholder="Search UGC creators"
+            value={filters.search}
+            onChange={updateFilter('search')}
+          />
+        ) : null}
         <select className="input" value={filters.gender} onChange={updateFilter('gender')}>
           <option value="">All Genders</option>
           {GENDER_OPTIONS.map((option) => (
@@ -52,30 +54,20 @@ export default function CreatorFilters({
             </option>
           ))}
         </select>
-        <select
-          className="input"
-          value={filters.experienceLevel}
-          onChange={updateFilter('experienceLevel')}
-        >
-          <option value="">Experience Level</option>
-          {UGC_EXPERIENCE_LEVELS.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
       </div>
     );
   }
 
   return (
     <div className="filters-bar filters-bar-wrap">
-      <input
-        className="input"
-        placeholder="Search influencers"
-        value={filters.search}
-        onChange={updateFilter('search')}
-      />
+      {!hideSearch ? (
+        <input
+          className="input"
+          placeholder="Search influencers"
+          value={filters.search}
+          onChange={updateFilter('search')}
+        />
+      ) : null}
       <select
         className="input"
         value={filters.followerCount}

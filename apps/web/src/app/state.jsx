@@ -202,7 +202,7 @@ function appReducer(state, action) {
       return {
         ...state,
         campaigns: state.campaigns.map((campaign) =>
-          campaign.id === campaignId ? { ...campaign, status: 'In Review' } : campaign
+          campaign.id === campaignId ? { ...campaign, status: 'In Progress' } : campaign
         ),
         notifications: addNotification(state.notifications, {
           id: makeId('note'),
@@ -336,7 +336,7 @@ function appReducer(state, action) {
       return {
         ...state,
         campaigns: state.campaigns.map((campaign) =>
-          campaign.id === campaignId ? { ...campaign, status: 'Published Campaign' } : campaign
+          campaign.id === campaignId ? { ...campaign, status: 'Published' } : campaign
         ),
         notifications: addNotification(state.notifications, {
           id: makeId('note'),

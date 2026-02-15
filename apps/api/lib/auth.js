@@ -61,6 +61,7 @@ async function getSessionUser(pool, req) {
        u.id,
        u.email,
        u.name,
+       u.logo_url,
        u.role,
        u.status,
        u.created_at,

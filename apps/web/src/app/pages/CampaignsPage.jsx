@@ -11,7 +11,7 @@ const API_BASE = '/api';
 const defaultForm = {
   name: '',
   brand: '',
-  status: 'Draft',
+  status: 'Planning',
   platforms: [],
   startDate: '',
   endDate: '',
@@ -192,7 +192,7 @@ export default function CampaignsPage() {
         body: JSON.stringify({
           name: wizardData.name,
           brand: wizardData.brand,
-          status: 'Draft',
+          status: 'Planning',
           platforms: wizardData.influencer?.platforms || ['Instagram'],
           objectives: wizardData.objectives,
           campaignType: wizardData.campaignType,
@@ -228,7 +228,7 @@ export default function CampaignsPage() {
       body: JSON.stringify({
         name: form.name,
         brand: form.brand,
-        status: role === 'admin' ? form.status || 'Draft' : 'Draft',
+        status: role === 'admin' ? form.status || 'Planning' : 'Planning',
         platforms: form.platforms,
         objectives: form.objectives,
         contentFormat: form.contentFormat,
@@ -285,9 +285,9 @@ export default function CampaignsPage() {
           onChange={(event) => setStatusFilter(event.target.value)}
         >
           <option value="">Status</option>
-          <option value="Draft">Draft</option>
-          <option value="In Review">In Review</option>
-          <option value="Published Campaign">Published Campaign</option>
+          <option value="Planning">Planning</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Published">Published</option>
         </select>
         {(role === 'admin' || role === 'employee') && (
           <select

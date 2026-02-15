@@ -102,7 +102,7 @@ function ShellInner() {
   const adminWorkspaceName = (user?.name && user.name.trim()) || 'admin';
   const brandWorkspaceName = (brandProfile?.name && brandProfile.name.trim()) || 'Brand';
   const topbarLogoSrc = isAdminRole
-    ? '/assets/brand/logos/artboard-1-3-cropped.png'
+    ? user?.logo_url || '/assets/brand/logos/artboard-1-3-cropped.png'
     : isBrandRole
       ? brandProfile?.logo_url || '/assets/brand/logos/kreateco-wordmark.png'
       : null;

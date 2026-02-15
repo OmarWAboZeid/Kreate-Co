@@ -39,14 +39,6 @@ const matchesAgeRange = (ageValue, selectedRange) => {
   return age >= min && age <= max;
 };
 
-const resolveExperienceLevel = (skillsRating) => {
-  const rating = Number(skillsRating);
-  if (!Number.isFinite(rating)) return '';
-  if (rating <= 2) return 'Beginner';
-  if (rating < 4) return 'Intermediate';
-  return 'Expert';
-};
-
 const matchesFollowerRange = (followerCount, selectedRange) => {
   if (!selectedRange) return true;
   const followers = Number(followerCount);
@@ -80,6 +72,17 @@ const matchesEngagementRate = (engagementValue, selectedRange) => {
   return true;
 };
 
+const normalizeVideoUrls = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || '').trim()).filter(Boolean);
+  }
+  return String(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
 const normalizeCreatorForm = (creator) => ({
   id: creator?.id || '',
   display_name: creator?.display_name || creator?.name || '',
@@ -103,17 +106,13 @@ const normalizeCreatorForm = (creator) => ({
   accepts_gifted_collab: Boolean(creator?.accepts_gifted_collab),
   turnaround_time: creator?.turnaround_time || '',
   has_equipment: Boolean(creator?.has_equipment),
-  has_editing_skills: Boolean(creator?.has_editing_skills),
   can_voiceover: Boolean(creator?.can_voiceover),
-  skills_rating:
-    creator?.skills_rating === null || creator?.skills_rating === undefined
-      ? ''
-      : String(creator.skills_rating),
   base_rate:
     creator?.base_rate === null || creator?.base_rate === undefined ? '' : String(creator.base_rate),
   profile_image: creator?.profile_image || '',
   has_mock_video: Boolean(creator?.has_mock_video),
   notes: creator?.notes || '',
+  ugc_video_urls: normalizeVideoUrls(creator?.ugc_video_urls),
   engagement_rate:
     creator?.engagement_rate === null || creator?.engagement_rate === undefined
       ? ''
@@ -128,20 +127,18 @@ const defaultUgcCreatorForm = () => ({
   handle: '',
   niche: '',
   has_mock_video: false,
-  portfolio_url: '',
   age: '',
   gender: '',
   languages: '',
   accepts_gifted_collab: false,
   turnaround_time: '',
   has_equipment: false,
-  has_editing_skills: false,
   can_voiceover: false,
-  skills_rating: '',
   base_rate: '',
   region: '',
   notes: '',
   profile_image: '',
+  ugc_video_urls: [],
 });
 
 export default function CreatorsPage() {
@@ -162,7 +159,6 @@ export default function CreatorsPage() {
     gender: '',
     age: '',
     niche: '',
-    experienceLevel: '',
   });
 
   const [influencerFilters, setInfluencerFilters] = useState({
@@ -193,6 +189,7 @@ export default function CreatorsPage() {
     loading: false,
     saving: false,
     imageUploading: false,
+    videoUploading: false,
     error: '',
     form: null,
   });
@@ -245,12 +242,6 @@ export default function CreatorsPage() {
         return false;
       }
       if (!matchesAgeRange(creator.age, ugcFilters.age)) return false;
-      if (
-        ugcFilters.experienceLevel &&
-        resolveExperienceLevel(creator.skills_rating) !== ugcFilters.experienceLevel
-      ) {
-        return false;
-      }
       return true;
     });
   }, [ugcCreators, ugcFilters]);
@@ -452,6 +443,7 @@ export default function CreatorsPage() {
       loading: true,
       saving: false,
       imageUploading: false,
+      videoUploading: false,
       error: '',
       form: null,
     });
@@ -465,6 +457,7 @@ export default function CreatorsPage() {
         loading: false,
         saving: false,
         imageUploading: false,
+        videoUploading: false,
         error: '',
         form: normalizeCreatorForm(data.data),
       });
@@ -474,6 +467,7 @@ export default function CreatorsPage() {
         loading: false,
         saving: false,
         imageUploading: false,
+        videoUploading: false,
         error: err?.message || 'Failed to load creator details.',
         form: null,
       });
@@ -486,6 +480,7 @@ export default function CreatorsPage() {
       loading: false,
       saving: false,
       imageUploading: false,
+      videoUploading: false,
       error: '',
       form: null,
     });
@@ -526,6 +521,109 @@ export default function CreatorsPage() {
         ...prev,
         imageUploading: false,
         error: err?.message || 'Failed to upload creator image.',
+      }));
+    }
+  };
+
+  const uploadCreatorVideo = async (file) => {
+    const urlRes = await fetch(`${API_BASE}/uploads/request-url`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: file.name,
+        size: file.size,
+        contentType: file.type,
+      }),
+    });
+    const urlData = await urlRes.json();
+    if (!urlRes.ok || !urlData.ok || !urlData.uploadURL || !urlData.objectPath) {
+      throw new Error(urlData?.error || 'Failed to generate upload URL');
+    }
+    const uploadRes = await fetch(urlData.uploadURL, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type || 'video/mp4' },
+      body: file,
+    });
+    if (!uploadRes.ok) {
+      throw new Error('Failed to upload video file');
+    }
+    return urlData.objectPath;
+  };
+
+  const addEditVideoUrl = () => {
+    setEditModal((prev) => {
+      if (!prev.form) return prev;
+      const current = Array.isArray(prev.form.ugc_video_urls) ? prev.form.ugc_video_urls : [];
+      return {
+        ...prev,
+        form: { ...prev.form, ugc_video_urls: [...current, ''] },
+      };
+    });
+  };
+
+  const updateEditVideoUrlAt = (index, value) => {
+    setEditModal((prev) => {
+      if (!prev.form) return prev;
+      const current = Array.isArray(prev.form.ugc_video_urls) ? [...prev.form.ugc_video_urls] : [];
+      if (index < 0 || index >= current.length) return prev;
+      current[index] = value;
+      return {
+        ...prev,
+        error: '',
+        form: { ...prev.form, ugc_video_urls: current },
+      };
+    });
+  };
+
+  const removeEditVideoUrlAt = (index) => {
+    setEditModal((prev) => {
+      if (!prev.form) return prev;
+      const current = Array.isArray(prev.form.ugc_video_urls) ? [...prev.form.ugc_video_urls] : [];
+      if (index < 0 || index >= current.length) return prev;
+      current.splice(index, 1);
+      return {
+        ...prev,
+        form: { ...prev.form, ugc_video_urls: current },
+      };
+    });
+  };
+
+  const handleUploadCreatorVideo = async (file) => {
+    if (!file) return;
+    if (!String(file.type || '').startsWith('video/')) {
+      setEditModal((prev) => ({
+        ...prev,
+        error: 'Please select a video file.',
+      }));
+      return;
+    }
+    setEditModal((prev) => ({
+      ...prev,
+      videoUploading: true,
+      error: '',
+    }));
+    try {
+      const videoPath = await uploadCreatorVideo(file);
+      setEditModal((prev) => {
+        const current = Array.isArray(prev.form?.ugc_video_urls) ? prev.form.ugc_video_urls : [];
+        return {
+          ...prev,
+          videoUploading: false,
+          error: '',
+          form: prev.form
+            ? {
+                ...prev.form,
+                ugc_video_urls: [...current, videoPath],
+              }
+            : prev.form,
+        };
+      });
+    } catch (err) {
+      setEditModal((prev) => ({
+        ...prev,
+        videoUploading: false,
+        error: err?.message || 'Failed to upload video.',
       }));
     }
   };
@@ -609,7 +707,6 @@ export default function CreatorsPage() {
       ['gender', 'Gender is required.'],
       ['languages', 'Languages are required.'],
       ['turnaround_time', 'Turnaround time is required.'],
-      ['skills_rating', 'Skills rating is required.'],
       ['base_rate', 'Base rate is required.'],
     ];
 
@@ -625,9 +722,9 @@ export default function CreatorsPage() {
       const payload = {
         ...form,
         age: Number(form.age),
-        skills_rating: Number(form.skills_rating),
         base_rate: Number(form.base_rate),
       };
+      delete payload.portfolio_url;
       const res = await fetch(`${API_BASE}/ugc-creators`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -652,10 +749,10 @@ export default function CreatorsPage() {
 
   const saveEditedCreator = async () => {
     if (!editModal.form?.id) return;
-    if (editModal.imageUploading) {
+    if (editModal.imageUploading || editModal.videoUploading) {
       setEditModal((prev) => ({
         ...prev,
-        error: 'Image upload is in progress. Please wait.',
+        error: 'A file upload is in progress. Please wait.',
       }));
       return;
     }
@@ -663,6 +760,10 @@ export default function CreatorsPage() {
     try {
       const payload = { ...editModal.form };
       delete payload.id;
+      payload.ugc_video_urls = normalizeVideoUrls(payload.ugc_video_urls);
+      if (payload.creator_type !== 'UGC') {
+        payload.ugc_video_urls = [];
+      }
       const res = await fetch(`/api/creators/${editModal.form.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -964,17 +1065,27 @@ export default function CreatorsPage() {
         </>
       )}
 
-      <CreatorProfileModal creator={selectedCreator} type={creatorType} onClose={closeProfile} />
+      <CreatorProfileModal
+        creator={selectedCreator}
+        type={creatorType}
+        viewerRole={role}
+        onClose={closeProfile}
+      />
       <CreatorEditModal
         open={editModal.open}
         loading={editModal.loading}
         saving={editModal.saving}
         uploadingImage={editModal.imageUploading}
+        uploadingVideo={editModal.videoUploading}
         error={editModal.error}
         form={editModal.form}
         onClose={closeEditModal}
         onChange={updateEditField}
         onUploadImage={handleUploadCreatorImage}
+        onUploadVideo={handleUploadCreatorVideo}
+        onAddVideoUrl={addEditVideoUrl}
+        onUpdateVideoUrlAt={updateEditVideoUrlAt}
+        onRemoveVideoUrlAt={removeEditVideoUrlAt}
         onSubmit={saveEditedCreator}
       />
       <UgcCreatorCreateModal

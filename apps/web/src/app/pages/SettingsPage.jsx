@@ -3,13 +3,18 @@ import { useParams } from 'react-router-dom';
 import Modal from '../components/Modal.jsx';
 import BrandsPage from './BrandsPage.jsx';
 import UsersPage from './UsersPage.jsx';
+import { useAuth } from '../../hooks/useAuth.jsx';
+
+const API_BASE = '/api';
 
 export default function SettingsPage() {
   const { role } = useParams();
+  const { user, refetch: refetchAuthUser } = useAuth();
   const settingsTabs =
     role === 'admin'
       ? [
           { id: 'packages', label: 'Packages' },
+          { id: 'creatorStages', label: 'Creator Stages' },
           { id: 'preferences', label: 'Preferences' },
           { id: 'brands', label: 'Brands' },
           { id: 'users', label: 'Users' },
@@ -34,6 +39,25 @@ export default function SettingsPage() {
     active: true,
   });
   const [packageError, setPackageError] = useState('');
+  const [preferencesForm, setPreferencesForm] = useState({
+    name: '',
+    email: '',
+    logo_url: '',
+  });
+  const [preferencesLogoFile, setPreferencesLogoFile] = useState(null);
+  const [preferencesLogoPreview, setPreferencesLogoPreview] = useState(null);
+  const [preferencesLoading, setPreferencesLoading] = useState(false);
+  const [preferencesSaving, setPreferencesSaving] = useState(false);
+  const [preferencesError, setPreferencesError] = useState('');
+  const [preferencesSuccess, setPreferencesSuccess] = useState('');
+  const [creatorStages, setCreatorStages] = useState([]);
+  const [creatorStagesLoading, setCreatorStagesLoading] = useState(false);
+  const [creatorStagesSaving, setCreatorStagesSaving] = useState(false);
+  const [creatorStagesError, setCreatorStagesError] = useState('');
+  const [creatorStageForm, setCreatorStageForm] = useState({
+    campaignType: 'UGC',
+    label: '',
+  });
 
   useEffect(() => {
     if (!settingsTabs.some((tab) => tab.id === activeTab)) {
@@ -69,6 +93,191 @@ export default function SettingsPage() {
     };
     fetchPackages();
   }, [role]);
+
+  const fetchCreatorStages = async () => {
+    if (role !== 'admin') return;
+    setCreatorStagesLoading(true);
+    setCreatorStagesError('');
+    try {
+      const res = await fetch('/api/creator-stages?includeInactive=true', {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || 'Failed to load creator stages.');
+      }
+      setCreatorStages(data.data || []);
+    } catch (error) {
+      setCreatorStagesError(error?.message || 'Failed to load creator stages.');
+    } finally {
+      setCreatorStagesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (role !== 'admin' || activeTab !== 'creatorStages') return;
+    fetchCreatorStages();
+  }, [role, activeTab]);
+
+  const fileToDataUrl = (file) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+          return;
+        }
+        reject(new Error('Failed to encode image'));
+      };
+      reader.onerror = () => reject(new Error('Failed to encode image'));
+      reader.readAsDataURL(file);
+    });
+
+  const uploadPreferencesLogo = async (file) => {
+    try {
+      const urlRes = await fetch(`${API_BASE}/uploads/request-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: file.name,
+          size: file.size,
+          contentType: file.type,
+        }),
+      });
+      const urlData = await urlRes.json();
+      if (!urlData.ok || !urlData.uploadURL || !urlData.objectPath) {
+        throw new Error(urlData.error || 'Failed to get upload URL');
+      }
+      const uploadRes = await fetch(urlData.uploadURL, {
+        method: 'PUT',
+        headers: { 'Content-Type': file.type },
+        body: file,
+      });
+      if (!uploadRes.ok) {
+        throw new Error('Failed to upload logo file');
+      }
+      return urlData.objectPath;
+    } catch (error) {
+      console.warn('Signed logo upload failed, using inline fallback.', error);
+      return fileToDataUrl(file);
+    }
+  };
+
+  const fetchPreferencesProfile = async () => {
+    setPreferencesLoading(true);
+    setPreferencesError('');
+    setPreferencesSuccess('');
+    try {
+      const res = await fetch(`${API_BASE}/me`, { credentials: 'include' });
+      const data = await res.json();
+      if (!res.ok || !data.ok || !data.data) {
+        throw new Error(data?.error || 'Failed to load profile.');
+      }
+      setPreferencesForm({
+        name: data.data.name || '',
+        email: data.data.email || '',
+        logo_url: data.data.logo_url || '',
+      });
+      setPreferencesLogoFile(null);
+      setPreferencesLogoPreview(data.data.logo_url || null);
+    } catch (error) {
+      setPreferencesError(error?.message || 'Failed to load profile.');
+    } finally {
+      setPreferencesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'preferences' || !user) return;
+    fetchPreferencesProfile();
+  }, [activeTab, user?.id]);
+
+  const updatePreferencesForm = (field, value) => {
+    setPreferencesError('');
+    setPreferencesSuccess('');
+    setPreferencesForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handlePreferencesLogoSelect = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setPreferencesError('');
+    setPreferencesSuccess('');
+    setPreferencesLogoFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreferencesLogoPreview(typeof reader.result === 'string' ? reader.result : null);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemovePreferencesLogo = () => {
+    setPreferencesLogoFile(null);
+    setPreferencesLogoPreview(null);
+    setPreferencesError('');
+    setPreferencesSuccess('');
+    setPreferencesForm((prev) => ({ ...prev, logo_url: '' }));
+  };
+
+  const handlePreferencesSubmit = async (event) => {
+    event.preventDefault();
+    const name = String(preferencesForm.name || '').trim();
+    const email = String(preferencesForm.email || '')
+      .trim()
+      .toLowerCase();
+    if (!name) {
+      setPreferencesError('Name is required.');
+      return;
+    }
+    if (!email) {
+      setPreferencesError('Email is required.');
+      return;
+    }
+
+    setPreferencesSaving(true);
+    setPreferencesError('');
+    setPreferencesSuccess('');
+    try {
+      let logoUrl = preferencesForm.logo_url || null;
+      if (preferencesLogoFile) {
+        logoUrl = await uploadPreferencesLogo(preferencesLogoFile);
+      } else if (!preferencesLogoPreview) {
+        logoUrl = null;
+      }
+
+      const res = await fetch(`${API_BASE}/me`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          name,
+          email,
+          logo_url: logoUrl,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok || !data.data) {
+        throw new Error(data?.error || 'Failed to update profile.');
+      }
+
+      setPreferencesForm({
+        name: data.data.name || '',
+        email: data.data.email || '',
+        logo_url: data.data.logo_url || '',
+      });
+      setPreferencesLogoPreview(data.data.logo_url || null);
+      setPreferencesLogoFile(null);
+      setPreferencesSuccess('Profile updated successfully.');
+      if (typeof refetchAuthUser === 'function') {
+        await refetchAuthUser();
+      }
+    } catch (error) {
+      setPreferencesError(error?.message || 'Failed to update profile.');
+    } finally {
+      setPreferencesSaving(false);
+    }
+  };
 
   const updatePackageForm = (field, value) => {
     setPackageForm((prev) => ({ ...prev, [field]: value }));
@@ -170,12 +379,83 @@ export default function SettingsPage() {
     }
   };
 
+  const sortedCreatorStages = [...creatorStages].sort((left, right) => {
+    if (left.campaign_type !== right.campaign_type) {
+      return String(left.campaign_type || '').localeCompare(String(right.campaign_type || ''));
+    }
+    if ((left.sort_order ?? 0) !== (right.sort_order ?? 0)) {
+      return (left.sort_order ?? 0) - (right.sort_order ?? 0);
+    }
+    return String(left.label || '').localeCompare(String(right.label || ''));
+  });
+
+  const updateCreatorStageForm = (field, value) => {
+    setCreatorStagesError('');
+    setCreatorStageForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleCreatorStageSubmit = async (event) => {
+    event.preventDefault();
+    const label = String(creatorStageForm.label || '').trim();
+    const campaignType = String(creatorStageForm.campaignType || '').trim();
+    if (!label) {
+      setCreatorStagesError('Status label is required.');
+      return;
+    }
+    if (!campaignType) {
+      setCreatorStagesError('Campaign type is required.');
+      return;
+    }
+
+    setCreatorStagesSaving(true);
+    setCreatorStagesError('');
+    try {
+      const res = await fetch('/api/creator-stages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          campaignType,
+          label,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok || !data.data) {
+        throw new Error(data?.error || 'Failed to add creator status.');
+      }
+      setCreatorStages((prev) => [...prev, data.data]);
+      setCreatorStageForm((prev) => ({ ...prev, label: '' }));
+    } catch (error) {
+      setCreatorStagesError(error?.message || 'Failed to add creator status.');
+    } finally {
+      setCreatorStagesSaving(false);
+    }
+  };
+
+  const handleDeleteCreatorStage = async (stage) => {
+    if (!stage?.id) return;
+    setCreatorStagesError('');
+    try {
+      const res = await fetch(`/api/creator-stages/${stage.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || 'Failed to delete status.');
+      }
+      setCreatorStages((prev) => prev.filter((item) => item.id !== stage.id));
+    } catch (error) {
+      setCreatorStagesError(error?.message || 'Failed to delete status.');
+    }
+  };
+
   return (
     <div className="page-stack">
       <div className="page-header">
         <div>
           <h2>Settings</h2>
-          <p>Configure packages, preferences, brands, and users.</p>
+          <p>Configure creator stages, packages, preferences, brands, and users.</p>
         </div>
       </div>
 
@@ -269,8 +549,180 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {activeTab === 'preferences' && (
+      {role === 'admin' && activeTab === 'creatorStages' && (
         <div className="card">
+          <div className="page-header" style={{ marginBottom: 16 }}>
+            <div>
+              <h3>Creator Stages</h3>
+              <p>Define status stages by campaign type for campaign creator workflows.</p>
+            </div>
+          </div>
+
+          <form className="creator-stage-form" onSubmit={handleCreatorStageSubmit}>
+            <label>
+              <span>Campaign Type</span>
+              <select
+                className="input"
+                value={creatorStageForm.campaignType}
+                onChange={(event) => updateCreatorStageForm('campaignType', event.target.value)}
+              >
+                <option value="UGC">UGC</option>
+                <option value="Influencer">Influencer</option>
+                <option value="Hybrid">Hybrid</option>
+              </select>
+            </label>
+            <label>
+              <span>Status Label</span>
+              <input
+                className="input"
+                value={creatorStageForm.label}
+                onChange={(event) => updateCreatorStageForm('label', event.target.value)}
+                placeholder="e.g. Contracted"
+              />
+            </label>
+            <button type="submit" className="btn btn-primary" disabled={creatorStagesSaving}>
+              {creatorStagesSaving ? 'Adding...' : 'Add Status'}
+            </button>
+          </form>
+
+          {creatorStagesError ? <p className="error-text">{creatorStagesError}</p> : null}
+
+          <div className="creator-stage-table-wrap">
+            <div className="creator-stage-table">
+              <div className="creator-stage-row creator-stage-row-head">
+                <span>Campaign Type</span>
+                <span>Status</span>
+                <span>Actions</span>
+              </div>
+              {creatorStagesLoading ? (
+                <div className="creator-stage-row">
+                  <span>Loading statuses...</span>
+                  <span>—</span>
+                  <span>—</span>
+                </div>
+              ) : sortedCreatorStages.length === 0 ? (
+                <div className="creator-stage-row">
+                  <span>No statuses yet.</span>
+                  <span>—</span>
+                  <span>—</span>
+                </div>
+              ) : (
+                sortedCreatorStages.map((stage) => (
+                  <div key={stage.id} className="creator-stage-row">
+                    <span>{stage.campaign_type}</span>
+                    <span>{stage.label}</span>
+                    <span>
+                      <button
+                        type="button"
+                        className="btn btn-danger btn-small"
+                        onClick={() => handleDeleteCreatorStage(stage)}
+                      >
+                        Delete
+                      </button>
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'preferences' && (
+        <div className="card settings-preferences-card">
+          <h3>Profile Preferences</h3>
+          <p className="text-muted">
+            {role === 'admin'
+              ? 'Update your current account profile and workspace logo.'
+              : 'Update your current account profile.'}
+          </p>
+
+          {preferencesLoading ? (
+            <p className="text-muted">Loading profile...</p>
+          ) : (
+            <form className="package-form-grid" onSubmit={handlePreferencesSubmit}>
+              <label>
+                <span>Full Name *</span>
+                <input
+                  className="input"
+                  value={preferencesForm.name}
+                  onChange={(event) => updatePreferencesForm('name', event.target.value)}
+                  placeholder="Your full name"
+                  required
+                />
+              </label>
+              <label>
+                <span>Email *</span>
+                <input
+                  className="input"
+                  type="email"
+                  value={preferencesForm.email}
+                  onChange={(event) => updatePreferencesForm('email', event.target.value)}
+                  placeholder="you@kreate.co"
+                  required
+                />
+              </label>
+
+              {role === 'admin' && (
+                <div className="full-width settings-preferences-logo-field">
+                  <span>Workspace Logo</span>
+                  <div className="logo-upload-container">
+                    {preferencesLogoPreview ? (
+                      <div className="logo-preview">
+                        <img src={preferencesLogoPreview} alt="Logo preview" />
+                        <button
+                          type="button"
+                          className="logo-remove"
+                          onClick={handleRemovePreferencesLogo}
+                          aria-label="Remove logo"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : null}
+                    {!preferencesLogoPreview && (
+                      <label className="logo-upload-btn">
+                        Upload Logo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePreferencesLogoSelect}
+                          style={{ display: 'none' }}
+                        />
+                      </label>
+                    )}
+                    {preferencesLogoPreview && (
+                      <label className="logo-upload-btn">
+                        Change Logo
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePreferencesLogoSelect}
+                          style={{ display: 'none' }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                  <p className="text-muted">Used in the admin workspace header.</p>
+                </div>
+              )}
+
+              {(preferencesError || preferencesSuccess) && (
+                <p className={`full-width ${preferencesError ? 'error-text' : 'text-muted'}`}>
+                  {preferencesError || preferencesSuccess}
+                </p>
+              )}
+
+              <div className="modal-actions full-width settings-preferences-actions">
+                <button type="submit" className="btn btn-primary" disabled={preferencesSaving}>
+                  {preferencesSaving ? 'Saving...' : 'Save Profile'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          <div className="settings-preferences-divider" />
+
           <h3>Notification Channels</h3>
           <div className="toggle-row">
             <span>Email summaries</span>

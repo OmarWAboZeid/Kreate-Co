@@ -12,13 +12,22 @@ export default function CreatorEditModal({
   loading,
   saving,
   uploadingImage,
+  uploadingVideo,
   form,
   error,
   onClose,
   onChange,
   onUploadImage,
+  onUploadVideo,
+  onAddVideoUrl,
+  onUpdateVideoUrlAt,
+  onRemoveVideoUrlAt,
   onSubmit,
 }) {
+  const creatorType = String(form?.creator_type || '').toLowerCase();
+  const showPortfolioField = creatorType === 'influencer';
+  const showUgcVideos = creatorType === 'ugc';
+  const videoUrls = Array.isArray(form?.ugc_video_urls) ? form.ugc_video_urls : [];
   return (
     <Modal
       open={open}
@@ -197,7 +206,7 @@ export default function CreatorEditModal({
             </label>
 
             <label>
-              <span>Base Rate</span>
+              <span>Rate</span>
               <input
                 className="input"
                 type="number"
@@ -205,19 +214,6 @@ export default function CreatorEditModal({
                 step="0.01"
                 value={textValue(form.base_rate)}
                 onChange={(event) => onChange('base_rate', event.target.value)}
-              />
-            </label>
-
-            <label>
-              <span>Skills Rating</span>
-              <input
-                className="input"
-                type="number"
-                min="0"
-                max="5"
-                step="0.1"
-                value={textValue(form.skills_rating)}
-                onChange={(event) => onChange('skills_rating', event.target.value)}
               />
             </label>
 
@@ -266,14 +262,73 @@ export default function CreatorEditModal({
               />
             </label>
 
-            <label>
-              <span>Portfolio URL</span>
-              <input
-                className="input"
-                value={textValue(form.portfolio_url)}
-                onChange={(event) => onChange('portfolio_url', event.target.value)}
-              />
-            </label>
+            {showPortfolioField ? (
+              <label>
+                <span>Portfolio URL</span>
+                <input
+                  className="input"
+                  value={textValue(form.portfolio_url)}
+                  onChange={(event) => onChange('portfolio_url', event.target.value)}
+                />
+              </label>
+            ) : null}
+
+            {showUgcVideos ? (
+              <div className="creator-video-upload full-width">
+                <span>UGC Videos</span>
+                <div className="creator-video-url-list">
+                  {videoUrls.length > 0 ? (
+                    videoUrls.map((url, index) => (
+                      <div key={`ugc-video-${index}`} className="creator-video-url-row">
+                        <input
+                          className="input"
+                          placeholder="/objects/... or https://..."
+                          value={textValue(url)}
+                          onChange={(event) =>
+                            onUpdateVideoUrlAt && onUpdateVideoUrlAt(index, event.target.value)
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-small"
+                          onClick={() => onRemoveVideoUrlAt && onRemoveVideoUrlAt(index)}
+                          disabled={saving || uploadingImage || uploadingVideo}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="creator-video-upload-empty">No videos added yet.</p>
+                  )}
+                </div>
+                <div className="creator-video-upload-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={() => onAddVideoUrl && onAddVideoUrl()}
+                    disabled={saving || uploadingImage || uploadingVideo}
+                  >
+                    Add Video URL
+                  </button>
+                  <label className="btn btn-secondary btn-small creator-image-upload-btn">
+                    {uploadingVideo ? 'Uploading...' : 'Upload Video'}
+                    <input
+                      type="file"
+                      accept="video/*"
+                      disabled={saving || uploadingImage || uploadingVideo}
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file && onUploadVideo) {
+                          onUploadVideo(file);
+                        }
+                        event.target.value = '';
+                      }}
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : null}
 
             <div className="creator-image-upload full-width">
               <span>Profile Image</span>
@@ -354,14 +409,6 @@ export default function CreatorEditModal({
             <label>
               <input
                 type="checkbox"
-                checked={Boolean(form.has_editing_skills)}
-                onChange={(event) => onChange('has_editing_skills', event.target.checked)}
-              />
-              <span>Has Editing Skills</span>
-            </label>
-            <label>
-              <input
-                type="checkbox"
                 checked={Boolean(form.can_voiceover)}
                 onChange={(event) => onChange('can_voiceover', event.target.checked)}
               />
@@ -376,12 +423,22 @@ export default function CreatorEditModal({
               type="button"
               className="btn btn-secondary"
               onClick={onClose}
-              disabled={saving || uploadingImage}
+              disabled={saving || uploadingImage || uploadingVideo}
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={saving || uploadingImage}>
-              {saving ? 'Saving...' : uploadingImage ? 'Uploading image...' : 'Save Changes'}
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={saving || uploadingImage || uploadingVideo}
+            >
+              {saving
+                ? 'Saving...'
+                : uploadingImage
+                  ? 'Uploading image...'
+                  : uploadingVideo
+                    ? 'Uploading video...'
+                    : 'Save Changes'}
             </button>
           </div>
         </form>

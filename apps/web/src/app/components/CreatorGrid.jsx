@@ -49,83 +49,32 @@ const formatPlatforms = (creator) => {
   return platforms.join(', ') || '—';
 };
 
-const createColumn = (key, label, render, hasData) => ({ key, label, render, hasData });
+const createColumn = (key, label, render) => ({ key, label, render });
 
-const getColumns = (type, creators) => {
+const getColumns = (type) => {
   const definitions =
     type === 'ugc'
       ? [
-          createColumn('age', 'Age', (creator) => (hasValue(creator.age) ? `${creator.age}` : '—'), (creator) =>
-            hasValue(creator.age)
-          ),
-          createColumn(
-            'gender',
-            'Gender',
-            (creator) => creator.gender || '—',
-            (creator) => hasValue(creator.gender)
-          ),
-          createColumn(
-            'skills',
-            'Skills',
-            (creator) => (hasValue(creator.skills_rating) ? `${creator.skills_rating}/5` : '—'),
-            (creator) => hasValue(creator.skills_rating)
-          ),
-          createColumn(
-            'base_rate',
-            'Base Rate',
-            (creator) => formatMoney(creator.base_rate),
-            (creator) => hasValue(creator.base_rate)
-          ),
-          createColumn(
-            'languages',
-            'Languages',
-            (creator) => creator.languages || '—',
-            (creator) => hasValue(creator.languages)
-          ),
+          createColumn('age', 'Age', (creator) => (hasValue(creator.age) ? `${creator.age}` : '—')),
+          createColumn('gender', 'Gender', (creator) => creator.gender || '—'),
+          createColumn('base_rate', 'Rate', (creator) => formatMoney(creator.base_rate)),
+          createColumn('languages', 'Languages', (creator) => creator.languages || '—'),
         ]
       : [
-          createColumn(
-            'followers',
-            'Followers',
-            (creator) => formatCompactNumber(creator.followers),
-            (creator) => hasValue(creator.followers)
-          ),
+          createColumn('followers', 'Followers', (creator) => formatCompactNumber(creator.followers)),
           createColumn(
             'engagement',
             'ER',
-            (creator) => (hasValue(creator.engagement_rate) ? `${creator.engagement_rate}%` : '—'),
-            (creator) => hasValue(creator.engagement_rate)
+            (creator) => (hasValue(creator.engagement_rate) ? `${creator.engagement_rate}%` : '—')
           ),
-          createColumn(
-            'avg_views',
-            'Avg Views',
-            (creator) => formatCompactNumber(creator.avg_views),
-            (creator) => hasValue(creator.avg_views)
-          ),
-          createColumn(
-            'platforms',
-            'Platforms',
-            (creator) => formatPlatforms(creator),
-            (creator) => hasValue(creator.tiktok_url || creator.tiktok_handle || creator.instagram_url || creator.instagram_handle)
-          ),
-          createColumn(
-            'niche',
-            'Niche',
-            (creator) => creator.niche || creator.category || '—',
-            (creator) => hasValue(creator.niche) || hasValue(creator.category)
-          ),
-          createColumn(
-            'gender',
-            'Gender',
-            (creator) => creator.gender || '—',
-            (creator) => hasValue(creator.gender)
-          ),
+          createColumn('avg_views', 'Avg Views', (creator) => formatCompactNumber(creator.avg_views)),
+          createColumn('platforms', 'Platforms', (creator) => formatPlatforms(creator)),
+          createColumn('niche', 'Niche', (creator) => creator.niche || creator.category || '—'),
+          createColumn('gender', 'Gender', (creator) => creator.gender || '—'),
         ];
 
   const maxColumns = type === 'ugc' ? 4 : 5;
-  const withData = definitions.filter((col) => creators.some((creator) => col.hasData(creator)));
-  const withoutData = definitions.filter((col) => !withData.some((item) => item.key === col.key));
-  return [...withData, ...withoutData].slice(0, maxColumns);
+  return definitions.slice(0, maxColumns);
 };
 
 export default function CreatorGrid({
@@ -145,7 +94,7 @@ export default function CreatorGrid({
     );
   }
 
-  const columns = getColumns(type, creators);
+  const columns = getColumns(type);
   const gridTemplateColumns = `minmax(var(--creator-col-main-min, 260px), 2fr) repeat(${columns.length}, minmax(var(--creator-col-metric-min, 100px), 0.8fr)) minmax(var(--creator-col-actions-min, 150px), 0.95fr)`;
   const gridStyle = { '--creator-grid-columns': gridTemplateColumns };
 

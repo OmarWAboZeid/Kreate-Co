@@ -7,7 +7,7 @@ const CONTENT_FORMAT_OPTIONS = [
   { value: 'Story', label: 'Story' },
 ];
 const DEAL_TYPES = ['Collab', 'Paid', 'Mix'];
-const CAMPAIGN_STATUSES = ['Draft', 'In Review', 'Published Campaign'];
+const CAMPAIGN_STATUSES = ['Planning', 'In Progress', 'Published'];
 const OBJECTIVES = ['Awareness', 'Sales', 'Launch', 'Content Bank'];
 const CREATOR_TIERS = [
   { value: 'nano', label: 'Nano Influencers' },
@@ -275,7 +275,7 @@ export default function CampaignFormModal({
                   <span>Campaign Status *</span>
                   <select
                     className={`input ${fieldError('status') ? 'input-error' : ''}`}
-                    value={form.status || 'Draft'}
+                    value={form.status || 'Planning'}
                     onChange={(event) => {
                       onChange('status', event.target.value);
                       markTouched('status');

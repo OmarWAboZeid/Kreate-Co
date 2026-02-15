@@ -114,21 +114,7 @@ export default function UgcCreatorCreateModal({
           </label>
 
           <label>
-            <span>Skills Rating (0-5) *</span>
-            <input
-              className="input"
-              type="number"
-              min="0"
-              max="5"
-              step="0.1"
-              value={textValue(form.skills_rating)}
-              onChange={(event) => onChange('skills_rating', event.target.value)}
-              required
-            />
-          </label>
-
-          <label>
-            <span>Base Rate *</span>
+            <span>Rate *</span>
             <input
               className="input"
               type="number"
@@ -146,15 +132,6 @@ export default function UgcCreatorCreateModal({
               className="input"
               value={textValue(form.phone)}
               onChange={(event) => onChange('phone', event.target.value)}
-            />
-          </label>
-
-          <label>
-            <span>Portfolio URL</span>
-            <input
-              className="input"
-              value={textValue(form.portfolio_url)}
-              onChange={(event) => onChange('portfolio_url', event.target.value)}
             />
           </label>
 
