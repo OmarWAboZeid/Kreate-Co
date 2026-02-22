@@ -226,6 +226,32 @@ const normalizeList = (value) => {
 };
 
 const normalizeTextArray = (value) => normalizeList(value);
+const MIN_PASSWORD_LENGTH = 8;
+const validatePasswordStrength = (password) => {
+  if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
+  }
+  return '';
+};
+const hasCampaignPackageDealTypeColumn = async () => {
+  if (!pool) return false;
+  try {
+    const result = await pool.query(
+      `
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'campaign_packages'
+          AND column_name = 'deal_type'
+      ) AS exists
+      `
+    );
+    return Boolean(result.rows[0]?.exists);
+  } catch (error) {
+    return true;
+  }
+};
 
 const CAMPAIGN_STATUS_MAP = Object.freeze({
   planning: 'Planning',
@@ -998,7 +1024,6 @@ const server = http.createServer(async (req, res) => {
         stderr: error?.stderr || '',
       });
     }
-    return;
   }
 
   if (url === '/api/creators/import-link' && method === 'POST') {
@@ -1378,16 +1403,11 @@ const server = http.createServer(async (req, res) => {
     if (!user) return;
     try {
       const urlObj = new URL(url, `http://localhost:${PORT}`);
-      const dealType = urlObj.searchParams.get('dealType');
       const packageType = urlObj.searchParams.get('packageType');
       const includeInactive = urlObj.searchParams.get('includeInactive') === 'true';
 
       const conditions = [];
       const values = [];
-      if (dealType) {
-        values.push(dealType);
-        conditions.push(`deal_type = $${values.length}`);
-      }
       if (packageType) {
         values.push(packageType);
         conditions.push(`package_type = $${values.length}`);
@@ -1399,10 +1419,49 @@ const server = http.createServer(async (req, res) => {
       const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
       const result = await pool.query(
         `
-        SELECT id, name, package_type, deal_type, influencer_video_count, ugc_video_count,
-               description, price_amount, currency, customizable, active, created_at
-        FROM campaign_packages
-        ${whereClause}
+        WITH ranked_packages AS (
+          SELECT
+            id,
+            name,
+            package_type,
+            influencer_video_count,
+            ugc_video_count,
+            description,
+            price_amount,
+            currency,
+            customizable,
+            active,
+            created_at,
+            ROW_NUMBER() OVER (
+              PARTITION BY
+                LOWER(COALESCE(name, '')),
+                package_type,
+                COALESCE(influencer_video_count, -1),
+                COALESCE(ugc_video_count, -1),
+                COALESCE(description, ''),
+                COALESCE(price_amount, 0),
+                COALESCE(currency, 'USD'),
+                COALESCE(customizable, false),
+                COALESCE(active, true)
+              ORDER BY updated_at DESC NULLS LAST, created_at DESC, id DESC
+            ) AS dedupe_rank
+          FROM campaign_packages
+          ${whereClause}
+        )
+        SELECT
+          id,
+          name,
+          package_type,
+          influencer_video_count,
+          ugc_video_count,
+          description,
+          price_amount,
+          currency,
+          customizable,
+          active,
+          created_at
+        FROM ranked_packages
+        WHERE dedupe_rank = 1
         ORDER BY package_type ASC, ugc_video_count ASC NULLS LAST, influencer_video_count ASC NULLS LAST, name ASC
         `,
         values
@@ -1430,7 +1489,6 @@ const server = http.createServer(async (req, res) => {
       const {
         name,
         package_type,
-        deal_type,
         influencer_video_count,
         ugc_video_count,
         description,
@@ -1440,34 +1498,89 @@ const server = http.createServer(async (req, res) => {
         active,
       } = body;
 
-      if (!name || !package_type || !deal_type || price_amount === undefined) {
+      if (!name || !package_type || price_amount === undefined) {
         return json(res, 400, { ok: false, error: 'Missing required package fields' });
       }
 
-      const result = await pool.query(
-        `
-        INSERT INTO campaign_packages
-          (name, package_type, deal_type, influencer_video_count, ugc_video_count, description,
-           price_amount, currency, customizable, active, created_by_user_id)
-        VALUES
-          ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        RETURNING id, name, package_type, deal_type, influencer_video_count, ugc_video_count,
-                  description, price_amount, currency, customizable, active, created_at
-        `,
-        [
-          name,
-          package_type,
-          deal_type,
-          influencer_video_count || null,
-          ugc_video_count || null,
-          description || null,
-          Number(price_amount),
-          currency || 'USD',
-          customizable === true,
-          active !== false,
-          user.id,
-        ]
-      );
+      const parsedInfluencerCount =
+        influencer_video_count === '' || influencer_video_count == null
+          ? null
+          : Number(influencer_video_count);
+      const parsedUgcCount =
+        ugc_video_count === '' || ugc_video_count == null ? null : Number(ugc_video_count);
+      const parsedPrice =
+        price_amount === '' || price_amount == null ? null : Number(price_amount);
+
+      if (parsedPrice == null || Number.isNaN(parsedPrice)) {
+        return json(res, 400, { ok: false, error: 'Invalid price value' });
+      }
+      if (parsedInfluencerCount != null && Number.isNaN(parsedInfluencerCount)) {
+        return json(res, 400, { ok: false, error: 'Invalid influencer video count' });
+      }
+      if (parsedUgcCount != null && Number.isNaN(parsedUgcCount)) {
+        return json(res, 400, { ok: false, error: 'Invalid UGC video count' });
+      }
+
+      const hasDealTypeColumn = await hasCampaignPackageDealTypeColumn();
+      const returningFields = `
+        id,
+        name,
+        package_type,
+        influencer_video_count,
+        ugc_video_count,
+        description,
+        price_amount,
+        currency,
+        customizable,
+        active,
+        created_at
+      `;
+
+      const result = hasDealTypeColumn
+        ? await pool.query(
+            `
+            INSERT INTO campaign_packages
+              (name, package_type, deal_type, influencer_video_count, ugc_video_count, description,
+               price_amount, currency, customizable, active, created_by_user_id)
+            VALUES
+              ($1, $2, 'paid', $3, $4, $5, $6, $7, $8, $9, $10)
+            RETURNING ${returningFields}
+            `,
+            [
+              name,
+              package_type,
+              parsedInfluencerCount,
+              parsedUgcCount,
+              description || null,
+              parsedPrice,
+              currency || 'USD',
+              customizable === true,
+              active !== false,
+              user.id,
+            ]
+          )
+        : await pool.query(
+            `
+            INSERT INTO campaign_packages
+              (name, package_type, influencer_video_count, ugc_video_count, description,
+               price_amount, currency, customizable, active, created_by_user_id)
+            VALUES
+              ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            RETURNING ${returningFields}
+            `,
+            [
+              name,
+              package_type,
+              parsedInfluencerCount,
+              parsedUgcCount,
+              description || null,
+              parsedPrice,
+              currency || 'USD',
+              customizable === true,
+              active !== false,
+              user.id,
+            ]
+          );
 
       const row = result.rows[0];
       return json(res, 201, {
@@ -1491,7 +1604,6 @@ const server = http.createServer(async (req, res) => {
       const {
         name,
         package_type,
-        deal_type,
         influencer_video_count,
         ugc_video_count,
         description,
@@ -1501,7 +1613,7 @@ const server = http.createServer(async (req, res) => {
         active,
       } = body;
 
-      if (!name || !package_type || !deal_type || price_amount === undefined) {
+      if (!name || !package_type || price_amount === undefined) {
         return json(res, 400, { ok: false, error: 'Missing required package fields' });
       }
 
@@ -1530,23 +1642,21 @@ const server = http.createServer(async (req, res) => {
         UPDATE campaign_packages
         SET name = $1,
             package_type = $2,
-            deal_type = $3,
-            influencer_video_count = $4,
-            ugc_video_count = $5,
-            description = $6,
-            price_amount = $7,
-            currency = $8,
-            customizable = $9,
-            active = $10,
+            influencer_video_count = $3,
+            ugc_video_count = $4,
+            description = $5,
+            price_amount = $6,
+            currency = $7,
+            customizable = $8,
+            active = $9,
             updated_at = NOW()
-        WHERE id = $11
-        RETURNING id, name, package_type, deal_type, influencer_video_count, ugc_video_count,
+        WHERE id = $10
+        RETURNING id, name, package_type, influencer_video_count, ugc_video_count,
                   description, price_amount, currency, customizable, active, created_at
         `,
         [
           name,
           package_type,
-          deal_type,
           parsedInfluencerCount,
           parsedUgcCount,
           description || null,
@@ -2329,7 +2439,10 @@ const server = http.createServer(async (req, res) => {
         SET brand_decision = $1,
             brand_decision_note = $2,
             brand_decided_at = CASE WHEN $1 = 'pending' THEN NULL ELSE NOW() END,
-            brand_decided_by_user_id = CASE WHEN $1 = 'pending' THEN NULL ELSE $3 END
+            brand_decided_by_user_id = CASE
+              WHEN $1 = 'pending' THEN NULL::uuid
+              ELSE $3::uuid
+            END
         WHERE campaign_id = $4 AND creator_id = $5
         RETURNING id
         `,
@@ -2824,15 +2937,39 @@ const server = http.createServer(async (req, res) => {
       const limit = parseInt(urlObj.searchParams.get('limit')) || 20;
       const offset = (page - 1) * limit;
 
-      const countResult = await pool.query('SELECT COUNT(*) FROM influencers');
+      const countResult = await pool.query(
+        `SELECT COUNT(*) FROM creators WHERE creator_type = 'Influencer'`
+      );
       const total = parseInt(countResult.rows[0].count);
 
       const result = await pool.query(
         `
-        SELECT id, name, tiktok_url, instagram_url, instagram_handle, tiktok_handle,
-               followers, niche, phone, region, notes, category, profile_image,
-               engagement_rate, avg_views, gender, created_at
-        FROM influencers 
+        SELECT
+          id,
+          display_name AS name,
+          handle,
+          tiktok_url,
+          instagram_url,
+          instagram_handle,
+          tiktok_handle,
+          followers,
+          primary_niche AS niche,
+          phone,
+          COALESCE(country, '') AS region,
+          notes,
+          category,
+          profile_image,
+          engagement_rate,
+          avg_views,
+          age,
+          gender,
+          base_rate,
+          portfolio_url,
+          creator_type,
+          status,
+          created_at
+        FROM creators
+        WHERE creator_type = 'Influencer'
         ORDER BY name ASC
         LIMIT $1 OFFSET $2
       `,
@@ -3502,6 +3639,67 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  if (method === 'POST' && url === '/api/me/password') {
+    const currentUser = await requireApprovedUser(req, res);
+    if (!currentUser) return;
+    try {
+      const body = await parseBody(req);
+      const currentPassword =
+        typeof body?.currentPassword === 'string' ? body.currentPassword : '';
+      const newPassword = typeof body?.newPassword === 'string' ? body.newPassword : '';
+
+      if (!currentPassword || !newPassword) {
+        return json(res, 400, {
+          ok: false,
+          error: 'Current password and new password are required',
+        });
+      }
+
+      const strengthError = validatePasswordStrength(newPassword);
+      if (strengthError) {
+        return json(res, 400, { ok: false, error: strengthError });
+      }
+      if (currentPassword === newPassword) {
+        return json(res, 400, {
+          ok: false,
+          error: 'New password must be different from current password',
+        });
+      }
+
+      const userResult = await pool.query(
+        'SELECT id, password_hash FROM users WHERE id = $1 LIMIT 1',
+        [currentUser.id]
+      );
+      if (userResult.rows.length === 0) {
+        return json(res, 404, { ok: false, error: 'User not found' });
+      }
+
+      const validCurrentPassword = await comparePasswords(
+        currentPassword,
+        userResult.rows[0].password_hash || ''
+      );
+      if (!validCurrentPassword) {
+        return json(res, 400, { ok: false, error: 'Current password is incorrect' });
+      }
+
+      const passwordHash = await hashPassword(newPassword);
+      await pool.query(
+        `
+        UPDATE users
+        SET password_hash = $2,
+            updated_at = NOW()
+        WHERE id = $1
+        `,
+        [currentUser.id, passwordHash]
+      );
+
+      return json(res, 200, { ok: true });
+    } catch (error) {
+      console.error('Update password error:', error);
+      return json(res, 500, { ok: false, error: 'Failed to update password' });
+    }
+  }
+
   if (method === 'POST' && url === '/api/auth/login') {
     if (!pool) {
       return json(res, 503, { ok: false, error: 'Database not configured' });
@@ -3533,7 +3731,15 @@ const server = http.createServer(async (req, res) => {
       const sessionId = await createSession(pool, user.id);
       setSessionCookie(res, sessionId);
       
-      const { password_hash, ...safeUser } = user;
+      const safeUser = {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        status: user.status,
+        logo_url: user.logo_url,
+        created_at: user.created_at,
+      };
       return json(res, 200, { ok: true, user: safeUser });
     } catch (error) {
       console.error('Login error:', error);
@@ -3568,6 +3774,55 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       console.error('Get user error:', error);
       return json(res, 500, { ok: false, error: 'Failed to get user' });
+    }
+  }
+
+  if (method === 'POST' && url === '/api/admin/users') {
+    const currentUser = await requireApprovedUser(req, res);
+    if (!currentUser) return;
+    if (currentUser.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const body = await parseBody(req);
+      const name = typeof body?.name === 'string' ? body.name.trim() : '';
+      const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+      const password = typeof body?.password === 'string' ? body.password : '';
+
+      if (!name) {
+        return json(res, 400, { ok: false, error: 'Name is required' });
+      }
+      if (!email) {
+        return json(res, 400, { ok: false, error: 'Email is required' });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return json(res, 400, { ok: false, error: 'Email format is invalid' });
+      }
+
+      const strengthError = validatePasswordStrength(password);
+      if (strengthError) {
+        return json(res, 400, { ok: false, error: strengthError });
+      }
+
+      const conflictCheck = await pool.query('SELECT id FROM users WHERE email = $1 LIMIT 1', [email]);
+      if (conflictCheck.rows.length > 0) {
+        return json(res, 409, { ok: false, error: 'Email already registered' });
+      }
+
+      const passwordHash = await hashPassword(password);
+      const result = await pool.query(
+        `
+        INSERT INTO users (email, password_hash, name, role, status)
+        VALUES ($1, $2, $3, 'admin', 'approved')
+        RETURNING id, email, name, role, status, logo_url, created_at
+        `,
+        [email, passwordHash, name]
+      );
+
+      return json(res, 201, { ok: true, user: result.rows[0] });
+    } catch (error) {
+      console.error('Create admin user error:', error);
+      return json(res, 500, { ok: false, error: 'Failed to create admin user' });
     }
   }
 
@@ -3733,6 +3988,45 @@ const server = http.createServer(async (req, res) => {
   }
 
   const userUpdateMatch = pathname.match(/^\/api\/admin\/users\/([^/]+)\/?$/);
+  const userPasswordResetMatch = pathname.match(/^\/api\/admin\/users\/([^/]+)\/password\/?$/);
+  if (method === 'POST' && userPasswordResetMatch) {
+    const currentUser = await requireApprovedUser(req, res);
+    if (!currentUser) return;
+    if (currentUser.role !== 'admin') {
+      return json(res, 403, { ok: false, error: 'Admin access required' });
+    }
+    try {
+      const userId = decodeURIComponent(userPasswordResetMatch[1]);
+      const body = await parseBody(req);
+      const password = typeof body?.password === 'string' ? body.password : '';
+
+      const strengthError = validatePasswordStrength(password);
+      if (strengthError) {
+        return json(res, 400, { ok: false, error: strengthError });
+      }
+
+      const passwordHash = await hashPassword(password);
+      const result = await pool.query(
+        `
+        UPDATE users
+        SET password_hash = $2,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, email, name
+        `,
+        [userId, passwordHash]
+      );
+      if (result.rows.length === 0) {
+        return json(res, 404, { ok: false, error: 'User not found' });
+      }
+
+      return json(res, 200, { ok: true, user: result.rows[0] });
+    } catch (error) {
+      console.error('Reset user password error:', error);
+      return json(res, 500, { ok: false, error: 'Failed to reset user password' });
+    }
+  }
+
   if (method === 'PUT' && userUpdateMatch) {
     const currentUser = await requireApprovedUser(req, res);
     if (!currentUser) return;
@@ -3747,6 +4041,8 @@ const server = http.createServer(async (req, res) => {
       const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
       const role = typeof body?.role === 'string' ? body.role.trim().toLowerCase() : '';
       const status = typeof body?.status === 'string' ? body.status.trim().toLowerCase() : '';
+      const hasPasswordField = Object.prototype.hasOwnProperty.call(body || {}, 'password');
+      const password = hasPasswordField && typeof body?.password === 'string' ? body.password : '';
       const hasOrganizationId = Object.prototype.hasOwnProperty.call(body || {}, 'organizationId');
       const organizationId =
         hasOrganizationId && body.organizationId != null
@@ -3771,6 +4067,18 @@ const server = http.createServer(async (req, res) => {
       const allowedStatuses = new Set(['pending', 'approved', 'rejected']);
       if (!allowedStatuses.has(status)) {
         return json(res, 400, { ok: false, error: 'Invalid status' });
+      }
+      if (hasPasswordField && typeof body?.password !== 'string') {
+        return json(res, 400, { ok: false, error: 'Password is invalid' });
+      }
+
+      let passwordHash = '';
+      if (hasPasswordField && password) {
+        const strengthError = validatePasswordStrength(password);
+        if (strengthError) {
+          return json(res, 400, { ok: false, error: strengthError });
+        }
+        passwordHash = await hashPassword(password);
       }
 
       const client = await pool.connect();
@@ -3870,18 +4178,34 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
-        await client.query(
-          `
-          UPDATE users
-          SET name = $2,
-              email = $3,
-              role = $4,
-              status = $5,
-              updated_at = NOW()
-          WHERE id = $1
-          `,
-          [userId, name, email, normalizedRole, normalizedStatus]
-        );
+        if (passwordHash) {
+          await client.query(
+            `
+            UPDATE users
+            SET name = $2,
+                email = $3,
+                role = $4,
+                status = $5,
+                password_hash = $6,
+                updated_at = NOW()
+            WHERE id = $1
+            `,
+            [userId, name, email, normalizedRole, normalizedStatus, passwordHash]
+          );
+        } else {
+          await client.query(
+            `
+            UPDATE users
+            SET name = $2,
+                email = $3,
+                role = $4,
+                status = $5,
+                updated_at = NOW()
+            WHERE id = $1
+            `,
+            [userId, name, email, normalizedRole, normalizedStatus]
+          );
+        }
 
         const result = await client.query(
           `

@@ -1,15 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import ActivityLog from '../components/ActivityLog.jsx';
 import ContentLogModal from '../components/ContentLogModal.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import StatusPill from '../components/StatusPill.jsx';
+import {
+  useBrandsQuery,
+  useCampaignsQuery,
+  useContentItemsQuery,
+  useInfluencersQuery,
+  useUgcCreatorsQuery,
+} from '../queries/index.js';
 import { storage, useAppDispatch, useAppState, utils } from '../state.jsx';
 
 export default function ContentPage() {
   const { role } = useParams();
   const { contentItems, creators, campaigns, activity, brands } = useAppState();
   const dispatch = useAppDispatch();
+  const creatorsQueryParams = useMemo(() => ({ page: 1, limit: 1000 }), []);
+  const brandsQuery = useBrandsQuery();
+  const campaignsQuery = useCampaignsQuery();
+  const contentItemsQuery = useContentItemsQuery({ limit: 1500 });
+  const ugcCreatorsQuery = useUgcCreatorsQuery(creatorsQueryParams);
+  const influencersQuery = useInfluencersQuery(creatorsQueryParams);
   const [showModal, setShowModal] = useState(false);
   const [selectedContentId, setSelectedContentId] = useState(null);
   const [feedbackForm, setFeedbackForm] = useState({ note: '', tags: [] });
@@ -21,6 +34,43 @@ export default function ContentPage() {
     caption: '',
     hashtags: '',
   });
+
+  useEffect(() => {
+    const payload = brandsQuery.data?.data;
+    if (!payload || brands.length > 0) return;
+    dispatch({ type: 'SET_BRANDS', payload });
+  }, [brands.length, brandsQuery.data, dispatch]);
+
+  useEffect(() => {
+    const payload = campaignsQuery.data?.data;
+    if (!payload || campaigns.length > 0) return;
+    dispatch({ type: 'SET_CAMPAIGNS', payload });
+  }, [campaigns.length, campaignsQuery.data, dispatch]);
+
+  useEffect(() => {
+    const payload = contentItemsQuery.data?.data;
+    if (!payload || contentItems.length > 0) return;
+    dispatch({ type: 'SET_CONTENT_ITEMS', payload });
+  }, [contentItems.length, contentItemsQuery.data, dispatch]);
+
+  useEffect(() => {
+    if (creators.length > 0) return;
+    const ugc = ugcCreatorsQuery.data?.data || [];
+    const influencers = influencersQuery.data?.data || [];
+    if (ugc.length === 0 && influencers.length === 0) return;
+    const mergedMap = new Map();
+    [...ugc, ...influencers].forEach((creator) => {
+      if (!creator?.id) return;
+      mergedMap.set(creator.id, creator);
+    });
+    dispatch({ type: 'SET_CREATORS', payload: Array.from(mergedMap.values()) });
+  }, [creators.length, ugcCreatorsQuery.data, influencersQuery.data, dispatch]);
+
+  const loading =
+    (brandsQuery.isLoading && brands.length === 0) ||
+    (campaignsQuery.isLoading && campaigns.length === 0) ||
+    (contentItemsQuery.isLoading && contentItems.length === 0) ||
+    ((ugcCreatorsQuery.isLoading || influencersQuery.isLoading) && creators.length === 0);
 
   const creatorMap = new Map(creators.map((creator) => [creator.id, creator]));
   const campaignMap = new Map(campaigns.map((campaign) => [campaign.id, campaign]));
@@ -111,6 +161,14 @@ export default function ContentPage() {
     setCreatorForm((prev) => ({ ...prev, link: '', caption: '', hashtags: '' }));
     setSelectedContentId(content.id);
   };
+
+  if (loading) {
+    return (
+      <div className="page-stack">
+        <p className="muted">Loading content...</p>
+      </div>
+    );
+  }
 
   if (visibleContentItems.length === 0 && role !== 'creator') {
     return (

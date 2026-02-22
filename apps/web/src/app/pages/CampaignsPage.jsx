@@ -4,9 +4,13 @@ import CampaignFormModal from '../components/CampaignFormModal.jsx';
 import CampaignGrid from '../components/CampaignGrid.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import CampaignWizard from '../components/CampaignWizard.jsx';
+import {
+  useBrandsQuery,
+  useCampaignsQuery,
+  useCreateCampaignMutation,
+  usePackagesQuery,
+} from '../queries/index.js';
 import { useAppDispatch, useAppState } from '../state.jsx';
-
-const API_BASE = '/api';
 
 const defaultForm = {
   name: '',
@@ -39,67 +43,32 @@ export default function CampaignsPage() {
   const [adminBrandFilter, setAdminBrandFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [packages, setPackages] = useState([]);
-  const [loadingCampaigns, setLoadingCampaigns] = useState(false);
-  const [loadingPackages, setLoadingPackages] = useState(false);
+  const brandsQuery = useBrandsQuery();
+  const campaignsQuery = useCampaignsQuery();
+  const packagesQuery = usePackagesQuery();
+  const createCampaignMutation = useCreateCampaignMutation();
+  const packages = useMemo(() => packagesQuery.data?.data || [], [packagesQuery.data]);
+  const loadingCampaigns = campaignsQuery.isLoading;
+  const loadingPackages = packagesQuery.isLoading;
+  const brandSource = brandsQuery.data?.data || brands;
+  const brandNames = brandSource.map((b) => (typeof b === 'string' ? b : b.name));
+  const campaignSource = campaignsQuery.data?.data || campaigns;
 
   useEffect(() => {
-    const fetchBrands = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/brands`);
-        const data = await res.json();
-        if (data.ok) {
-          dispatch({ type: 'SET_BRANDS', payload: data.data });
-        }
-      } catch (err) {
-        console.error('Error fetching brands:', err);
-      }
-    };
-    if (brands.length === 0) {
-      fetchBrands();
-    }
-  }, [dispatch, brands.length]);
+    const payload = brandsQuery.data?.data;
+    if (!payload) return;
+    dispatch({ type: 'SET_BRANDS', payload });
+  }, [brandsQuery.data, dispatch]);
 
   useEffect(() => {
-    const fetchCampaigns = async () => {
-      setLoadingCampaigns(true);
-      try {
-        const res = await fetch(`${API_BASE}/campaigns`);
-        const data = await res.json();
-        if (data.ok) {
-          dispatch({ type: 'SET_CAMPAIGNS', payload: data.data });
-        }
-      } catch (err) {
-        console.error('Error fetching campaigns:', err);
-      } finally {
-        setLoadingCampaigns(false);
-      }
-    };
-    fetchCampaigns();
-  }, [dispatch, role]);
+    const payload = campaignsQuery.data?.data;
+    if (!payload) return;
+    dispatch({ type: 'SET_CAMPAIGNS', payload });
+  }, [campaignsQuery.data, dispatch]);
 
-  useEffect(() => {
-    const fetchPackages = async () => {
-      setLoadingPackages(true);
-      try {
-        const res = await fetch(`${API_BASE}/packages`);
-        const data = await res.json();
-        if (data.ok) {
-          setPackages(data.data || []);
-        }
-      } catch (err) {
-        console.error('Error fetching packages:', err);
-      } finally {
-        setLoadingPackages(false);
-      }
-    };
-    fetchPackages();
-  }, []);
-
-  const brandNames = brands.map((b) => (typeof b === 'string' ? b : b.name));
   const brandFilter = role === 'brand' ? brandNames[0] || null : null;
   const visibleCampaigns = useMemo(() => {
-    let filtered = campaigns;
+    let filtered = campaignSource;
     if ((role === 'admin' || role === 'employee') && adminBrandFilter) {
       filtered = filtered.filter((campaign) => campaign.brand === adminBrandFilter);
     }
@@ -119,7 +88,7 @@ export default function CampaignsPage() {
       });
     }
     return filtered;
-  }, [campaigns, role, adminBrandFilter, searchQuery, statusFilter]);
+  }, [campaignSource, role, adminBrandFilter, searchQuery, statusFilter]);
 
   const openModal = () => {
     if (role === 'brand' && brandFilter) {
@@ -186,31 +155,26 @@ export default function CampaignsPage() {
 
   const handleWizardSubmit = async (wizardData) => {
     try {
-      const res = await fetch(`${API_BASE}/campaigns`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: wizardData.name,
-          brand: wizardData.brand,
-          status: 'Planning',
-          platforms: wizardData.influencer?.platforms || ['Instagram'],
-          objectives: wizardData.objectives,
-          campaignType: wizardData.campaignType,
-          campaignTypeDetail: wizardData.campaignTypeDetail || null,
-          dealType: wizardData.paymentType ? wizardData.paymentType.toLowerCase() : null,
-          targetAudience: wizardData.creatorAgeRange
-            ? `Creator age range: ${wizardData.creatorAgeRange}`
-            : null,
-          creatorTiers: wizardData.creatorTiers,
-          startDate: wizardData.startDate,
-          ugcVideoCount: wizardData.ugcCount || null,
-          influencerVideoCount: wizardData.influencerCount || null,
-          customPackageLabel: wizardData.ugcVideosOther || null,
-        }),
+      const response = await createCampaignMutation.mutateAsync({
+        name: wizardData.name,
+        brand: wizardData.brand,
+        status: 'Planning',
+        platforms: wizardData.influencer?.platforms || ['Instagram'],
+        objectives: wizardData.objectives,
+        campaignType: wizardData.campaignType,
+        campaignTypeDetail: wizardData.campaignTypeDetail || null,
+        dealType: wizardData.paymentType ? wizardData.paymentType.toLowerCase() : null,
+        targetAudience: wizardData.creatorAgeRange
+          ? `Creator age range: ${wizardData.creatorAgeRange}`
+          : null,
+        creatorTiers: wizardData.creatorTiers,
+        startDate: wizardData.startDate,
+        ugcVideoCount: wizardData.ugcCount || null,
+        influencerVideoCount: wizardData.influencerCount || null,
+        customPackageLabel: wizardData.ugcVideosOther || null,
       });
-      const data = await res.json();
-      if (data.ok) {
-        dispatch({ type: 'CREATE_CAMPAIGN', payload: data.data, actor: 'Brand' });
+      if (response?.data) {
+        dispatch({ type: 'CREATE_CAMPAIGN', payload: response.data, actor: 'Brand' });
         setShowWizard(false);
       }
     } catch (error) {
@@ -222,36 +186,31 @@ export default function CampaignsPage() {
     if (!form.name || !form.brand || form.platforms.length === 0) {
       throw new Error('Please complete the required fields.');
     }
-    const res = await fetch(`${API_BASE}/campaigns`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: form.name,
-        brand: form.brand,
-        status: role === 'admin' ? form.status || 'Planning' : 'Planning',
-        platforms: form.platforms,
-        objectives: form.objectives,
-        contentFormat: form.contentFormat,
-          creatorTiers: form.creatorTiers,
-          campaignType: form.creatorType,
-          campaignTypeDetail: form.campaignTypeDetail,
-          dealType: form.dealType,
-          targetAudience: form.targetAudience,
-          deliverables: form.deliverables,
-        notes: form.notes,
-        startDate: form.startDate,
-        endDate: form.endDate,
-        packageId: form.campaignPackage || null,
-        customPackageLabel: form.customPackage || null,
-      }),
+    const response = await createCampaignMutation.mutateAsync({
+      name: form.name,
+      brand: form.brand,
+      status: role === 'admin' ? form.status || 'Planning' : 'Planning',
+      platforms: form.platforms,
+      objectives: form.objectives,
+      contentFormat: form.contentFormat,
+      creatorTiers: form.creatorTiers,
+      campaignType: form.creatorType,
+      campaignTypeDetail: form.campaignTypeDetail,
+      dealType: form.dealType,
+      targetAudience: form.targetAudience,
+      deliverables: form.deliverables,
+      notes: form.notes,
+      startDate: form.startDate,
+      endDate: form.endDate,
+      packageId: form.campaignPackage || null,
+      customPackageLabel: form.customPackage || null,
     });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      throw new Error(data?.error || 'Failed to create campaign.');
+    if (!response?.data) {
+      throw new Error('Failed to create campaign.');
     }
-    dispatch({ type: 'CREATE_CAMPAIGN', payload: data.data, actor: 'Admin' });
+    dispatch({ type: 'CREATE_CAMPAIGN', payload: response.data, actor: 'Admin' });
     closeModal();
-    return data.data;
+    return response.data;
   };
 
   return (

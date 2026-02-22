@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getJson } from '../api/client.js';
 import CreatorFilters from '../components/CreatorFilters.jsx';
 import CampaignFormModal from '../components/CampaignFormModal.jsx';
 import CreatorGrid from '../components/CreatorGrid.jsx';
@@ -10,6 +9,16 @@ import Modal from '../components/Modal.jsx';
 import StatusPill from '../components/StatusPill.jsx';
 import { useAppDispatch, useAppState } from '../state.jsx';
 import { handleAvatarError, resolveAvatarSrc } from '../utils/avatar.js';
+import {
+  campaignsApi,
+  useBrandsQuery,
+  useCampaignCreatorsQuery,
+  useCreatorStagesQuery,
+  useInfluencersQuery,
+  usePackagesQuery,
+  useUgcCreatorsQuery,
+  useUpdateCampaignMutation,
+} from '../queries/index.js';
 
 const makeId = (prefix) => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 
@@ -174,6 +183,31 @@ const normalizeExternalUrl = (value) => {
   return `https://${raw.replace(/^\/+/, '')}`;
 };
 
+const normalizeCreatorVideoUrls = (creator) => {
+  const raw = creator?.ugc_video_urls;
+  if (!raw) return [];
+  const list = Array.isArray(raw) ? raw : String(raw).split(',');
+  return list
+    .map((item) => String(item || '').trim())
+    .filter(Boolean);
+};
+
+const resolveMediaUrl = (value) => {
+  if (!value) return '';
+  const raw = String(value).trim();
+  if (!raw) return '';
+  if (
+    raw.startsWith('/objects/') ||
+    raw.startsWith('http://') ||
+    raw.startsWith('https://') ||
+    raw.startsWith('data:')
+  ) {
+    return raw;
+  }
+  if (raw.startsWith('/')) return raw;
+  return `/${raw.replace(/^\/+/, '')}`;
+};
+
 const getCreatorSocialLinks = (creator) =>
   [
     { label: 'TikTok', url: creator?.tiktok_url },
@@ -210,9 +244,13 @@ export default function CampaignDetailPage() {
     url: '',
     title: 'Submitted Video',
   });
+  const [ugcVideosModal, setUgcVideosModal] = useState({
+    open: false,
+    creator: null,
+    videos: [],
+  });
   const [rejectModal, setRejectModal] = useState({ open: false, creator: null });
   const [rejectReason, setRejectReason] = useState('');
-  const [loadingCreatorsState, setLoadingCreatorsState] = useState(false);
   const [showAddCreatorsModal, setShowAddCreatorsModal] = useState(false);
   const [brandTab, setBrandTab] = useState('brief');
   const [adminTab, setAdminTab] = useState('overview');
@@ -237,14 +275,6 @@ export default function CampaignDetailPage() {
     contentFormat: [],
     notes: '',
   });
-  const [packages, setPackages] = useState([]);
-  const [loadingPackages, setLoadingPackages] = useState(false);
-  const [loadingBrands, setLoadingBrands] = useState(false);
-  const [creatorStageDefinitions, setCreatorStageDefinitions] = useState([]);
-
-  const [ugcCreators, setUgcCreators] = useState([]);
-  const [influencers, setInfluencers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [suggestTab, setSuggestTab] = useState('ugc');
   const [ugcFilters, setUgcFilters] = useState({
     search: '',
@@ -290,6 +320,33 @@ export default function CampaignDetailPage() {
   const isEmployee = role === 'employee';
   const isBrand = role === 'brand';
   const canManageCreators = isAdmin || isEmployee;
+  const creatorsQueryParams = useMemo(() => ({ limit: 100 }), []);
+  const ugcCreatorsQuery = useUgcCreatorsQuery(creatorsQueryParams, {
+    enabled: Boolean(campaignId),
+  });
+  const influencersQuery = useInfluencersQuery(creatorsQueryParams, {
+    enabled: Boolean(campaignId),
+  });
+  const brandsQuery = useBrandsQuery({}, { enabled: isAdmin });
+  const packagesQuery = usePackagesQuery({}, { enabled: isAdmin });
+  const creatorStagesQuery = useCreatorStagesQuery({}, { enabled: Boolean(campaignId) });
+  const campaignCreatorsQuery = useCampaignCreatorsQuery(campaignId, {
+    enabled: Boolean(campaignId),
+  });
+  const updateCampaignMutation = useUpdateCampaignMutation();
+  const ugcCreators = useMemo(() => ugcCreatorsQuery.data?.data || [], [ugcCreatorsQuery.data]);
+  const influencers = useMemo(
+    () => influencersQuery.data?.data || [],
+    [influencersQuery.data]
+  );
+  const loading = ugcCreatorsQuery.isLoading || influencersQuery.isLoading;
+  const packages = useMemo(() => packagesQuery.data?.data || [], [packagesQuery.data]);
+  const loadingPackages = isAdmin ? packagesQuery.isLoading : false;
+  const loadingBrands = isAdmin ? brandsQuery.isLoading : false;
+  const creatorStageDefinitions = useMemo(
+    () => creatorStagesQuery.data?.data || [],
+    [creatorStagesQuery.data]
+  );
   const numericBrandSortColumns = new Set([
     'submissions',
     'published',
@@ -321,108 +378,25 @@ export default function CampaignDetailPage() {
     setAdminAnalyticsSortBy(columnKey);
     setAdminAnalyticsSortDirection(numericAdminSortColumns.has(columnKey) ? 'desc' : 'asc');
   };
-  const brandNames = brands.map((b) => (typeof b === 'string' ? b : b.name));
-
-  useEffect(() => {
-    const fetchCreators = async () => {
-      try {
-        setLoading(true);
-        const [ugcRes, infRes] = await Promise.all([
-          getJson('/api/ugc-creators?limit=100', 'Failed to fetch UGC creators'),
-          getJson('/api/influencers?limit=100', 'Failed to fetch influencers'),
-        ]);
-        setUgcCreators(ugcRes?.data || []);
-        setInfluencers(infRes?.data || []);
-      } catch (err) {
-        console.error('Failed to fetch creators:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchCreators();
-  }, []);
-
-  useEffect(() => {
-    if (brands.length > 0 || !isAdmin) return;
-    const fetchBrands = async () => {
-      setLoadingBrands(true);
-      try {
-        const res = await fetch('/api/brands');
-        const data = await res.json();
-        if (data.ok) {
-          dispatch({ type: 'SET_BRANDS', payload: data.data });
-        }
-      } catch (err) {
-        console.error('Failed to fetch brands:', err);
-      } finally {
-        setLoadingBrands(false);
-      }
-    };
-    fetchBrands();
-  }, [brands.length, dispatch, isAdmin]);
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    const fetchPackages = async () => {
-      setLoadingPackages(true);
-      try {
-        const res = await fetch('/api/packages');
-        const data = await res.json();
-        if (data.ok) {
-          setPackages(data.data || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch packages:', err);
-      } finally {
-        setLoadingPackages(false);
-      }
-    };
-    fetchPackages();
-  }, [isAdmin]);
-
-  useEffect(() => {
-    let ignore = false;
-    const fetchCreatorStages = async () => {
-      try {
-        const res = await fetch('/api/creator-stages');
-        const data = await res.json();
-        if (!ignore && res.ok && data.ok) {
-          setCreatorStageDefinitions(data.data || []);
-        }
-      } catch (err) {
-        if (!ignore) {
-          console.error('Failed to fetch creator stages:', err);
-        }
-      }
-    };
-    fetchCreatorStages();
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
+  const brandNamesSource = brandsQuery.data?.data || brands;
+  const brandNames = brandNamesSource.map((b) => (typeof b === 'string' ? b : b.name));
   const refreshCampaignCreators = async () => {
     if (!campaignId) return;
-    setLoadingCreatorsState(true);
     try {
-      const res = await fetch(`/api/campaigns/${campaignId}/creators`);
-      const data = await res.json();
-      if (data.ok) {
-        dispatch({
-          type: 'SET_CAMPAIGN_CREATORS',
-          payload: { campaignId, data: data.data },
-        });
-      }
+      await campaignCreatorsQuery.refetch();
     } catch (err) {
       console.error('Failed to fetch campaign creators:', err);
-    } finally {
-      setLoadingCreatorsState(false);
     }
   };
 
   useEffect(() => {
-    refreshCampaignCreators();
-  }, [campaignId]);
+    const payload = campaignCreatorsQuery.data?.data;
+    if (!campaignId || !payload) return;
+    dispatch({
+      type: 'SET_CAMPAIGN_CREATORS',
+      payload: { campaignId, data: payload },
+    });
+  }, [campaignId, campaignCreatorsQuery.data, dispatch]);
 
   useEffect(() => {
     let ignore = false;
@@ -643,6 +617,44 @@ export default function CampaignDetailPage() {
     setSelectedCreator(null);
   };
 
+  const applyLocalDecisionState = (creatorId, decisionLabel, rejectionReason = '') => {
+    const existing = campaignCreators[campaign.id];
+    if (!existing) return;
+
+    const nextApprovals = {
+      ...existing.approvals,
+      [creatorId]: decisionLabel,
+    };
+    const nextRejectionReasons = {
+      ...(existing.rejectionReasons || {}),
+    };
+    if (decisionLabel === 'Brand Rejected' && rejectionReason) {
+      nextRejectionReasons[creatorId] = rejectionReason;
+    } else {
+      delete nextRejectionReasons[creatorId];
+    }
+
+    const nextOutreach = {
+      ...(existing.outreach || {}),
+    };
+    if (decisionLabel === 'Suggested') {
+      delete nextOutreach[creatorId];
+    }
+
+    dispatch({
+      type: 'SET_CAMPAIGN_CREATORS',
+      payload: {
+        campaignId: campaign.id,
+        data: {
+          ...existing,
+          approvals: nextApprovals,
+          rejectionReasons: nextRejectionReasons,
+          outreach: nextOutreach,
+        },
+      },
+    });
+  };
+
   const handleDecision = async (creatorId, decision) => {
     const mappedDecision =
       decision === 'Brand Approved'
@@ -651,32 +663,36 @@ export default function CampaignDetailPage() {
           ? 'rejected'
           : 'pending';
     try {
-      const res = await fetch(`/api/campaigns/${campaign.id}/creators/${creatorId}/decision`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decision: mappedDecision, note: '' }),
+      await campaignsApi.updateCreatorDecision({
+        campaignId: campaign.id,
+        creatorId,
+        payload: { decision: mappedDecision, note: '' },
       });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        throw new Error(data?.error || 'Failed to update decision.');
-      }
-      await refreshCampaignCreators();
+
+      const nextDecisionLabel =
+        mappedDecision === 'approved'
+          ? 'Brand Approved'
+          : mappedDecision === 'rejected'
+            ? 'Brand Rejected'
+            : 'Suggested';
+      applyLocalDecisionState(creatorId, nextDecisionLabel);
+
+      refreshCampaignCreators().catch((error) => {
+        console.error('Failed to refresh creators after decision update:', error);
+      });
     } catch (err) {
       console.error('Failed to update decision:', err);
+      alert(err?.message || 'Failed to update decision.');
     }
   };
 
   const handleWorkflowStatusUpdate = async (creatorId, workflowStatus) => {
     try {
-      const res = await fetch(`/api/campaigns/${campaign.id}/creators/${creatorId}/workflow`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workflowStatus }),
+      await campaignsApi.updateCreatorWorkflow({
+        campaignId: campaign.id,
+        creatorId,
+        payload: { workflowStatus },
       });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        throw new Error(data?.error || 'Failed to update creator stage.');
-      }
       await refreshCampaignCreators();
     } catch (err) {
       console.error('Failed to update creator stage:', err);
@@ -687,12 +703,11 @@ export default function CampaignDetailPage() {
     const isAlreadySuggested = creatorState.shortlist.includes(creator.id);
     if (isAlreadySuggested) return;
     try {
-      await fetch(`/api/campaigns/${campaign.id}/creators/suggest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ creatorId: creator.id }),
+      await campaignsApi.suggestCreator({
+        campaignId: campaign.id,
+        creatorId: creator.id,
       });
-      refreshCampaignCreators();
+      await refreshCampaignCreators();
     } catch (err) {
       console.error('Failed to suggest creator:', err);
     }
@@ -700,13 +715,10 @@ export default function CampaignDetailPage() {
 
   const handleUndoSuggestCreator = async (creatorId) => {
     try {
-      const res = await fetch(`/api/campaigns/${campaign.id}/creators/${creatorId}/suggest`, {
-        method: 'DELETE',
+      await campaignsApi.unsuggestCreator({
+        campaignId: campaign.id,
+        creatorId,
       });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        throw new Error(data?.error || 'Failed to undo suggestion.');
-      }
       await refreshCampaignCreators();
     } catch (err) {
       console.error('Failed to undo suggestion:', err);
@@ -734,6 +746,23 @@ export default function CampaignDetailPage() {
   const openVideoPreview = (url, title) => {
     if (!url) return;
     setVideoPreview({ open: true, url, title: title || 'Submitted Video' });
+  };
+
+  const openUgcVideosModal = (creator) => {
+    const videos = normalizeCreatorVideoUrls(creator).map(resolveMediaUrl).filter(Boolean);
+    setUgcVideosModal({
+      open: true,
+      creator,
+      videos,
+    });
+  };
+
+  const closeUgcVideosModal = () => {
+    setUgcVideosModal({
+      open: false,
+      creator: null,
+      videos: [],
+    });
   };
 
   const isLikelyVideoUrl = (url) => {
@@ -815,13 +844,13 @@ export default function CampaignDetailPage() {
   const handleRejectConfirm = async () => {
     if (!rejectModal.creator || !rejectReason.trim()) return;
     try {
-      await fetch(`/api/campaigns/${campaign.id}/creators/${rejectModal.creator.id}/decision`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ decision: 'rejected', note: rejectReason }),
+      await campaignsApi.updateCreatorDecision({
+        campaignId: campaign.id,
+        creatorId: rejectModal.creator.id,
+        payload: { decision: 'rejected', note: rejectReason },
       });
       closeRejectModal();
-      refreshCampaignCreators();
+      await refreshCampaignCreators();
     } catch (err) {
       console.error('Failed to reject creator:', err);
     }
@@ -943,18 +972,11 @@ export default function CampaignDetailPage() {
         createdAt: new Date().toISOString(),
       };
 
-      const workflowRes = await fetch(
-        `/api/campaigns/${campaign.id}/creators/${addContentModal.creator.id}/workflow`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ finalVideoLink: contentForm.link }),
-        }
-      );
-      const workflowData = await workflowRes.json();
-      if (!workflowRes.ok || !workflowData.ok) {
-        throw new Error(workflowData?.error || 'Failed to link submitted video');
-      }
+      await campaignsApi.updateCreatorWorkflow({
+        campaignId: campaign.id,
+        creatorId: addContentModal.creator.id,
+        payload: { finalVideoLink: contentForm.link },
+      });
 
       dispatch({ type: 'LOG_CONTENT_DELIVERY', payload: { content: newContent } });
       await refreshCampaignCreators();
@@ -971,10 +993,9 @@ export default function CampaignDetailPage() {
     if (!campaignId) {
       throw new Error('Missing campaign id.');
     }
-    const res = await fetch(`/api/campaigns/${campaignId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const data = await updateCampaignMutation.mutateAsync({
+      campaignId,
+      payload: {
         name: editForm.name,
         brand: editForm.brand,
         status: role === 'admin' ? editForm.status : undefined,
@@ -992,15 +1013,12 @@ export default function CampaignDetailPage() {
         endDate: editForm.endDate || null,
         packageId: editForm.campaignPackage || null,
         customPackageLabel: editForm.customPackage || null,
-      }),
+      },
     });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      throw new Error(data?.error || 'Failed to update campaign.');
-    }
-    dispatch({ type: 'UPDATE_CAMPAIGN', payload: data.data });
+    const updatedCampaign = data?.data || data;
+    dispatch({ type: 'UPDATE_CAMPAIGN', payload: updatedCampaign });
     closeEditModal();
-    return data.data;
+    return updatedCampaign;
   };
 
   const campaignType = campaign.campaignType || 'Hybrid';
@@ -1870,6 +1888,87 @@ export default function CampaignDetailPage() {
     { key: 'ugc', type: 'ugc', label: 'UGC Creators', tone: 'ugc' },
   ];
 
+  const getBrandCampaignWorkflowStatus = (creator) =>
+    creatorState.outreach?.[creator.id]?.workflowStatus || creatorStageOptions[0] || 'Sourced';
+
+  const renderBrandCreatorStatusCell = (creator) => {
+    const decision = creatorState.approvals?.[creator.id] || 'Suggested';
+    if (decision === 'Brand Rejected') {
+      return null;
+    }
+    const workflowStatus = getBrandCampaignWorkflowStatus(creator);
+    return (
+      <div className="brand-creator-status-cell">
+        <StatusPill status={workflowStatus} />
+      </div>
+    );
+  };
+
+  const renderBrandInfluencerSocialLinks = (creator) => {
+    const links = getCreatorSocialLinks(creator).filter((entry) =>
+      ['TikTok', 'Instagram', 'YouTube', 'Facebook'].includes(entry.label)
+    );
+    if (links.length === 0) {
+      return <span className="creator-social-empty">No links</span>;
+    }
+    return (
+      <div className="brand-creator-social-links">
+        {links.map((entry) => (
+          <a
+            key={`${creator.id}-${entry.label}`}
+            href={entry.href}
+            className="creator-social-link"
+            target="_blank"
+            rel="noreferrer"
+          >
+            {entry.label}
+          </a>
+        ))}
+      </div>
+    );
+  };
+
+  const renderBrandCreatorMeta = (creator) => {
+    const creatorTypeKey = inferCreatorType(creator);
+    const followers = formatCompactFollowers(creator?.followers ?? creator?.followers_count);
+    const niche = creator?.niche || creator?.category || 'General';
+    if (creatorTypeKey !== 'ugc' && followers !== '—') {
+      return `${followers} followers · ${niche}`;
+    }
+    return niche;
+  };
+
+  const getBrandCreatorColumns = (creatorType) => {
+    if (creatorType === 'influencer') {
+      return [
+        {
+          key: 'status',
+          label: 'Campaign Status',
+          raw: true,
+          className: 'creator-list-v3-metric-status',
+          render: (creator) => renderBrandCreatorStatusCell(creator),
+        },
+        {
+          key: 'social_links',
+          label: 'Social Links',
+          raw: true,
+          className: 'creator-list-v3-metric-social',
+          render: (creator) => renderBrandInfluencerSocialLinks(creator),
+        },
+      ];
+    }
+
+    return [
+      {
+        key: 'status',
+        label: 'Campaign Status',
+        raw: true,
+        className: 'creator-list-v3-metric-status',
+        render: (creator) => renderBrandCreatorStatusCell(creator),
+      },
+    ];
+  };
+
   const renderBrandPendingActions = (creator) => (
     <>
       <button
@@ -1890,15 +1989,10 @@ export default function CampaignDetailPage() {
   );
 
   const renderBrandApprovedActions = (creator) => {
-    const workflowStatus =
-      creatorState.outreach?.[creator.id]?.workflowStatus ||
-      creatorStageOptions[0] ||
-      'In Progress';
     const finalLink = creatorState.outreach?.[creator.id]?.finalVideoLink || '';
     if (!finalLink) {
       return (
         <>
-          <span className="creator-stage-pill">{workflowStatus}</span>
           <button
             type="button"
             className="btn btn-secondary btn-small"
@@ -1912,7 +2006,6 @@ export default function CampaignDetailPage() {
     if (isLikelyVideoUrl(finalLink)) {
       return (
         <>
-          <span className="creator-stage-pill">{workflowStatus}</span>
           <button
             type="button"
             className="btn btn-secondary btn-small"
@@ -1934,7 +2027,6 @@ export default function CampaignDetailPage() {
     }
     return (
       <>
-        <span className="creator-stage-pill">{workflowStatus}</span>
         <a
           className="btn btn-secondary btn-small"
           href={finalLink}
@@ -1987,6 +2079,9 @@ export default function CampaignDetailPage() {
             type={section.type}
             onOpenProfile={openCreatorProfile}
             renderActions={renderActions}
+            customColumns={getBrandCreatorColumns(section.type)}
+            renderMainMeta={renderBrandCreatorMeta}
+            showViewButton={false}
           />
         </div>
       );
@@ -2326,7 +2421,11 @@ export default function CampaignDetailPage() {
               />
             ) : (
               <div className="campaign-creators-table-wrap">
-                <div className="campaign-creators-table">
+                <div
+                  className={`campaign-creators-table ${
+                    adminCreatorFilterTab === 'influencer' ? 'campaign-creators-table-influencer' : ''
+                  }`}
+                >
                   <div className="campaign-creators-row campaign-creators-row-head">
                     <div className="campaign-creators-col-head">
                       <span className="campaign-creators-col-title">Creator Profile</span>
@@ -2336,22 +2435,35 @@ export default function CampaignDetailPage() {
                       <span className="campaign-creators-col-title">Workflow & Actions</span>
                       <span className="campaign-creators-col-hint">Stage, decision, delivery</span>
                     </div>
-                    <div className="campaign-creators-col-head">
-                      <span className="campaign-creators-col-title">Channels</span>
-                      <span className="campaign-creators-col-hint">Social links and portfolio</span>
-                    </div>
+                    {adminCreatorFilterTab !== 'influencer' ? (
+                      <div className="campaign-creators-col-head">
+                        <span className="campaign-creators-col-title">Channels</span>
+                        <span className="campaign-creators-col-hint">Social links and UGC videos</span>
+                      </div>
+                    ) : null}
                   </div>
                   {filteredAdminCreators.map((creator) => {
-                    const creatorType = inferCreatorType(creator) === 'ugc' ? 'UGC' : 'Influencer';
+                    const creatorTypeKey = inferCreatorType(creator);
+                    const creatorType = creatorTypeKey === 'ugc' ? 'UGC' : 'Influencer';
                     const followersLabel = formatCompactFollowers(
                       creator.followers ?? creator.followers_count
                     );
+                    const audienceMeta =
+                      creatorTypeKey === 'ugc' || followersLabel === '—'
+                        ? `${creator.niche || creator.category || 'General'} · ${creatorType}`
+                        : `${followersLabel} followers · ${creator.niche || creator.category || 'General'} · ${creatorType}`;
                     const currentDecision = creatorState.approvals?.[creator.id] || 'Suggested';
                     const hasWorkflowEntry = Boolean(creatorState.outreach?.[creator.id]);
                     const currentWorkflowStatus =
                       creatorState.outreach?.[creator.id]?.workflowStatus ||
                       (hasWorkflowEntry ? creatorStageOptions[0] || '' : '');
-                    const socialLinks = getCreatorSocialLinks(creator);
+                    const socialLinks = getCreatorSocialLinks(creator).filter((entry) =>
+                      ['TikTok', 'Instagram', 'YouTube', 'Facebook'].includes(entry.label)
+                    );
+                    const ugcVideoUrls =
+                      creatorTypeKey === 'ugc'
+                        ? normalizeCreatorVideoUrls(creator).map(resolveMediaUrl).filter(Boolean)
+                        : [];
                     return (
                       <div key={creator.id} className="campaign-creators-row">
                         <div className="campaign-creators-main">
@@ -2362,11 +2474,35 @@ export default function CampaignDetailPage() {
                             onError={handleAvatarError}
                           />
                           <div className="campaign-creators-main-info">
-                            <strong>{creator.name || creator.display_name || 'Creator'}</strong>
-                            <span>
-                              {followersLabel} followers · {creator.niche || creator.category || 'General'} ·{' '}
-                              {creatorType}
-                            </span>
+                            <strong>
+                              <button
+                                type="button"
+                                className="campaign-creators-name-btn"
+                                onClick={() =>
+                                  openCreatorProfile(creator, inferCreatorType(creator))
+                                }
+                              >
+                                {creator.name || creator.display_name || 'Creator'}
+                              </button>
+                            </strong>
+                            <span>{audienceMeta}</span>
+                            {creatorTypeKey === 'influencer' ? (
+                              <div className="campaign-creators-inline-social">
+                                {socialLinks.length > 0 ? (
+                                  socialLinks.map((entry) => (
+                                    <a
+                                      key={`${creator.id}-inline-${entry.label}`}
+                                      href={entry.href}
+                                      className="creator-social-link"
+                                      target="_blank"
+                                      rel="noreferrer"
+                                    >
+                                      {entry.label}
+                                    </a>
+                                  ))
+                                ) : null}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                         <div className="campaign-creators-status">
@@ -2410,20 +2546,20 @@ export default function CampaignDetailPage() {
                                 Add Content
                               </button>
                             ) : null}
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-small"
-                              onClick={() => openCreatorProfile(creator, inferCreatorType(creator))}
-                            >
-                              View
-                            </button>
                           </div>
                         </div>
-                        <div className="campaign-creators-social">
-                          {socialLinks.length === 0 ? (
-                            <span className="creator-social-empty">No links</span>
-                          ) : (
-                            socialLinks.map((entry) => (
+                        {adminCreatorFilterTab !== 'influencer' ? (
+                          <div className="campaign-creators-social">
+                            {creatorTypeKey === 'ugc' ? (
+                              <button
+                                type="button"
+                                className="creator-social-link creator-social-link-button"
+                                onClick={() => openUgcVideosModal(creator)}
+                              >
+                                UGC Videos {ugcVideoUrls.length > 0 ? `(${ugcVideoUrls.length})` : ''}
+                              </button>
+                            ) : null}
+                            {socialLinks.map((entry) => (
                               <a
                                 key={`${creator.id}-${entry.label}`}
                                 href={entry.href}
@@ -2433,9 +2569,9 @@ export default function CampaignDetailPage() {
                               >
                                 {entry.label}
                               </a>
-                            ))
-                          )}
-                        </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -2510,6 +2646,7 @@ export default function CampaignDetailPage() {
                   <span>Actions</span>
                 </div>
                 {suggestCreators.map((creator) => {
+                  const creatorTypeKey = inferCreatorType(creator);
                   const isAlreadySuggested = creatorState.shortlist.includes(creator.id);
                   const currentDecision = creatorState.approvals?.[creator.id] || 'Suggested';
                   const canUndoSuggestion = isAlreadySuggested && currentDecision === 'Suggested';
@@ -2527,7 +2664,9 @@ export default function CampaignDetailPage() {
                       </div>
                       <div className="add-creators-modal-creator-col">
                         <strong>{creator.name || creator.display_name || 'Creator'}</strong>
-                        <span>{followersLabel} followers</span>
+                        {creatorTypeKey !== 'ugc' && followersLabel !== '—' ? (
+                          <span>{followersLabel} followers</span>
+                        ) : null}
                         <span>{creator.niche || creator.category || 'General'}</span>
                       </div>
                       <div className="add-creators-modal-actions-col">
@@ -2706,6 +2845,65 @@ export default function CampaignDetailPage() {
             className="btn btn-secondary"
             onClick={closeVideoPreview}
           >
+            Close
+          </button>
+        </div>
+      </Modal>
+
+      <Modal
+        open={ugcVideosModal.open}
+        onClose={closeUgcVideosModal}
+        title={`${ugcVideosModal.creator?.name || ugcVideosModal.creator?.display_name || 'UGC Creator'} Videos`}
+        description="Uploaded UGC videos for this creator."
+        size="large"
+      >
+        {ugcVideosModal.videos.length === 0 ? (
+          <EmptyState
+            title="No videos uploaded yet"
+            description="This creator does not have uploaded UGC videos yet."
+          />
+        ) : (
+          <div className="ugc-videos-library-grid">
+            {ugcVideosModal.videos.map((url, index) => (
+              <article key={`${url}-${index}`} className="ugc-videos-library-card">
+                <div className="ugc-videos-library-head">
+                  <strong>Video {index + 1}</strong>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={() =>
+                      openVideoPreview(
+                        url,
+                        `${ugcVideosModal.creator?.name || ugcVideosModal.creator?.display_name || 'Creator'} - Video ${
+                          index + 1
+                        }`
+                      )
+                    }
+                  >
+                    Preview
+                  </button>
+                </div>
+                {isLikelyVideoUrl(url) ? (
+                  <video
+                    className="ugc-videos-library-player"
+                    src={url}
+                    controls
+                    controlsList="nodownload noplaybackrate nofullscreen"
+                    disablePictureInPicture
+                    onContextMenu={(event) => event.preventDefault()}
+                    preload="metadata"
+                  />
+                ) : (
+                  <a href={url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-small">
+                    Open Link
+                  </a>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+        <div className="modal-actions">
+          <button type="button" className="btn btn-secondary" onClick={closeUgcVideosModal}>
             Close
           </button>
         </div>

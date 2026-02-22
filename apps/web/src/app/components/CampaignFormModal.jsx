@@ -16,12 +16,6 @@ const CREATOR_TIERS = [
   { value: 'macro', label: 'Macro' },
 ];
 
-const dealTypeLabel = {
-  collab: 'Collab',
-  paid: 'Paid',
-  mix: 'Mix',
-};
-
 export default function CampaignFormModal({
   open,
   form,
@@ -177,7 +171,6 @@ export default function CampaignFormModal({
   };
 
   const filteredPackages = packages.filter((pkg) => {
-    if (form.dealType && pkg.deal_type !== form.dealType) return false;
     if (!form.creatorType) return false;
     if (form.creatorType === 'Hybrid') {
       return (
@@ -402,9 +395,7 @@ export default function CampaignFormModal({
               <h4>Campaign Package *</h4>
               <div className="campaign-form-grid">
                 <div className="campaign-field full-width">
-                  <span>
-                    Package{form.dealType ? ` · ${dealTypeLabel[form.dealType]}` : ''}
-                  </span>
+                  <span>Package</span>
                   {loadingPackages ? (
                     <p className="muted">Loading packages...</p>
                   ) : (
@@ -428,7 +419,7 @@ export default function CampaignFormModal({
                         </button>
                       ))}
                       {filteredPackages.length === 0 && (
-                        <span className="muted">Select a deal type to see packages.</span>
+                        <span className="muted">Select a campaign type to see packages.</span>
                       )}
                     </div>
                   )}

@@ -6,6 +6,10 @@ import UsersPage from './UsersPage.jsx';
 import { useAuth } from '../../hooks/useAuth.jsx';
 
 const API_BASE = '/api';
+const formatPackageFilterLabel = (value) =>
+  String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 
 export default function SettingsPage() {
   const { role } = useParams();
@@ -26,10 +30,11 @@ export default function SettingsPage() {
   const [showPackageModal, setShowPackageModal] = useState(false);
   const [editingPackage, setEditingPackage] = useState(null);
   const [packageSearch, setPackageSearch] = useState('');
+  const [packageTypeFilter, setPackageTypeFilter] = useState('all');
+  const [packageStatusFilter, setPackageStatusFilter] = useState('all');
   const [packageForm, setPackageForm] = useState({
     name: '',
     package_type: 'influencer',
-    deal_type: 'paid',
     influencer_video_count: '',
     ugc_video_count: '',
     description: '',
@@ -50,6 +55,14 @@ export default function SettingsPage() {
   const [preferencesSaving, setPreferencesSaving] = useState(false);
   const [preferencesError, setPreferencesError] = useState('');
   const [preferencesSuccess, setPreferencesSuccess] = useState('');
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordSuccess, setPasswordSuccess] = useState('');
   const [creatorStages, setCreatorStages] = useState([]);
   const [creatorStagesLoading, setCreatorStagesLoading] = useState(false);
   const [creatorStagesSaving, setCreatorStagesSaving] = useState(false);
@@ -65,15 +78,32 @@ export default function SettingsPage() {
     }
   }, [activeTab, settingsTabs]);
 
+  const packageTypeOptions = Array.from(
+    new Set(
+      packages
+        .map((pkg) => String(pkg.package_type || '').trim().toLowerCase())
+        .filter(Boolean)
+    )
+  );
   const filteredPackages = packages.filter((pkg) => {
-    if (!packageSearch.trim()) return true;
     const query = packageSearch.trim().toLowerCase();
-    return (
-      (pkg.name || '').toLowerCase().includes(query) ||
-      (pkg.package_type || '').toLowerCase().includes(query) ||
-      (pkg.deal_type || '').toLowerCase().includes(query)
-    );
+    const packageType = String(pkg.package_type || '').trim().toLowerCase();
+    const status = pkg.active === false ? 'inactive' : 'active';
+
+    if (query) {
+      const searchBlob = [pkg.name, pkg.package_type, pkg.description, pkg.currency]
+        .map((value) => String(value || '').toLowerCase())
+        .join(' ');
+      if (!searchBlob.includes(query)) return false;
+    }
+
+    if (packageTypeFilter !== 'all' && packageType !== packageTypeFilter) return false;
+    if (packageStatusFilter !== 'all' && status !== packageStatusFilter) return false;
+    return true;
   });
+  const hasPackageFilters = Boolean(
+    packageSearch.trim() || packageTypeFilter !== 'all' || packageStatusFilter !== 'all'
+  );
 
   useEffect(() => {
     if (role !== 'admin') return;
@@ -199,6 +229,12 @@ export default function SettingsPage() {
     setPreferencesForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  const updatePasswordForm = (field, value) => {
+    setPasswordError('');
+    setPasswordSuccess('');
+    setPasswordForm((prev) => ({ ...prev, [field]: value }));
+  };
+
   const handlePreferencesLogoSelect = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -279,6 +315,59 @@ export default function SettingsPage() {
     }
   };
 
+  const handlePasswordSubmit = async (event) => {
+    event.preventDefault();
+    const currentPassword = String(passwordForm.currentPassword || '');
+    const newPassword = String(passwordForm.newPassword || '');
+    const confirmPassword = String(passwordForm.confirmPassword || '');
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('All password fields are required.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirmation do not match.');
+      return;
+    }
+    if (newPassword === currentPassword) {
+      setPasswordError('New password must be different from current password.');
+      return;
+    }
+
+    setPasswordSaving(true);
+    setPasswordError('');
+    setPasswordSuccess('');
+    try {
+      const res = await fetch(`${API_BASE}/me/password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || 'Failed to update password.');
+      }
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+      setPasswordSuccess('Password updated successfully.');
+    } catch (error) {
+      setPasswordError(error?.message || 'Failed to update password.');
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
   const updatePackageForm = (field, value) => {
     setPackageForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -289,7 +378,6 @@ export default function SettingsPage() {
     setPackageForm({
       name: '',
       package_type: 'influencer',
-      deal_type: 'paid',
       influencer_video_count: '',
       ugc_video_count: '',
       description: '',
@@ -307,7 +395,6 @@ export default function SettingsPage() {
     setPackageForm({
       name: pkg.name || '',
       package_type: pkg.package_type || 'influencer',
-      deal_type: pkg.deal_type || 'paid',
       influencer_video_count: pkg.influencer_video_count ?? '',
       ugc_video_count: pkg.ugc_video_count ?? '',
       description: pkg.description || '',
@@ -338,6 +425,12 @@ export default function SettingsPage() {
     } catch (err) {
       window.alert(err?.message || 'Failed to delete package.');
     }
+  };
+
+  const clearPackageFilters = () => {
+    setPackageSearch('');
+    setPackageTypeFilter('all');
+    setPackageStatusFilter('all');
   };
 
   const handlePackageSubmit = async (event) => {
@@ -477,74 +570,112 @@ export default function SettingsPage() {
           <div className="page-header" style={{ marginBottom: 16 }}>
             <div>
               <h3>Campaign Packages</h3>
-              <p>Manage and edit the packages that power campaign pricing.</p>
             </div>
-            <div className="table-actions">
-              <input
-                className="input"
-                style={{ minWidth: 220 }}
-                placeholder="Search packages..."
-                value={packageSearch}
-                onChange={(event) => setPackageSearch(event.target.value)}
-              />
-              <button type="button" className="btn btn-primary" onClick={openNewPackageModal}>
+            <div className="table-actions packages-toolbar">
+              <div className="packages-toolbar-filters">
+                <input
+                  className="input packages-filter-input"
+                  placeholder="Search packages..."
+                  value={packageSearch}
+                  onChange={(event) => setPackageSearch(event.target.value)}
+                />
+                <select
+                  className="input packages-filter-select"
+                  value={packageTypeFilter}
+                  onChange={(event) => setPackageTypeFilter(event.target.value)}
+                >
+                  <option value="all">All Types</option>
+                  {packageTypeOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {formatPackageFilterLabel(option)}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="input packages-filter-select"
+                  value={packageStatusFilter}
+                  onChange={(event) => setPackageStatusFilter(event.target.value)}
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+                {hasPackageFilters ? (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-small"
+                    onClick={clearPackageFilters}
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                className="btn btn-primary packages-toolbar-add"
+                onClick={openNewPackageModal}
+              >
                 Add Package
               </button>
             </div>
           </div>
 
-          <div className="table">
-            <div className="table-row header">
-              <span>Name</span>
-              <span>Type</span>
-              <span>Deal</span>
-              <span>Videos</span>
-              <span>Price</span>
-              <span>Status</span>
-              <span>Actions</span>
-            </div>
-            {loadingPackages ? (
-              <div className="table-row">
-                <span>Loading packages...</span>
+          <div className="settings-packages-table-wrap">
+            <div className="table settings-packages-table">
+              <div className="table-row header">
+                <span>Name</span>
+                <span>Type</span>
+                <span>Videos</span>
+                <span>Price</span>
+                <span>Status</span>
+                <span>Actions</span>
               </div>
-            ) : (
-              filteredPackages.map((pkg) => (
-                <div key={pkg.id} className="table-row">
-                  <span>{pkg.name}</span>
-                  <span>{pkg.package_type}</span>
-                  <span>{pkg.deal_type}</span>
-                  <span>
-                    {pkg.package_type === 'bundle'
-                      ? `${pkg.ugc_video_count || 0} UGC / ${pkg.influencer_video_count || 0} INF`
-                      : pkg.package_type === 'ugc'
-                        ? `${pkg.ugc_video_count || 0} UGC`
-                        : pkg.package_type === 'influencer'
-                          ? `${pkg.influencer_video_count || 0} INF`
-                          : 'Custom'}
-                  </span>
-                  <span>${pkg.price_amount}</span>
-                  <span>{pkg.active ? 'Active' : 'Inactive'}</span>
-                  <span>
-                    <div className="table-actions">
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-small"
-                        onClick={() => openEditPackageModal(pkg)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="btn btn-danger btn-small"
-                        onClick={() => handleDeletePackage(pkg)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </span>
+              {loadingPackages ? (
+                <div className="table-row">
+                  <span>Loading packages...</span>
                 </div>
-              ))
-            )}
+              ) : filteredPackages.length === 0 ? (
+                <div className="table-row">
+                  <span>No packages match the current filters.</span>
+                </div>
+              ) : (
+                filteredPackages.map((pkg) => (
+                  <div key={pkg.id} className="table-row">
+                    <span>{pkg.name}</span>
+                    <span>{pkg.package_type}</span>
+                    <span>
+                      {pkg.package_type === 'bundle'
+                        ? `${pkg.ugc_video_count || 0} UGC / ${pkg.influencer_video_count || 0} INF`
+                        : pkg.package_type === 'ugc'
+                          ? `${pkg.ugc_video_count || 0} UGC`
+                          : pkg.package_type === 'influencer'
+                            ? `${pkg.influencer_video_count || 0} INF`
+                            : 'Custom'}
+                    </span>
+                    <span>${pkg.price_amount}</span>
+                    <span>{pkg.active ? 'Active' : 'Inactive'}</span>
+                    <span>
+                      <div className="table-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-small"
+                          onClick={() => openEditPackageModal(pkg)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-small"
+                          onClick={() => handleDeletePackage(pkg)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -723,6 +854,58 @@ export default function SettingsPage() {
 
           <div className="settings-preferences-divider" />
 
+          <h3>Security</h3>
+          <p className="text-muted">Change your account password.</p>
+          <form className="package-form-grid settings-password-form" onSubmit={handlePasswordSubmit}>
+            <label>
+              <span>Current Password *</span>
+              <input
+                className="input"
+                type="password"
+                value={passwordForm.currentPassword}
+                onChange={(event) => updatePasswordForm('currentPassword', event.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </label>
+            <label>
+              <span>New Password *</span>
+              <input
+                className="input"
+                type="password"
+                value={passwordForm.newPassword}
+                onChange={(event) => updatePasswordForm('newPassword', event.target.value)}
+                autoComplete="new-password"
+                minLength={8}
+                required
+              />
+            </label>
+            <label className="full-width">
+              <span>Confirm New Password *</span>
+              <input
+                className="input"
+                type="password"
+                value={passwordForm.confirmPassword}
+                onChange={(event) => updatePasswordForm('confirmPassword', event.target.value)}
+                autoComplete="new-password"
+                minLength={8}
+                required
+              />
+            </label>
+            {(passwordError || passwordSuccess) && (
+              <p className={`full-width ${passwordError ? 'error-text' : 'text-muted'}`}>
+                {passwordError || passwordSuccess}
+              </p>
+            )}
+            <div className="modal-actions full-width settings-preferences-actions">
+              <button type="submit" className="btn btn-primary" disabled={passwordSaving}>
+                {passwordSaving ? 'Updating...' : 'Update Password'}
+              </button>
+            </div>
+          </form>
+
+          <div className="settings-preferences-divider" />
+
           <h3>Notification Channels</h3>
           <div className="toggle-row">
             <span>Email summaries</span>
@@ -760,18 +943,6 @@ export default function SettingsPage() {
                 placeholder="e.g. Influencer 10 Videos"
                 required
               />
-            </label>
-            <label>
-              <span>Deal Type</span>
-              <select
-                className="input"
-                value={packageForm.deal_type}
-                onChange={(event) => updatePackageForm('deal_type', event.target.value)}
-              >
-                <option value="collab">Collab</option>
-                <option value="paid">Paid</option>
-                <option value="mix">Mix</option>
-              </select>
             </label>
             <label>
               <span>Package Type</span>

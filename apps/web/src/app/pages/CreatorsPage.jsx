@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import AddContentModal from '../components/AddContentModal.jsx';
 import BrandRecommendations from '../components/BrandRecommendations.jsx';
@@ -9,8 +10,16 @@ import CreatorProfileModal from '../components/CreatorProfileModal.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import RejectionModal from '../components/RejectionModal.jsx';
 import UgcCreatorCreateModal from '../components/UgcCreatorCreateModal.jsx';
-import { getJson } from '../api/client.js';
 import { NICHES, WORKFLOW_STATUSES } from '../config/options.js';
+import {
+  creatorsApi,
+  queryKeys,
+  useCreateUgcCreatorMutation,
+  useInfluencersQuery,
+  useImportCreatorFromLinkMutation,
+  useUgcCreatorsQuery,
+  useUpdateCreatorMutation,
+} from '../queries/index.js';
 
 const ITEMS_PER_PAGE = 12;
 const MAX_FETCH_LIMIT = 1000;
@@ -144,10 +153,8 @@ const defaultUgcCreatorForm = () => ({
 export default function CreatorsPage() {
   const { role } = useParams();
   const isAdmin = role === 'admin';
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('ugc');
-  const [ugcCreators, setUgcCreators] = useState([]);
-  const [influencers, setInfluencers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [selectedCreator, setSelectedCreator] = useState(null);
   const [creatorType, setCreatorType] = useState(null);
 
@@ -170,7 +177,6 @@ export default function CreatorsPage() {
     engagementRate: '',
   });
 
-  const [error, setError] = useState(null);
   const [linkImport, setLinkImport] = useState({
     url: '',
     loading: false,
@@ -194,32 +200,27 @@ export default function CreatorsPage() {
     form: null,
   });
 
-  const fetchCreators = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const [ugcData, influencerData] = await Promise.all([
-        getJson(`/api/ugc-creators?page=1&limit=${MAX_FETCH_LIMIT}`, 'Failed to fetch UGC creators'),
-        getJson(`/api/influencers?page=1&limit=${MAX_FETCH_LIMIT}`, 'Failed to fetch influencers'),
-      ]);
-
-      if (ugcData.ok) {
-        setUgcCreators(ugcData.data || []);
-      }
-      if (influencerData.ok) {
-        setInfluencers(influencerData.data || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch creators:', err);
-      setError('Unable to load creators.');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchCreators();
-  }, [fetchCreators]);
+  const creatorsQueryParams = useMemo(
+    () => ({ page: 1, limit: MAX_FETCH_LIMIT }),
+    []
+  );
+  const ugcCreatorsQuery = useUgcCreatorsQuery(creatorsQueryParams, {
+    enabled: role !== 'creator',
+  });
+  const influencersQuery = useInfluencersQuery(creatorsQueryParams, {
+    enabled: role !== 'creator',
+  });
+  const ugcCreators = useMemo(() => ugcCreatorsQuery.data?.data || [], [ugcCreatorsQuery.data]);
+  const influencers = useMemo(
+    () => influencersQuery.data?.data || [],
+    [influencersQuery.data]
+  );
+  const loading =
+    role !== 'creator' && (ugcCreatorsQuery.isLoading || influencersQuery.isLoading);
+  const error = ugcCreatorsQuery.error?.message || influencersQuery.error?.message || null;
+  const updateCreatorMutation = useUpdateCreatorMutation();
+  const createUgcCreatorMutation = useCreateUgcCreatorMutation();
+  const importCreatorMutation = useImportCreatorFromLinkMutation();
 
   useEffect(() => {
     setUgcPage(1);
@@ -448,10 +449,10 @@ export default function CreatorsPage() {
       form: null,
     });
     try {
-      const data = await getJson(`/api/creators/${creator.id}`, 'Failed to fetch creator details');
-      if (!data.ok || !data.data) {
-        throw new Error(data?.error || 'Creator not found');
-      }
+      const data = await queryClient.fetchQuery({
+        queryKey: queryKeys.creators.details(creator.id),
+        queryFn: () => creatorsApi.getById(creator.id),
+      });
       setEditModal({
         open: true,
         loading: false,
@@ -725,19 +726,9 @@ export default function CreatorsPage() {
         base_rate: Number(form.base_rate),
       };
       delete payload.portfolio_url;
-      const res = await fetch(`${API_BASE}/ugc-creators`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        throw new Error(data?.error || 'Failed to add UGC creator.');
-      }
+      await createUgcCreatorMutation.mutateAsync(payload);
       closeUgcCreateModal();
       setActiveTab('ugc');
-      await fetchCreators();
     } catch (err) {
       setUgcCreateModal((prev) => ({
         ...prev,
@@ -764,18 +755,11 @@ export default function CreatorsPage() {
       if (payload.creator_type !== 'UGC') {
         payload.ugc_video_urls = [];
       }
-      const res = await fetch(`/api/creators/${editModal.form.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(payload),
+      await updateCreatorMutation.mutateAsync({
+        creatorId: editModal.form.id,
+        payload,
       });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        throw new Error(data?.error || 'Failed to update creator.');
-      }
       closeEditModal();
-      await fetchCreators();
     } catch (err) {
       setEditModal((prev) => ({
         ...prev,
@@ -803,16 +787,7 @@ export default function CreatorsPage() {
       success: '',
     }));
     try {
-      const res = await fetch(`${API_BASE}/creators/import-link`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ url: profileUrl }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        throw new Error(data?.error || 'Failed to import creator.');
-      }
+      const data = await importCreatorMutation.mutateAsync({ url: profileUrl });
       const importedName = data?.data?.name || 'Creator';
       const action = data?.meta?.action === 'created' ? 'added' : 'updated';
       setLinkImport({
@@ -822,7 +797,6 @@ export default function CreatorsPage() {
         success: `${importedName} ${action} successfully.`,
       });
       setActiveTab('influencer');
-      await fetchCreators();
     } catch (err) {
       setLinkImport((prev) => ({
         ...prev,
@@ -1038,6 +1012,7 @@ export default function CreatorsPage() {
               onOpenProfile={openProfile}
               canEdit={isAdmin}
               onEditCreator={openEditCreator}
+              includeInfluencerRate={isAdmin}
             />
           </div>
 

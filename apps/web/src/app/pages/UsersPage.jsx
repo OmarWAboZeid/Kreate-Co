@@ -18,6 +18,17 @@ export default function UsersPage({ embedded = false }) {
     error: '',
     form: null,
   });
+  const [addAdminModal, setAddAdminModal] = useState({
+    open: false,
+    saving: false,
+    error: '',
+    form: {
+      name: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+    },
+  });
 
   const fetchUsers = async () => {
     try {
@@ -135,6 +146,8 @@ export default function UsersPage({ embedded = false }) {
         role: user.role || 'brand',
         status: user.status || 'pending',
         organizationId: user.role === 'admin' ? '' : brandAssignments[user.id] || user.brand_id || '',
+        password: '',
+        confirmPassword: '',
       },
     });
   };
@@ -183,6 +196,13 @@ export default function UsersPage({ embedded = false }) {
     if (form.role !== 'admin' && form.status === 'approved' && !form.organizationId) {
       return 'Select a brand for approved brand users';
     }
+    const hasPassword = Boolean(form.password);
+    const hasConfirmPassword = Boolean(form.confirmPassword);
+    if (hasPassword || hasConfirmPassword) {
+      if (!hasPassword || !hasConfirmPassword) return 'Both password fields are required';
+      if (form.password.length < 8) return 'Password must be at least 8 characters';
+      if (form.password !== form.confirmPassword) return 'Password and confirmation do not match';
+    }
     return '';
   };
 
@@ -204,6 +224,9 @@ export default function UsersPage({ embedded = false }) {
         status: editModal.form.status,
         organizationId: editModal.form.role === 'admin' ? null : editModal.form.organizationId || null,
       };
+      if (editModal.form.password) {
+        payload.password = editModal.form.password;
+      }
       const res = await fetch(`/api/admin/users/${editModal.form.id}`, {
         method: 'PUT',
         credentials: 'include',
@@ -218,6 +241,88 @@ export default function UsersPage({ embedded = false }) {
       fetchUsers();
     } catch (err) {
       setEditModal((prev) => ({ ...prev, saving: false, error: err.message }));
+    }
+  };
+
+  const openAddAdminModal = () => {
+    setAddAdminModal({
+      open: true,
+      saving: false,
+      error: '',
+      form: {
+        name: '',
+        email: '',
+        password: '',
+        confirmPassword: '',
+      },
+    });
+  };
+
+  const closeAddAdminModal = () => {
+    setAddAdminModal({
+      open: false,
+      saving: false,
+      error: '',
+      form: {
+        name: '',
+        email: '',
+        password: '',
+        confirmPassword: '',
+      },
+    });
+  };
+
+  const updateAddAdminField = (field, value) => {
+    setAddAdminModal((prev) => ({
+      ...prev,
+      error: '',
+      form: {
+        ...prev.form,
+        [field]: value,
+      },
+    }));
+  };
+
+  const validateAddAdminForm = (form) => {
+    if (!form?.name?.trim()) return 'Name is required';
+    if (!form?.email?.trim()) return 'Email is required';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return 'Email format is invalid';
+    if (!form?.password) return 'Password is required';
+    if (form.password.length < 8) return 'Password must be at least 8 characters';
+    if (!form?.confirmPassword) return 'Password confirmation is required';
+    if (form.password !== form.confirmPassword) return 'Password and confirmation do not match';
+    return '';
+  };
+
+  const handleCreateAdmin = async (event) => {
+    event.preventDefault();
+    const validationError = validateAddAdminForm(addAdminModal.form);
+    if (validationError) {
+      setAddAdminModal((prev) => ({ ...prev, error: validationError }));
+      return;
+    }
+
+    setAddAdminModal((prev) => ({ ...prev, saving: true, error: '' }));
+    try {
+      const payload = {
+        name: addAdminModal.form.name.trim(),
+        email: addAdminModal.form.email.trim(),
+        password: addAdminModal.form.password,
+      };
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || 'Failed to create admin user');
+      }
+      closeAddAdminModal();
+      fetchUsers();
+    } catch (err) {
+      setAddAdminModal((prev) => ({ ...prev, saving: false, error: err.message }));
     }
   };
 
@@ -263,13 +368,18 @@ export default function UsersPage({ embedded = false }) {
         </div>
       )}
 
-      <div className="filter-bar">
+      <div className="filter-bar users-filter-bar">
         <select className="input" value={filter} onChange={(e) => setFilter(e.target.value)}>
           <option value="all">All Users ({users.length})</option>
           <option value="pending">Pending ({users.filter((u) => u.status === 'pending').length})</option>
           <option value="approved">Approved ({users.filter((u) => u.status === 'approved').length})</option>
           <option value="rejected">Rejected ({users.filter((u) => u.status === 'rejected').length})</option>
         </select>
+        <div className="filter-bar-actions">
+          <button type="button" className="btn btn-primary" onClick={openAddAdminModal}>
+            Add Admin
+          </button>
+        </div>
       </div>
 
       {filteredUsers.length === 0 ? (
@@ -386,7 +496,7 @@ export default function UsersPage({ embedded = false }) {
         open={editModal.open}
         onClose={editModal.saving ? undefined : closeEditModal}
         title="Edit User"
-        description="Update user details, access role, approval status, and assigned brand."
+        description="Update user details, access role, approval status, assigned brand, and optional password."
       >
         <form className="modal-form" onSubmit={handleSaveUserEdit}>
           <div className="user-edit-grid">
@@ -449,6 +559,30 @@ export default function UsersPage({ embedded = false }) {
                 </select>
               </label>
             )}
+            <label>
+              <span>New Password</span>
+              <input
+                className="input"
+                type="password"
+                value={editModal.form?.password || ''}
+                onChange={(event) => updateEditField('password', event.target.value)}
+                autoComplete="new-password"
+                minLength={8}
+                placeholder="Leave empty to keep current password"
+              />
+            </label>
+            <label>
+              <span>Confirm New Password</span>
+              <input
+                className="input"
+                type="password"
+                value={editModal.form?.confirmPassword || ''}
+                onChange={(event) => updateEditField('confirmPassword', event.target.value)}
+                autoComplete="new-password"
+                minLength={8}
+                placeholder="Repeat new password"
+              />
+            </label>
           </div>
           {editModal.error && <p className="field-error">{editModal.error}</p>}
           <div className="modal-actions">
@@ -462,6 +596,73 @@ export default function UsersPage({ embedded = false }) {
             </button>
             <button type="submit" className="btn btn-primary" disabled={editModal.saving}>
               {editModal.saving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={addAdminModal.open}
+        onClose={addAdminModal.saving ? undefined : closeAddAdminModal}
+        title="Add Admin User"
+        description="Create a new approved admin account."
+      >
+        <form className="modal-form" onSubmit={handleCreateAdmin}>
+          <label>
+            <span>Name *</span>
+            <input
+              className="input"
+              value={addAdminModal.form.name}
+              onChange={(event) => updateAddAdminField('name', event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            <span>Email *</span>
+            <input
+              className="input"
+              type="email"
+              value={addAdminModal.form.email}
+              onChange={(event) => updateAddAdminField('email', event.target.value)}
+              required
+            />
+          </label>
+          <label>
+            <span>Password *</span>
+            <input
+              className="input"
+              type="password"
+              value={addAdminModal.form.password}
+              onChange={(event) => updateAddAdminField('password', event.target.value)}
+              autoComplete="new-password"
+              minLength={8}
+              required
+            />
+          </label>
+          <label>
+            <span>Confirm Password *</span>
+            <input
+              className="input"
+              type="password"
+              value={addAdminModal.form.confirmPassword}
+              onChange={(event) => updateAddAdminField('confirmPassword', event.target.value)}
+              autoComplete="new-password"
+              minLength={8}
+              required
+            />
+          </label>
+          {addAdminModal.error && <p className="field-error">{addAdminModal.error}</p>}
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={closeAddAdminModal}
+              disabled={addAdminModal.saving}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={addAdminModal.saving}>
+              {addAdminModal.saving ? 'Creating...' : 'Create Admin'}
             </button>
           </div>
         </form>

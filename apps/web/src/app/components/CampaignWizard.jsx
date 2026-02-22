@@ -596,7 +596,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
       case STEPS.REVIEW:
         return (
           <div className="wizard-step">
-            <h3>Review your campaign</h3>
+            <h3>Campaign overview</h3>
             <div className="wizard-review">
               <div className="review-section">
                 <h4>Campaign Details</h4>
