@@ -25,6 +25,7 @@ export default function CreatorEditModal({
   onSubmit,
 }) {
   const creatorType = String(form?.creator_type || '').toLowerCase();
+  const isInfluencer = creatorType === 'influencer';
   const showPortfolioField = creatorType === 'influencer';
   const showUgcVideos = creatorType === 'ugc';
   const videoUrls = Array.isArray(form?.ugc_video_urls) ? form.ugc_video_urls : [];
@@ -126,14 +127,16 @@ export default function CreatorEditModal({
               />
             </label>
 
-            <label>
-              <span>Handle</span>
-              <input
-                className="input"
-                value={textValue(form.handle)}
-                onChange={(event) => onChange('handle', event.target.value)}
-              />
-            </label>
+            {isInfluencer ? null : (
+              <label>
+                <span>Handle</span>
+                <input
+                  className="input"
+                  value={textValue(form.handle)}
+                  onChange={(event) => onChange('handle', event.target.value)}
+                />
+              </label>
+            )}
 
             <label>
               <span>TikTok URL</span>
@@ -145,29 +148,11 @@ export default function CreatorEditModal({
             </label>
 
             <label>
-              <span>TikTok Handle</span>
-              <input
-                className="input"
-                value={textValue(form.tiktok_handle)}
-                onChange={(event) => onChange('tiktok_handle', event.target.value)}
-              />
-            </label>
-
-            <label>
               <span>Instagram URL</span>
               <input
                 className="input"
                 value={textValue(form.instagram_url)}
                 onChange={(event) => onChange('instagram_url', event.target.value)}
-              />
-            </label>
-
-            <label>
-              <span>Instagram Handle</span>
-              <input
-                className="input"
-                value={textValue(form.instagram_handle)}
-                onChange={(event) => onChange('instagram_handle', event.target.value)}
               />
             </label>
 
@@ -242,15 +227,6 @@ export default function CreatorEditModal({
                   </option>
                 ))}
               </select>
-            </label>
-
-            <label>
-              <span>Languages</span>
-              <input
-                className="input"
-                value={textValue(form.languages)}
-                onChange={(event) => onChange('languages', event.target.value)}
-              />
             </label>
 
             <label>
@@ -381,40 +357,20 @@ export default function CreatorEditModal({
             </label>
           </div>
 
-          <div className="creator-edit-booleans">
-            <label>
-              <input
-                type="checkbox"
-                checked={Boolean(form.accepts_gifted_collab)}
-                onChange={(event) => onChange('accepts_gifted_collab', event.target.checked)}
-              />
+          {!isInfluencer ? (
+            <div className="creator-edit-toggle-row">
               <span>Accepts Gifted Collab</span>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={Boolean(form.has_mock_video)}
-                onChange={(event) => onChange('has_mock_video', event.target.checked)}
-              />
-              <span>Has Mock Video</span>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={Boolean(form.has_equipment)}
-                onChange={(event) => onChange('has_equipment', event.target.checked)}
-              />
-              <span>Has Equipment</span>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={Boolean(form.can_voiceover)}
-                onChange={(event) => onChange('can_voiceover', event.target.checked)}
-              />
-              <span>Can Voiceover</span>
-            </label>
-          </div>
+              <button
+                type="button"
+                className={`creator-edit-switch ${Boolean(form.accepts_gifted_collab) ? 'active' : ''}`}
+                onClick={() => onChange('accepts_gifted_collab', !Boolean(form.accepts_gifted_collab))}
+                aria-pressed={Boolean(form.accepts_gifted_collab)}
+                aria-label="Toggle Accepts Gifted Collab"
+              >
+                <span className="creator-edit-switch-knob" />
+              </button>
+            </div>
+          ) : null}
 
           {error && <p className="error-text">{error}</p>}
 

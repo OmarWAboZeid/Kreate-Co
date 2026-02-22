@@ -3054,7 +3054,6 @@ const server = http.createServer(async (req, res) => {
       if (!payload.niche) return json(res, 400, { ok: false, error: 'niche is required' });
       if (payload.age == null) return json(res, 400, { ok: false, error: 'age is required' });
       if (!payload.gender) return json(res, 400, { ok: false, error: 'gender is required' });
-      if (!payload.languages) return json(res, 400, { ok: false, error: 'languages is required' });
       if (!payload.turnaround_time) {
         return json(res, 400, { ok: false, error: 'turnaround_time is required' });
       }

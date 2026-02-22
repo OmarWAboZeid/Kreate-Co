@@ -92,17 +92,6 @@ export default function UgcCreatorCreateModal({
           </label>
 
           <label>
-            <span>Languages *</span>
-            <input
-              className="input"
-              value={textValue(form.languages)}
-              onChange={(event) => onChange('languages', event.target.value)}
-              placeholder="e.g. English, Arabic"
-              required
-            />
-          </label>
-
-          <label>
             <span>Turnaround Time *</span>
             <input
               className="input"

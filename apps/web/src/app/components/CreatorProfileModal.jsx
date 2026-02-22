@@ -27,15 +27,6 @@ const formatEngagement = (value) => {
   return `${num}%`;
 };
 
-const formatList = (value) => {
-  if (Array.isArray(value)) {
-    const clean = value.map((item) => String(item || '').trim()).filter(Boolean);
-    return clean.length ? clean.join(', ') : '—';
-  }
-  if (value == null || value === '') return '—';
-  return String(value);
-};
-
 const normalizeExternalUrl = (value) => {
   if (!value) return '';
   const raw = String(value).trim();
@@ -159,7 +150,6 @@ export default function CreatorProfileModal({ creator, type, onClose, viewerRole
     { label: 'Category', value: creator.category || (isInfluencer ? '—' : 'UGC') },
     { label: 'Gender', value: creator.gender || '—' },
     { label: 'Age', value: creator.age || '—' },
-    { label: 'Languages', value: formatList(creator.languages) },
     ...(!isBrandViewer ? [{ label: 'Phone', value: creator.phone || '—' }] : []),
   ];
   const capabilityItems = [

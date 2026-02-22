@@ -11,6 +11,7 @@ import { useAppDispatch, useAppState } from '../state.jsx';
 import { handleAvatarError, resolveAvatarSrc } from '../utils/avatar.js';
 import {
   campaignsApi,
+  creatorsApi,
   useBrandsQuery,
   useCampaignCreatorsQuery,
   useCreatorStagesQuery,
@@ -175,12 +176,76 @@ const formatCompactFollowers = (value) => {
   }).format(parsed);
 };
 
+const formatRatePlaceholder = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return 'Current rate not set';
+  return `Current: $${parsed.toLocaleString()}`;
+};
+
 const normalizeExternalUrl = (value) => {
   if (!value) return '';
   const raw = String(value).trim();
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw)) return raw;
   return `https://${raw.replace(/^\/+/, '')}`;
+};
+
+const SocialPlatformIcon = ({ platform }) => {
+  if (platform === 'instagram') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect
+          x="3.5"
+          y="3.5"
+          width="17"
+          height="17"
+          rx="5"
+          ry="5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.9"
+        />
+        <circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" strokeWidth="1.9" />
+        <circle cx="17.5" cy="6.8" r="1.2" fill="currentColor" />
+      </svg>
+    );
+  }
+  if (platform === 'youtube') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect
+          x="2.8"
+          y="5.2"
+          width="18.4"
+          height="13.6"
+          rx="4.2"
+          ry="4.2"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.9"
+        />
+        <path d="M10 9.1 15.2 12 10 14.9z" fill="currentColor" />
+      </svg>
+    );
+  }
+  if (platform === 'facebook') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path
+          d="M13.8 21v-7.2h2.4l.4-2.7h-2.8V9.3c0-.8.2-1.3 1.4-1.3h1.5V5.6c-.3 0-1.2-.1-2.3-.1-2.3 0-3.8 1.4-3.8 4v1.6H8.2v2.7h2.4V21z"
+          fill="currentColor"
+        />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        d="M16.1 5.2c-1 0-1.9-.4-2.5-1.1v9.2a4.3 4.3 0 1 1-3-4.1v2.2a2.2 2.2 0 1 0 .9 1.8V3h2.2c.2 1.5 1.3 2.2 2.4 2.2z"
+        fill="currentColor"
+      />
+    </svg>
+  );
 };
 
 const normalizeCreatorVideoUrls = (creator) => {
@@ -208,13 +273,12 @@ const resolveMediaUrl = (value) => {
   return `/${raw.replace(/^\/+/, '')}`;
 };
 
-const getCreatorSocialLinks = (creator) =>
+const getCreatorSocialEntries = (creator) =>
   [
-    { label: 'TikTok', url: creator?.tiktok_url },
-    { label: 'Instagram', url: creator?.instagram_url },
-    { label: 'YouTube', url: creator?.youtube_url },
-    { label: 'Facebook', url: creator?.facebook_url },
-    { label: 'Portfolio', url: creator?.portfolio_url },
+    { key: 'tiktok', label: 'TikTok', url: creator?.tiktok_url },
+    { key: 'instagram', label: 'Instagram', url: creator?.instagram_url },
+    { key: 'youtube', label: 'YouTube', url: creator?.youtube_url },
+    { key: 'facebook', label: 'Facebook', url: creator?.facebook_url },
   ]
     .map((entry) => ({ ...entry, href: normalizeExternalUrl(entry.url) }))
     .filter((entry) => entry.href);
@@ -315,6 +379,7 @@ export default function CampaignDetailPage() {
   const [adminAnalyticsSortDirection, setAdminAnalyticsSortDirection] = useState('desc');
   const [adminAnalyticsPlatformFilter, setAdminAnalyticsPlatformFilter] = useState('all');
   const [adminAnalyticsStatusFilter, setAdminAnalyticsStatusFilter] = useState('all');
+  const [suggestInfluencerRates, setSuggestInfluencerRates] = useState({});
 
   const isAdmin = role === 'admin';
   const isEmployee = role === 'employee';
@@ -703,6 +768,37 @@ export default function CampaignDetailPage() {
     const isAlreadySuggested = creatorState.shortlist.includes(creator.id);
     if (isAlreadySuggested) return;
     try {
+      if (isAdmin && suggestTab === 'influencer') {
+        const draftRateRaw = suggestInfluencerRates[creator.id];
+        if (draftRateRaw !== undefined && String(draftRateRaw).trim() !== '') {
+          const nextRate = Number(draftRateRaw);
+          if (!Number.isFinite(nextRate) || nextRate < 0) {
+            throw new Error('Rate must be a non-negative number.');
+          }
+          const currentRate = Number(creator.base_rate);
+          if (!Number.isFinite(currentRate) || Math.abs(currentRate - nextRate) > 0.0001) {
+            const creatorDetailsRes = await creatorsApi.getById(creator.id);
+            const creatorDetails = creatorDetailsRes?.data;
+            if (!creatorDetails) {
+              throw new Error('Failed to load creator details before updating rate.');
+            }
+            await creatorsApi.update({
+              creatorId: creator.id,
+              payload: {
+                ...creatorDetails,
+                base_rate: nextRate,
+              },
+            });
+            await influencersQuery.refetch();
+          }
+          setSuggestInfluencerRates((prev) => {
+            const next = { ...prev };
+            delete next[creator.id];
+            return next;
+          });
+        }
+      }
+
       await campaignsApi.suggestCreator({
         campaignId: campaign.id,
         creatorId: creator.id,
@@ -731,6 +827,7 @@ export default function CampaignDetailPage() {
 
   const closeAddCreatorsModal = () => {
     setShowAddCreatorsModal(false);
+    setSuggestInfluencerRates({});
   };
 
   const closeAddContentModal = () => {
@@ -1893,37 +1990,13 @@ export default function CampaignDetailPage() {
 
   const renderBrandCreatorStatusCell = (creator) => {
     const decision = creatorState.approvals?.[creator.id] || 'Suggested';
-    if (decision === 'Brand Rejected') {
+    if (decision !== 'Brand Approved') {
       return null;
     }
     const workflowStatus = getBrandCampaignWorkflowStatus(creator);
     return (
       <div className="brand-creator-status-cell">
         <StatusPill status={workflowStatus} />
-      </div>
-    );
-  };
-
-  const renderBrandInfluencerSocialLinks = (creator) => {
-    const links = getCreatorSocialLinks(creator).filter((entry) =>
-      ['TikTok', 'Instagram', 'YouTube', 'Facebook'].includes(entry.label)
-    );
-    if (links.length === 0) {
-      return <span className="creator-social-empty">No links</span>;
-    }
-    return (
-      <div className="brand-creator-social-links">
-        {links.map((entry) => (
-          <a
-            key={`${creator.id}-${entry.label}`}
-            href={entry.href}
-            className="creator-social-link"
-            target="_blank"
-            rel="noreferrer"
-          >
-            {entry.label}
-          </a>
-        ))}
       </div>
     );
   };
@@ -1938,36 +2011,18 @@ export default function CampaignDetailPage() {
     return niche;
   };
 
-  const getBrandCreatorColumns = (creatorType) => {
-    if (creatorType === 'influencer') {
-      return [
-        {
-          key: 'status',
-          label: 'Campaign Status',
-          raw: true,
-          className: 'creator-list-v3-metric-status',
-          render: (creator) => renderBrandCreatorStatusCell(creator),
-        },
-        {
-          key: 'social_links',
-          label: 'Social Links',
-          raw: true,
-          className: 'creator-list-v3-metric-social',
-          render: (creator) => renderBrandInfluencerSocialLinks(creator),
-        },
-      ];
-    }
-
-    return [
-      {
-        key: 'status',
-        label: 'Campaign Status',
-        raw: true,
-        className: 'creator-list-v3-metric-status',
-        render: (creator) => renderBrandCreatorStatusCell(creator),
-      },
-    ];
-  };
+  const getBrandCreatorColumns = ({ includeStatus = true } = {}) =>
+    includeStatus
+      ? [
+          {
+            key: 'status',
+            label: 'Campaign Status',
+            raw: true,
+            className: 'creator-list-v3-metric-status',
+            render: (creator) => renderBrandCreatorStatusCell(creator),
+          },
+        ]
+      : [];
 
   const renderBrandPendingActions = (creator) => (
     <>
@@ -2056,7 +2111,11 @@ export default function CampaignDetailPage() {
     </button>
   );
 
-  const renderBrandCreatorTypeSections = (typedCreators, renderActions) =>
+  const renderBrandCreatorTypeSections = (
+    typedCreators,
+    renderActions,
+    { includeStatus = true } = {}
+  ) =>
     brandCreatorTypeSections.map((section) => {
       const creatorsByType = typedCreators?.[section.key] || [];
       if (creatorsByType.length === 0) return null;
@@ -2079,9 +2138,10 @@ export default function CampaignDetailPage() {
             type={section.type}
             onOpenProfile={openCreatorProfile}
             renderActions={renderActions}
-            customColumns={getBrandCreatorColumns(section.type)}
+            customColumns={getBrandCreatorColumns({ includeStatus })}
             renderMainMeta={renderBrandCreatorMeta}
             showViewButton={false}
+            showSocialIcons
           />
         </div>
       );
@@ -2354,7 +2414,8 @@ export default function CampaignDetailPage() {
                     </div>
                     {renderBrandCreatorTypeSections(
                       filteredCreatorBucketsByType.rejected,
-                      renderBrandRejectedActions
+                      renderBrandRejectedActions,
+                      { includeStatus: false }
                     )}
                   </div>
                 )}
@@ -2427,7 +2488,7 @@ export default function CampaignDetailPage() {
                       <th>Creator</th>
                       <th>Brand Decision</th>
                       <th>Campaign Status</th>
-                      <th>{adminCreatorFilterTab === 'influencer' ? 'Social Links' : 'Channels'}</th>
+                      {adminCreatorFilterTab === 'ugc' ? <th>Channels</th> : null}
                       <th className="campaign-admin-creators-actions-head">Actions</th>
                     </tr>
                   </thead>
@@ -2454,9 +2515,7 @@ export default function CampaignDetailPage() {
                         : isRejected
                           ? 'Rejected'
                           : 'Awaiting Approval';
-                      const socialLinks = getCreatorSocialLinks(creator).filter((entry) =>
-                        ['TikTok', 'Instagram', 'YouTube', 'Facebook'].includes(entry.label)
-                      );
+                      const socialEntries = getCreatorSocialEntries(creator);
                       const ugcVideoUrls =
                         creatorTypeKey === 'ugc'
                           ? normalizeCreatorVideoUrls(creator).map(resolveMediaUrl).filter(Boolean)
@@ -2484,6 +2543,23 @@ export default function CampaignDetailPage() {
                                   </button>
                                 </strong>
                                 <span>{audienceMeta}</span>
+                                {socialEntries.length > 0 ? (
+                                  <div className="creator-list-v3-social-icons campaign-admin-creator-social-icons">
+                                    {socialEntries.map((entry) => (
+                                      <a
+                                        key={`${creator.id}-${entry.key}`}
+                                        href={entry.href}
+                                        className={`creator-list-v3-social-icon ${entry.key}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        title={entry.label}
+                                        aria-label={entry.label}
+                                      >
+                                        <SocialPlatformIcon platform={entry.key} />
+                                      </a>
+                                    ))}
+                                  </div>
+                                ) : null}
                               </div>
                             </div>
                           </td>
@@ -2512,26 +2588,8 @@ export default function CampaignDetailPage() {
                               </span>
                             )}
                           </td>
-                          <td>
-                            {adminCreatorFilterTab === 'influencer' ? (
-                              socialLinks.length > 0 ? (
-                                <div className="campaign-admin-creator-links">
-                                  {socialLinks.map((entry) => (
-                                    <a
-                                      key={`${creator.id}-${entry.label}`}
-                                      href={entry.href}
-                                      className="creator-social-link"
-                                      target="_blank"
-                                      rel="noreferrer"
-                                    >
-                                      {entry.label}
-                                    </a>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="creator-social-empty">—</span>
-                              )
-                            ) : (
+                          {adminCreatorFilterTab === 'ugc' ? (
+                            <td>
                               <button
                                 type="button"
                                 className="creator-social-link creator-social-link-button"
@@ -2539,17 +2597,10 @@ export default function CampaignDetailPage() {
                               >
                                 UGC Videos {ugcVideoUrls.length > 0 ? `(${ugcVideoUrls.length})` : ''}
                               </button>
-                            )}
-                          </td>
+                            </td>
+                          ) : null}
                           <td className="campaign-admin-creators-actions">
                             <div className="campaign-admin-creators-actions-wrap">
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-small"
-                                onClick={() => openCreatorProfile(creator, creatorTypeKey)}
-                              >
-                                View
-                              </button>
                               {canManageCreators && currentDecision === 'Suggested' ? (
                                 <button
                                   type="button"
@@ -2649,6 +2700,8 @@ export default function CampaignDetailPage() {
                   const isAlreadySuggested = creatorState.shortlist.includes(creator.id);
                   const currentDecision = creatorState.approvals?.[creator.id] || 'Suggested';
                   const canUndoSuggestion = isAlreadySuggested && currentDecision === 'Suggested';
+                  const canEditInfluencerRate =
+                    isAdmin && creatorTypeKey === 'influencer' && !isAlreadySuggested;
                   const followersLabel = formatCompactFollowers(
                     creator.followers ?? creator.followers_count
                   );
@@ -2669,6 +2722,22 @@ export default function CampaignDetailPage() {
                         <span>{creator.niche || creator.category || 'General'}</span>
                       </div>
                       <div className="add-creators-modal-actions-col">
+                        {canEditInfluencerRate ? (
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="input add-creators-rate-input"
+                            placeholder={formatRatePlaceholder(creator.base_rate)}
+                            value={suggestInfluencerRates[creator.id] ?? ''}
+                            onChange={(event) =>
+                              setSuggestInfluencerRates((prev) => ({
+                                ...prev,
+                                [creator.id]: event.target.value,
+                              }))
+                            }
+                          />
+                        ) : null}
                         <button
                           type="button"
                           className="btn btn-secondary btn-small"

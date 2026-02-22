@@ -92,6 +92,27 @@ const normalizeVideoUrls = (value) => {
     .filter(Boolean);
 };
 
+const extractHandleFromUrl = (value, platform) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw.replace(/^\/+/, '')}`;
+  try {
+    const parsed = new URL(normalized);
+    const pathname = parsed.pathname.replace(/\/+$/, '');
+    if (platform === 'tiktok') {
+      const match = pathname.match(/^\/@([^/]+)/i);
+      return match ? match[1] : '';
+    }
+    if (platform === 'instagram') {
+      const match = pathname.match(/^\/([^/]+)/i);
+      return match ? match[1] : '';
+    }
+    return '';
+  } catch (error) {
+    return '';
+  }
+};
+
 const normalizeCreatorForm = (creator) => ({
   id: creator?.id || '',
   display_name: creator?.display_name || creator?.name || '',
@@ -706,7 +727,6 @@ export default function CreatorsPage() {
       ['niche', 'Niche is required.'],
       ['age', 'Age is required.'],
       ['gender', 'Gender is required.'],
-      ['languages', 'Languages are required.'],
       ['turnaround_time', 'Turnaround time is required.'],
       ['base_rate', 'Base rate is required.'],
     ];
@@ -755,6 +775,15 @@ export default function CreatorsPage() {
       if (payload.creator_type !== 'UGC') {
         payload.ugc_video_urls = [];
       }
+
+      const derivedTikTokHandle = extractHandleFromUrl(payload.tiktok_url, 'tiktok');
+      const derivedInstagramHandle = extractHandleFromUrl(payload.instagram_url, 'instagram');
+      payload.tiktok_handle = derivedTikTokHandle;
+      payload.instagram_handle = derivedInstagramHandle;
+      if (payload.creator_type === 'Influencer') {
+        payload.handle = derivedTikTokHandle || derivedInstagramHandle || '';
+      }
+
       await updateCreatorMutation.mutateAsync({
         creatorId: editModal.form.id,
         payload,
@@ -968,6 +997,8 @@ export default function CreatorsPage() {
               onOpenProfile={openProfile}
               canEdit={isAdmin}
               onEditCreator={openEditCreator}
+              showViewButton={!isAdmin}
+              showSocialIcons={isAdmin}
             />
           </div>
 
@@ -1013,6 +1044,8 @@ export default function CreatorsPage() {
               canEdit={isAdmin}
               onEditCreator={openEditCreator}
               includeInfluencerRate={isAdmin}
+              showViewButton={!isAdmin}
+              showSocialIcons={isAdmin}
             />
           </div>
 
