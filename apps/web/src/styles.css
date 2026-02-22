@@ -11515,3 +11515,223 @@ body.modal-open {
     top: 80px;
   }
 }
+
+/* Admin campaign creators table */
+.campaign-admin-creators-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  background: #fff;
+  border: 1px solid var(--app-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.campaign-admin-creators-table thead th {
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--app-text-muted);
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--app-line);
+  background: var(--app-surface-muted);
+}
+
+.campaign-admin-creators-table th:nth-child(1) {
+  width: 33%;
+}
+
+.campaign-admin-creators-table th:nth-child(2) {
+  width: 14%;
+}
+
+.campaign-admin-creators-table th:nth-child(3) {
+  width: 20%;
+}
+
+.campaign-admin-creators-table th:nth-child(4) {
+  width: 18%;
+}
+
+.campaign-admin-creators-actions-head {
+  width: 15%;
+  text-align: right !important;
+}
+
+.campaign-admin-creators-table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--app-line);
+  vertical-align: middle;
+}
+
+.campaign-admin-creators-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.campaign-admin-creators-table tbody tr:hover td {
+  background: rgba(97, 21, 56, 0.03);
+}
+
+.campaign-admin-creator-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.campaign-admin-creator-cell .creator-avatar-sm {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.campaign-admin-creator-meta {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.campaign-admin-creator-meta strong {
+  min-width: 0;
+}
+
+.campaign-admin-creator-meta .campaign-creators-name-btn {
+  font-size: 0.92rem;
+  line-height: 1.2;
+}
+
+.campaign-admin-creator-meta span {
+  font-size: 0.8rem;
+  color: var(--app-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.campaign-admin-creator-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.campaign-admin-creators-actions {
+  text-align: right;
+}
+
+.campaign-admin-creators-actions-wrap {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.campaign-admin-creators-actions-wrap .btn,
+.campaign-admin-creators-actions-wrap .btn-small {
+  min-height: 30px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 0.74rem;
+}
+
+.creator-stage-pill.creator-stage-pill-muted {
+  border-color: #dde2ec;
+  background: #f6f8fc;
+  color: #647089;
+}
+
+.status-awaiting-approval {
+  background: rgba(198, 208, 119, 0.22);
+  color: #55601f;
+}
+
+@media (max-width: 980px) {
+  .campaign-admin-creators-table {
+    min-width: 860px;
+  }
+
+  .campaign-admin-creators-actions {
+    text-align: left;
+  }
+
+  .campaign-admin-creators-actions-wrap {
+    justify-content: flex-start;
+  }
+
+  .campaign-admin-creators-actions-head {
+    text-align: left !important;
+  }
+}
+
+/* Campaign creators toolbar layout */
+.creator-network-section .creator-network-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'tabs add'
+    'filters filters';
+  align-items: start;
+  gap: 10px;
+  width: 100%;
+}
+
+.creator-network-section .campaign-creators-filter-tabs {
+  grid-area: tabs;
+  width: min(520px, 100%);
+  min-width: 300px;
+  margin: 0;
+}
+
+.creator-network-section .creator-network-filters .filters-bar {
+  grid-area: filters;
+  width: 100%;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-wrap: nowrap;
+  scrollbar-width: thin;
+}
+
+.creator-network-section .creator-network-filters .filters-bar-wrap .input {
+  flex: 0 0 auto;
+  min-width: 128px;
+  max-width: none;
+}
+
+.creator-network-section .creator-network-filters .filters-bar-wrap input[type='text'],
+.creator-network-section .creator-network-filters .filters-bar-wrap input[placeholder*='Search'] {
+  min-width: 190px;
+}
+
+.creator-network-section .creator-network-filters .add-creators-button {
+  grid-area: add;
+  margin-left: 0;
+  margin-top: 0;
+  align-self: start;
+  justify-self: end;
+  white-space: nowrap;
+}
+
+@media (max-width: 1320px) {
+  .creator-network-section .creator-network-filters {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .creator-network-section .campaign-creators-filter-tabs {
+    max-width: none;
+    min-width: 0;
+  }
+
+  .creator-network-section .creator-network-filters .add-creators-button {
+    justify-self: end;
+  }
+}

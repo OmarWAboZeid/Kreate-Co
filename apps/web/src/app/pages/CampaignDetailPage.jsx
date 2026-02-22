@@ -2421,77 +2421,104 @@ export default function CampaignDetailPage() {
               />
             ) : (
               <div className="campaign-creators-table-wrap">
-                <div
-                  className={`campaign-creators-table ${
-                    adminCreatorFilterTab === 'influencer' ? 'campaign-creators-table-influencer' : ''
-                  }`}
-                >
-                  <div className="campaign-creators-row campaign-creators-row-head">
-                    <div className="campaign-creators-col-head">
-                      <span className="campaign-creators-col-title">Creator Profile</span>
-                      <span className="campaign-creators-col-hint">Name, audience, niche</span>
-                    </div>
-                    <div className="campaign-creators-col-head">
-                      <span className="campaign-creators-col-title">Workflow & Actions</span>
-                      <span className="campaign-creators-col-hint">Stage, decision, delivery</span>
-                    </div>
-                    {adminCreatorFilterTab !== 'influencer' ? (
-                      <div className="campaign-creators-col-head">
-                        <span className="campaign-creators-col-title">Channels</span>
-                        <span className="campaign-creators-col-hint">Social links and UGC videos</span>
-                      </div>
-                    ) : null}
-                  </div>
-                  {filteredAdminCreators.map((creator) => {
-                    const creatorTypeKey = inferCreatorType(creator);
-                    const creatorType = creatorTypeKey === 'ugc' ? 'UGC' : 'Influencer';
-                    const followersLabel = formatCompactFollowers(
-                      creator.followers ?? creator.followers_count
-                    );
-                    const audienceMeta =
-                      creatorTypeKey === 'ugc' || followersLabel === '—'
-                        ? `${creator.niche || creator.category || 'General'} · ${creatorType}`
-                        : `${followersLabel} followers · ${creator.niche || creator.category || 'General'} · ${creatorType}`;
-                    const currentDecision = creatorState.approvals?.[creator.id] || 'Suggested';
-                    const hasWorkflowEntry = Boolean(creatorState.outreach?.[creator.id]);
-                    const currentWorkflowStatus =
-                      creatorState.outreach?.[creator.id]?.workflowStatus ||
-                      (hasWorkflowEntry ? creatorStageOptions[0] || '' : '');
-                    const socialLinks = getCreatorSocialLinks(creator).filter((entry) =>
-                      ['TikTok', 'Instagram', 'YouTube', 'Facebook'].includes(entry.label)
-                    );
-                    const ugcVideoUrls =
-                      creatorTypeKey === 'ugc'
-                        ? normalizeCreatorVideoUrls(creator).map(resolveMediaUrl).filter(Boolean)
-                        : [];
-                    return (
-                      <div key={creator.id} className="campaign-creators-row">
-                        <div className="campaign-creators-main">
-                          <img
-                            src={resolveAvatarSrc(creator.profile_image)}
-                            alt={creator.name || creator.display_name || 'Creator'}
-                            className="creator-avatar-sm"
-                            onError={handleAvatarError}
-                          />
-                          <div className="campaign-creators-main-info">
-                            <strong>
-                              <button
-                                type="button"
-                                className="campaign-creators-name-btn"
-                                onClick={() =>
-                                  openCreatorProfile(creator, inferCreatorType(creator))
+                <table className="campaign-admin-creators-table">
+                  <thead>
+                    <tr>
+                      <th>Creator</th>
+                      <th>Brand Decision</th>
+                      <th>Campaign Status</th>
+                      <th>{adminCreatorFilterTab === 'influencer' ? 'Social Links' : 'Channels'}</th>
+                      <th className="campaign-admin-creators-actions-head">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredAdminCreators.map((creator) => {
+                      const creatorTypeKey = inferCreatorType(creator);
+                      const creatorType = creatorTypeKey === 'ugc' ? 'UGC' : 'Influencer';
+                      const followersLabel = formatCompactFollowers(
+                        creator.followers ?? creator.followers_count
+                      );
+                      const audienceMeta =
+                        creatorTypeKey === 'ugc' || followersLabel === '—'
+                          ? `${creator.niche || creator.category || 'General'} · ${creatorType}`
+                          : `${followersLabel} followers · ${creator.niche || creator.category || 'General'} · ${creatorType}`;
+                      const currentDecision = creatorState.approvals?.[creator.id] || 'Suggested';
+                      const isApproved = currentDecision === 'Brand Approved';
+                      const isRejected = currentDecision === 'Brand Rejected';
+                      const workflowStatus =
+                        creatorState.outreach?.[creator.id]?.workflowStatus ||
+                        creatorStageOptions[0] ||
+                        'Sourced';
+                      const decisionLabel = isApproved
+                        ? 'Approved'
+                        : isRejected
+                          ? 'Rejected'
+                          : 'Awaiting Approval';
+                      const socialLinks = getCreatorSocialLinks(creator).filter((entry) =>
+                        ['TikTok', 'Instagram', 'YouTube', 'Facebook'].includes(entry.label)
+                      );
+                      const ugcVideoUrls =
+                        creatorTypeKey === 'ugc'
+                          ? normalizeCreatorVideoUrls(creator).map(resolveMediaUrl).filter(Boolean)
+                          : [];
+                      return (
+                        <tr key={creator.id}>
+                          <td>
+                            <div className="campaign-admin-creator-cell">
+                              <img
+                                src={resolveAvatarSrc(creator.profile_image)}
+                                alt={creator.name || creator.display_name || 'Creator'}
+                                className="creator-avatar-sm"
+                                onError={handleAvatarError}
+                              />
+                              <div className="campaign-admin-creator-meta">
+                                <strong>
+                                  <button
+                                    type="button"
+                                    className="campaign-creators-name-btn"
+                                    onClick={() =>
+                                      openCreatorProfile(creator, inferCreatorType(creator))
+                                    }
+                                  >
+                                    {creator.name || creator.display_name || 'Creator'}
+                                  </button>
+                                </strong>
+                                <span>{audienceMeta}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <StatusPill status={decisionLabel} />
+                          </td>
+                          <td>
+                            {isApproved ? (
+                              <select
+                                className="input creator-status-select"
+                                value={workflowStatus}
+                                onChange={(event) =>
+                                  handleWorkflowStatusUpdate(creator.id, event.target.value)
                                 }
+                                disabled={!canManageCreators}
                               >
-                                {creator.name || creator.display_name || 'Creator'}
-                              </button>
-                            </strong>
-                            <span>{audienceMeta}</span>
-                            {creatorTypeKey === 'influencer' ? (
-                              <div className="campaign-creators-inline-social">
-                                {socialLinks.length > 0 ? (
-                                  socialLinks.map((entry) => (
+                                {creatorStageOptions.map((statusLabel) => (
+                                  <option key={statusLabel} value={statusLabel}>
+                                    {statusLabel}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="creator-stage-pill creator-stage-pill-muted">
+                                {isRejected ? 'Not active' : 'Awaiting brand approval'}
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            {adminCreatorFilterTab === 'influencer' ? (
+                              socialLinks.length > 0 ? (
+                                <div className="campaign-admin-creator-links">
+                                  {socialLinks.map((entry) => (
                                     <a
-                                      key={`${creator.id}-inline-${entry.label}`}
+                                      key={`${creator.id}-${entry.label}`}
                                       href={entry.href}
                                       className="creator-social-link"
                                       target="_blank"
@@ -2499,58 +2526,12 @@ export default function CampaignDetailPage() {
                                     >
                                       {entry.label}
                                     </a>
-                                  ))
-                                ) : null}
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="campaign-creators-status">
-                          <select
-                            className="input creator-status-select"
-                            value={currentWorkflowStatus}
-                            onChange={(event) =>
-                              handleWorkflowStatusUpdate(creator.id, event.target.value)
-                            }
-                            disabled={!canManageCreators || !hasWorkflowEntry}
-                          >
-                            {!hasWorkflowEntry ? (
-                              <option value="">Awaiting approval</option>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="creator-social-empty">—</span>
+                              )
                             ) : (
-                              creatorStageOptions.map((statusLabel) => (
-                                <option key={statusLabel} value={statusLabel}>
-                                  {statusLabel}
-                                </option>
-                              ))
-                            )}
-                          </select>
-                          <div className="campaign-creators-status-meta">
-                            <StatusPill status={currentDecision} />
-                          </div>
-                          <div className="campaign-creators-status-actions">
-                            {canManageCreators && currentDecision === 'Suggested' ? (
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-small"
-                                onClick={() => handleUndoSuggestCreator(creator.id)}
-                              >
-                                Undo Suggest
-                              </button>
-                            ) : null}
-                            {canManageCreators ? (
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-small"
-                                onClick={() => setAddContentModal({ open: true, creator })}
-                              >
-                                Add Content
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                        {adminCreatorFilterTab !== 'influencer' ? (
-                          <div className="campaign-creators-social">
-                            {creatorTypeKey === 'ugc' ? (
                               <button
                                 type="button"
                                 className="creator-social-link creator-social-link-button"
@@ -2558,24 +2539,42 @@ export default function CampaignDetailPage() {
                               >
                                 UGC Videos {ugcVideoUrls.length > 0 ? `(${ugcVideoUrls.length})` : ''}
                               </button>
-                            ) : null}
-                            {socialLinks.map((entry) => (
-                              <a
-                                key={`${creator.id}-${entry.label}`}
-                                href={entry.href}
-                                className="creator-social-link"
-                                target="_blank"
-                                rel="noreferrer"
+                            )}
+                          </td>
+                          <td className="campaign-admin-creators-actions">
+                            <div className="campaign-admin-creators-actions-wrap">
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-small"
+                                onClick={() => openCreatorProfile(creator, creatorTypeKey)}
                               >
-                                {entry.label}
-                              </a>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
+                                View
+                              </button>
+                              {canManageCreators && currentDecision === 'Suggested' ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-small"
+                                  onClick={() => handleUndoSuggestCreator(creator.id)}
+                                >
+                                  Undo Suggest
+                                </button>
+                              ) : null}
+                              {canManageCreators && isApproved ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-small"
+                                  onClick={() => setAddContentModal({ open: true, creator })}
+                                >
+                                  Add Content
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
