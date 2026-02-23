@@ -166,6 +166,78 @@ const formatShortDate = (value) => {
   });
 };
 
+const CALENDAR_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const CALENDAR_EVENT_TYPE_OPTIONS = [
+  { value: 'milestone', label: 'Milestone' },
+  { value: 'task', label: 'Task' },
+  { value: 'deadline', label: 'Deadline' },
+  { value: 'meeting', label: 'Meeting' },
+];
+
+const parseCalendarDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  }
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const dateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const year = Number(dateOnlyMatch[1]);
+    const month = Number(dateOnlyMatch[2]);
+    const day = Number(dateOnlyMatch[3]);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+    return new Date(year, month - 1, day);
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+};
+
+const toCalendarDayKey = (date) => {
+  const parsed = parseCalendarDate(date);
+  if (!parsed) return '';
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+};
+
+const addCalendarDays = (date, days) => {
+  const parsed = parseCalendarDate(date);
+  if (!parsed) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() + Number(days || 0));
+};
+
+const normalizeEventType = (value) => {
+  const raw = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[-_]+/g, ' ');
+  if (raw === 'task') return 'task';
+  if (raw === 'deadline') return 'deadline';
+  if (raw === 'meeting') return 'meeting';
+  if (raw === 'submission') return 'submission';
+  if (raw === 'published') return 'published';
+  return 'milestone';
+};
+
+const eventToneForType = (type) => {
+  const normalized = normalizeEventType(type);
+  if (normalized === 'submission') return 'submission';
+  if (normalized === 'published') return 'published';
+  return 'milestone';
+};
+
+const eventTypeLabel = (type) => {
+  const normalized = normalizeEventType(type);
+  if (normalized === 'task') return 'Task';
+  if (normalized === 'deadline') return 'Deadline';
+  if (normalized === 'meeting') return 'Meeting';
+  if (normalized === 'submission') return 'Submission';
+  if (normalized === 'published') return 'Published';
+  return 'Milestone';
+};
+
 const formatCompactFollowers = (value) => {
   if (value == null || value === '') return '—';
   const parsed = Number(value);
@@ -318,6 +390,24 @@ export default function CampaignDetailPage() {
   const [showAddCreatorsModal, setShowAddCreatorsModal] = useState(false);
   const [brandTab, setBrandTab] = useState('brief');
   const [adminTab, setAdminTab] = useState('overview');
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
+  const [customCalendarEvents, setCustomCalendarEvents] = useState([]);
+  const [customCalendarEventsLoading, setCustomCalendarEventsLoading] = useState(false);
+  const [customCalendarEventsError, setCustomCalendarEventsError] = useState('');
+  const [calendarEventModal, setCalendarEventModal] = useState({
+    open: false,
+    mode: 'create',
+    eventId: null,
+    title: '',
+    eventDate: '',
+    type: 'milestone',
+    description: '',
+    saving: false,
+    error: '',
+  });
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({
     name: '',
@@ -385,6 +475,7 @@ export default function CampaignDetailPage() {
   const isEmployee = role === 'employee';
   const isBrand = role === 'brand';
   const canManageCreators = isAdmin || isEmployee;
+  const canManageCalendar = isAdmin || isEmployee || isBrand;
   const creatorsQueryParams = useMemo(() => ({ limit: 100 }), []);
   const ugcCreatorsQuery = useUgcCreatorsQuery(creatorsQueryParams, {
     enabled: Boolean(campaignId),
@@ -485,6 +576,53 @@ export default function CampaignDetailPage() {
   }, [dispatch, campaignId]);
 
   const campaign = campaigns.find((item) => item.id === campaignId);
+  useEffect(() => {
+    if (!campaign) return;
+    const seedDate =
+      parseCalendarDate(campaign.timeline?.start) ||
+      parseCalendarDate(campaign.startDate) ||
+      parseCalendarDate(campaign.timeline?.end) ||
+      parseCalendarDate(campaign.endDate) ||
+      parseCalendarDate(campaign.createdAt || campaign.created_at) ||
+      new Date();
+    setCalendarMonth(new Date(seedDate.getFullYear(), seedDate.getMonth(), 1));
+  }, [
+    campaignId,
+    campaign?.timeline?.start,
+    campaign?.startDate,
+    campaign?.timeline?.end,
+    campaign?.endDate,
+    campaign?.createdAt,
+      campaign?.created_at,
+  ]);
+  useEffect(() => {
+    let ignore = false;
+    const loadCalendarEvents = async () => {
+      if (!campaignId) return;
+      setCustomCalendarEventsLoading(true);
+      setCustomCalendarEventsError('');
+      try {
+        const data = await campaignsApi.listEvents(campaignId);
+        if (!ignore) {
+          setCustomCalendarEvents(Array.isArray(data?.data) ? data.data : []);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setCustomCalendarEventsError(error?.message || 'Failed to load campaign events.');
+          setCustomCalendarEvents([]);
+        }
+      } finally {
+        if (!ignore) {
+          setCustomCalendarEventsLoading(false);
+        }
+      }
+    };
+    loadCalendarEvents();
+    return () => {
+      ignore = true;
+    };
+  }, [campaignId]);
+
   const brandOptions = useMemo(() => {
     const options = new Set(brandNames);
     if (campaign?.brand) {
@@ -938,6 +1076,117 @@ export default function CampaignDetailPage() {
     setRejectReason('');
   };
 
+  const closeCalendarEventModal = () => {
+    setCalendarEventModal({
+      open: false,
+      mode: 'create',
+      eventId: null,
+      title: '',
+      eventDate: '',
+      type: 'milestone',
+      description: '',
+      saving: false,
+      error: '',
+    });
+  };
+
+  const openCreateCalendarEventModal = () => {
+    const fallbackDate =
+      toCalendarDayKey(new Date()) ||
+      campaign?.timeline?.start ||
+      campaign?.startDate ||
+      '';
+    setCalendarEventModal({
+      open: true,
+      mode: 'create',
+      eventId: null,
+      title: '',
+      eventDate: fallbackDate,
+      type: 'milestone',
+      description: '',
+      saving: false,
+      error: '',
+    });
+  };
+
+  const openEditCalendarEventModal = (event) => {
+    if (!event) return;
+    setCalendarEventModal({
+      open: true,
+      mode: 'edit',
+      eventId: event.persistedId || event.id,
+      title: event.title || '',
+      eventDate: String(event.eventDate || '').slice(0, 10),
+      type: normalizeEventType(event.type),
+      description: event.description || '',
+      saving: false,
+      error: '',
+    });
+  };
+
+  const refreshCustomCalendarEvents = async () => {
+    if (!campaignId) return;
+    const data = await campaignsApi.listEvents(campaignId);
+    setCustomCalendarEvents(Array.isArray(data?.data) ? data.data : []);
+  };
+
+  const submitCalendarEvent = async () => {
+    if (!canManageCalendar || !campaignId) return;
+    const title = String(calendarEventModal.title || '').trim();
+    const eventDate = String(calendarEventModal.eventDate || '').trim();
+    const type = normalizeEventType(calendarEventModal.type);
+    const description = String(calendarEventModal.description || '').trim();
+
+    if (!title) {
+      setCalendarEventModal((prev) => ({ ...prev, error: 'Title is required.' }));
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
+      setCalendarEventModal((prev) => ({
+        ...prev,
+        error: 'Date is required in YYYY-MM-DD format.',
+      }));
+      return;
+    }
+
+    setCalendarEventModal((prev) => ({ ...prev, saving: true, error: '' }));
+    try {
+      const payload = {
+        title,
+        eventDate,
+        type,
+        description,
+      };
+      if (calendarEventModal.mode === 'edit' && calendarEventModal.eventId) {
+        await campaignsApi.updateEvent({
+          campaignId,
+          eventId: calendarEventModal.eventId,
+          payload,
+        });
+      } else {
+        await campaignsApi.createEvent({ campaignId, payload });
+      }
+      await refreshCustomCalendarEvents();
+      closeCalendarEventModal();
+    } catch (error) {
+      setCalendarEventModal((prev) => ({
+        ...prev,
+        saving: false,
+        error: error?.message || 'Failed to save event.',
+      }));
+    }
+  };
+
+  const deleteCalendarEvent = async (eventId) => {
+    if (!canManageCalendar || !campaignId || !eventId) return;
+    try {
+      await campaignsApi.deleteEvent({ campaignId, eventId });
+      await refreshCustomCalendarEvents();
+    } catch (error) {
+      setCustomCalendarEventsError(error?.message || 'Failed to delete event.');
+    }
+  };
+
   const handleRejectConfirm = async () => {
     if (!rejectModal.creator || !rejectReason.trim()) return;
     try {
@@ -1194,6 +1443,180 @@ export default function CampaignDetailPage() {
     creatorMap.get(creatorId) ||
     creatorMap.get(Number(creatorId)) ||
     shortlistCreators.find((item) => String(item.id) === creatorId);
+  const campaignCalendarEvents = useMemo(() => {
+    const events = [];
+    const usedMilestoneDates = new Set();
+    const pushMilestone = (id, dateValue, title, subtitle = '') => {
+      const parsedDate = parseCalendarDate(dateValue);
+      if (!parsedDate) return;
+      const key = toCalendarDayKey(parsedDate);
+      if (usedMilestoneDates.has(`${id}:${key}`)) return;
+      usedMilestoneDates.add(`${id}:${key}`);
+      events.push({
+        id: `${id}-${key}`,
+        date: parsedDate,
+        dayKey: key,
+        eventDate: key,
+        title,
+        subtitle,
+        type: 'milestone',
+        description: '',
+        custom: false,
+        tone: 'milestone',
+      });
+    };
+
+    const campaignStartDate =
+      parseCalendarDate(campaign.timeline?.start) || parseCalendarDate(campaign.startDate);
+    const campaignEndDate =
+      parseCalendarDate(campaign.timeline?.end) || parseCalendarDate(campaign.endDate);
+
+    pushMilestone('kickoff', campaignStartDate, 'Campaign kickoff', campaign.name || '');
+    pushMilestone('launch', campaignEndDate, 'Target publish date', campaign.name || '');
+
+    if (campaignStartDate && campaignEndDate && campaignEndDate > campaignStartDate) {
+      const totalDays = Math.max(
+        1,
+        Math.round((campaignEndDate.getTime() - campaignStartDate.getTime()) / DAY_IN_MS)
+      );
+      const checkpoints = [
+        { id: 'sourcing', title: 'Creator sourcing checkpoint', progress: 0.25 },
+        { id: 'filming', title: 'Filming checkpoint', progress: 0.6 },
+        { id: 'review', title: 'Final review checkpoint', progress: 0.85 },
+      ];
+      checkpoints.forEach((checkpoint) => {
+        const dayOffset = Math.max(1, Math.min(totalDays - 1, Math.round(totalDays * checkpoint.progress)));
+        const date = addCalendarDays(campaignStartDate, dayOffset);
+        pushMilestone(checkpoint.id, date, checkpoint.title, campaign.name || '');
+      });
+    }
+
+    campaignContent.forEach((item, index) => {
+      const contentDate = parseCalendarDate(item.createdAt || item.created_at);
+      if (!contentDate) return;
+      const creatorId = item.creatorId == null ? '' : String(item.creatorId);
+      const creator = resolveCreatorById(creatorId);
+      const creatorName = creator?.name || creator?.display_name || 'Creator';
+      const platform = String(item.platform || '').trim();
+      const status = String(item.status || '').trim().toLowerCase();
+      const isPublished = status === 'published';
+      const dayKey = toCalendarDayKey(contentDate);
+      events.push({
+        id: `content-${item.id || `${creatorId || 'creator'}-${index}`}`,
+        date: contentDate,
+        dayKey,
+        eventDate: dayKey,
+        title: isPublished ? 'Content published' : 'Content submitted',
+        subtitle: `${creatorName}${platform ? ` · ${platform}` : ''}`,
+        type: isPublished ? 'published' : 'submission',
+        description: '',
+        custom: false,
+        tone: isPublished ? 'published' : 'submission',
+      });
+    });
+
+    customCalendarEvents.forEach((event, index) => {
+      const parsedDate = parseCalendarDate(event.eventDate || event.date);
+      if (!parsedDate) return;
+      const dayKey = toCalendarDayKey(parsedDate);
+      const type = normalizeEventType(event.type);
+      events.push({
+        id: `custom-${event.id || index}`,
+        persistedId: event.id || null,
+        date: parsedDate,
+        dayKey,
+        eventDate: dayKey,
+        title: event.title || 'Event',
+        subtitle: event.description || eventTypeLabel(type),
+        type,
+        description: event.description || '',
+        custom: true,
+        tone: eventToneForType(type),
+      });
+    });
+
+    if (events.length === 0) {
+      const createdDate = parseCalendarDate(campaign.createdAt || campaign.created_at);
+      if (createdDate) {
+        events.push({
+          id: `created-${campaign.id}`,
+          date: createdDate,
+          dayKey: toCalendarDayKey(createdDate),
+          eventDate: toCalendarDayKey(createdDate),
+          title: 'Campaign created',
+          subtitle: campaign.name || '',
+          type: 'milestone',
+          description: '',
+          custom: false,
+          tone: 'milestone',
+        });
+      }
+    }
+
+    return events.sort((left, right) => {
+      const dateDelta = left.date.getTime() - right.date.getTime();
+      if (dateDelta !== 0) return dateDelta;
+      return String(left.title || '').localeCompare(String(right.title || ''), undefined, {
+        sensitivity: 'base',
+        numeric: true,
+      });
+    });
+  }, [
+    campaign.id,
+    campaign.name,
+    campaign.startDate,
+    campaign.endDate,
+    campaign.timeline?.start,
+    campaign.timeline?.end,
+    campaign.createdAt,
+    campaign.created_at,
+    campaignContent,
+    customCalendarEvents,
+    creatorMap,
+    shortlistCreators,
+  ]);
+  const campaignCalendarEventsByDay = useMemo(() => {
+    const map = new Map();
+    campaignCalendarEvents.forEach((event) => {
+      if (!event.dayKey) return;
+      const current = map.get(event.dayKey) || [];
+      current.push(event);
+      map.set(event.dayKey, current);
+    });
+    return map;
+  }, [campaignCalendarEvents]);
+  const calendarDayCells = useMemo(() => {
+    const monthStart = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const mondayOffset = (monthStart.getDay() + 6) % 7;
+    const gridStart = new Date(
+      monthStart.getFullYear(),
+      monthStart.getMonth(),
+      monthStart.getDate() - mondayOffset
+    );
+    const todayKey = toCalendarDayKey(new Date());
+    return Array.from({ length: 42 }, (_, index) => {
+      const date = addCalendarDays(gridStart, index);
+      const dayKey = toCalendarDayKey(date);
+      return {
+        key: dayKey,
+        date,
+        events: campaignCalendarEventsByDay.get(dayKey) || [],
+        isCurrentMonth: date.getMonth() === calendarMonth.getMonth(),
+        isToday: dayKey === todayKey,
+      };
+    });
+  }, [calendarMonth, campaignCalendarEventsByDay]);
+  const upcomingCalendarEvents = useMemo(() => {
+    const today = parseCalendarDate(new Date());
+    const upcoming = campaignCalendarEvents.filter(
+      (event) => today && event.date.getTime() >= today.getTime()
+    );
+    return (upcoming.length > 0 ? upcoming : campaignCalendarEvents).slice(0, 10);
+  }, [campaignCalendarEvents]);
+  const calendarMonthLabel = calendarMonth.toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  });
   const creatorAnalyticsRows = analyticsCreatorIds
     .map((creatorId) => {
       const creator = resolveCreatorById(creatorId);
@@ -1979,6 +2402,163 @@ export default function CampaignDetailPage() {
       </div>
     </section>
   );
+  const calendarCard = (
+    <section className="detail-card campaign-calendar-section">
+      <div className="detail-card-header">
+        <div>
+          <h3>Campaign Calendar</h3>
+          <p className="section-description">
+            A simple timeline for milestones, submissions, and launch checkpoints.
+          </p>
+        </div>
+        <div className="campaign-calendar-header-actions">
+          <div className="campaign-calendar-legend">
+            <span className="campaign-calendar-legend-item">
+              <i className="campaign-calendar-dot tone-milestone" />
+              Milestone
+            </span>
+            <span className="campaign-calendar-legend-item">
+              <i className="campaign-calendar-dot tone-submission" />
+              Submission
+            </span>
+            <span className="campaign-calendar-legend-item">
+              <i className="campaign-calendar-dot tone-published" />
+              Published
+            </span>
+          </div>
+          {canManageCalendar ? (
+            <button
+              type="button"
+              className="btn btn-primary btn-small"
+              onClick={openCreateCalendarEventModal}
+            >
+              Add Event
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <div className="detail-card-content campaign-calendar-content">
+        <div className="campaign-calendar-layout">
+          <article className="campaign-calendar-panel">
+            <div className="campaign-calendar-toolbar">
+              <button
+                type="button"
+                className="btn btn-secondary btn-small"
+                onClick={() =>
+                  setCalendarMonth(
+                    (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
+                  )
+                }
+                aria-label="Previous month"
+              >
+                ←
+              </button>
+              <strong>{calendarMonthLabel}</strong>
+              <button
+                type="button"
+                className="btn btn-secondary btn-small"
+                onClick={() =>
+                  setCalendarMonth(
+                    (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
+                  )
+                }
+                aria-label="Next month"
+              >
+                →
+              </button>
+            </div>
+            <div className="campaign-calendar-weekdays">
+              {CALENDAR_WEEKDAYS.map((label) => (
+                <span key={label}>{label}</span>
+              ))}
+            </div>
+            <div className="campaign-calendar-grid">
+              {calendarDayCells.map((cell) => (
+                <div
+                  key={cell.key}
+                  className={[
+                    'campaign-calendar-day',
+                    cell.isCurrentMonth ? '' : 'is-outside',
+                    cell.isToday ? 'is-today' : '',
+                    cell.events.length > 0 ? 'has-events' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <span className="campaign-calendar-day-number">{cell.date.getDate()}</span>
+                  {cell.events.length > 0 ? (
+                    <div className="campaign-calendar-day-dots">
+                      {cell.events.slice(0, 3).map((event, index) => (
+                        <i
+                          key={`${cell.key}-${event.id}-${index}`}
+                          className={`campaign-calendar-dot tone-${event.tone}`}
+                        />
+                      ))}
+                      {cell.events.length > 3 ? (
+                        <span className="campaign-calendar-day-more">+{cell.events.length - 3}</span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <aside className="campaign-calendar-timeline">
+            <div className="campaign-calendar-timeline-head">
+              <h4>Timeline</h4>
+              <span>{campaignCalendarEvents.length} events</span>
+            </div>
+            <p className="campaign-calendar-help">
+              Use this to align creator actions, approvals, and delivery windows.
+            </p>
+            {customCalendarEventsLoading ? (
+              <p className="creator-social-empty">Loading events...</p>
+            ) : null}
+            {customCalendarEventsError ? (
+              <p className="error-text">{customCalendarEventsError}</p>
+            ) : null}
+            {upcomingCalendarEvents.length > 0 ? (
+              <ul className="campaign-calendar-event-list">
+                {upcomingCalendarEvents.map((event, index) => (
+                  <li key={`${event.id}-${index}`} className="campaign-calendar-event-item">
+                    <i className={`campaign-calendar-dot tone-${event.tone}`} />
+                    <div className="campaign-calendar-event-copy">
+                      <strong>{event.title}</strong>
+                      <span>
+                        {formatShortDate(event.date)}
+                        {event.subtitle ? ` · ${event.subtitle}` : ''}
+                      </span>
+                    </div>
+                    {event.custom && canManageCalendar ? (
+                      <div className="campaign-calendar-event-actions">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-small"
+                          onClick={() => openEditCalendarEventModal(event)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-small"
+                          onClick={() => deleteCalendarEvent(event.persistedId)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="creator-social-empty">No campaign events yet.</p>
+            )}
+          </aside>
+        </div>
+      </div>
+    </section>
+  );
 
   const brandCreatorTypeSections = [
     { key: 'influencer', type: 'influencer', label: 'Influencer Creators', tone: 'influencer' },
@@ -2286,6 +2866,13 @@ export default function CampaignDetailPage() {
             >
               Analytics
             </button>
+            <button
+              type="button"
+              className={brandTab === 'calendar' ? 'active' : undefined}
+              onClick={() => setBrandTab('calendar')}
+            >
+              Calendar
+            </button>
           </div>
         </div>
       )}
@@ -2315,6 +2902,13 @@ export default function CampaignDetailPage() {
             >
               Analytics
             </button>
+            <button
+              type="button"
+              className={adminTab === 'calendar' ? 'active' : undefined}
+              onClick={() => setAdminTab('calendar')}
+            >
+              Calendar
+            </button>
           </div>
           {isAdmin && (
             <div className="campaign-tab-actions">
@@ -2328,8 +2922,10 @@ export default function CampaignDetailPage() {
 
       {isBrand && brandTab === 'brief' ? briefCard : null}
       {isBrand && brandTab === 'analytics' ? brandAnalyticsCard : null}
+      {isBrand && brandTab === 'calendar' ? calendarCard : null}
       {!isBrand && adminTab === 'overview' ? briefCard : null}
       {!isBrand && adminTab === 'analytics' ? adminAnalyticsCard : null}
+      {!isBrand && adminTab === 'calendar' ? calendarCard : null}
 
       {isBrand && brandTab === 'creators' ? (
         <section className="detail-card brand-creator-section">
@@ -2772,6 +3368,86 @@ export default function CampaignDetailPage() {
             Close
           </button>
         </div>
+      </Modal>
+
+      <Modal
+        open={calendarEventModal.open}
+        onClose={closeCalendarEventModal}
+        title={calendarEventModal.mode === 'edit' ? 'Edit Calendar Event' : 'Add Calendar Event'}
+        description="Events are shared with the campaign workspace."
+      >
+        <form
+          className="modal-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitCalendarEvent();
+          }}
+        >
+          <label>
+            <span>Title *</span>
+            <input
+              className="input"
+              value={calendarEventModal.title}
+              onChange={(event) =>
+                setCalendarEventModal((prev) => ({ ...prev, title: event.target.value }))
+              }
+              required
+            />
+          </label>
+          <label>
+            <span>Date *</span>
+            <input
+              className="input"
+              type="date"
+              value={calendarEventModal.eventDate}
+              onChange={(event) =>
+                setCalendarEventModal((prev) => ({ ...prev, eventDate: event.target.value }))
+              }
+              required
+            />
+          </label>
+          <label>
+            <span>Type</span>
+            <select
+              className="input"
+              value={calendarEventModal.type}
+              onChange={(event) =>
+                setCalendarEventModal((prev) => ({ ...prev, type: event.target.value }))
+              }
+            >
+              {CALENDAR_EVENT_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Description</span>
+            <textarea
+              className="input"
+              rows={3}
+              value={calendarEventModal.description}
+              onChange={(event) =>
+                setCalendarEventModal((prev) => ({ ...prev, description: event.target.value }))
+              }
+            />
+          </label>
+          {calendarEventModal.error ? <p className="field-error">{calendarEventModal.error}</p> : null}
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={closeCalendarEventModal}
+              disabled={calendarEventModal.saving}
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={calendarEventModal.saving}>
+              {calendarEventModal.saving ? 'Saving...' : 'Save Event'}
+            </button>
+          </div>
+        </form>
       </Modal>
 
       <CreatorProfileModal

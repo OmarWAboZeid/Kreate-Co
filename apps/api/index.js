@@ -277,6 +277,29 @@ const normalizeCampaignStatus = (value, options = {}) => {
   return CAMPAIGN_STATUS_MAP[normalizedKey] || fallback;
 };
 
+const CAMPAIGN_EVENT_TYPE_MAP = Object.freeze({
+  milestone: 'milestone',
+  task: 'task',
+  deadline: 'deadline',
+  meeting: 'meeting',
+  submission: 'submission',
+  published: 'published',
+});
+
+const normalizeCampaignEventType = (value, options = {}) => {
+  const { fallback = 'milestone' } = options;
+  if (value === undefined || value === null || value === '') return fallback;
+  const normalizedKey = String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ');
+  if (normalizedKey in CAMPAIGN_EVENT_TYPE_MAP) {
+    return CAMPAIGN_EVENT_TYPE_MAP[normalizedKey];
+  }
+  return null;
+};
+
 const readJsonBody = (req) =>
   new Promise((resolve, reject) => {
     let body = '';
@@ -779,6 +802,28 @@ const mapCampaignRow = (row) => ({
     : null,
   createdAt: row.created_at ? row.created_at.toISOString().slice(0, 10) : null,
 });
+
+const mapCampaignEventRow = (row) => {
+  const eventDate =
+    typeof row.event_date === 'string'
+      ? row.event_date
+      : row.event_date
+        ? row.event_date.toISOString().slice(0, 10)
+        : null;
+  return {
+    id: row.id,
+    campaignId: row.campaign_id,
+    organizationId: row.organization_id,
+    title: row.title || '',
+    description: row.description || '',
+    type: normalizeCampaignEventType(row.event_type, { fallback: 'milestone' }),
+    eventDate,
+    createdByUserId: row.created_by_user_id || null,
+    updatedByUserId: row.updated_by_user_id || null,
+    createdAt: row.created_at ? row.created_at.toISOString() : null,
+    updatedAt: row.updated_at ? row.updated_at.toISOString() : null,
+  };
+};
 
 const CONTENT_STATUS_MAP = Object.freeze({
   pending: 'Pending Review',
@@ -2202,6 +2247,251 @@ const server = http.createServer(async (req, res) => {
 
       const responseRow = result.rows[0];
       return json(res, 200, { ok: true, data: mapCampaignRow(responseRow) });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  const campaignEventsMatch = pathname.match(
+    /^\/api\/campaigns\/([0-9a-fA-F-]+)\/events\/?$/
+  );
+  if (campaignEventsMatch && method === 'GET') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    try {
+      const campaignId = campaignEventsMatch[1];
+      const organizationId = await getCampaignOrganizationId(campaignId);
+      if (!organizationId) {
+        return json(res, 404, { ok: false, error: 'Campaign not found' });
+      }
+      const hasAccess = await ensureOrgAccess(user, organizationId);
+      if (!hasAccess) {
+        return json(res, 403, { ok: false, error: 'Forbidden' });
+      }
+
+      const result = await pool.query(
+        `
+        SELECT
+          id,
+          campaign_id,
+          organization_id,
+          title,
+          description,
+          event_type,
+          event_date,
+          created_by_user_id,
+          updated_by_user_id,
+          created_at,
+          updated_at
+        FROM campaign_events
+        WHERE campaign_id = $1
+        ORDER BY event_date ASC, created_at ASC
+        `,
+        [campaignId]
+      );
+
+      return json(res, 200, {
+        ok: true,
+        data: result.rows.map(mapCampaignEventRow),
+      });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if (campaignEventsMatch && method === 'POST') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin' && user.role !== 'employee' && user.role !== 'brand') {
+      return json(res, 403, { ok: false, error: 'Forbidden' });
+    }
+    try {
+      const campaignId = campaignEventsMatch[1];
+      const organizationId = await getCampaignOrganizationId(campaignId);
+      if (!organizationId) {
+        return json(res, 404, { ok: false, error: 'Campaign not found' });
+      }
+      const hasAccess = await ensureOrgAccess(user, organizationId);
+      if (!hasAccess) {
+        return json(res, 403, { ok: false, error: 'Forbidden' });
+      }
+
+      const body = await parseBody(req);
+      const title = String(body.title || '').trim();
+      const description = String(body.description || '').trim();
+      const type = normalizeCampaignEventType(body.type, { fallback: null });
+      const eventDate = String(body.eventDate || body.date || '').trim();
+
+      if (!title) {
+        return json(res, 400, { ok: false, error: 'title is required' });
+      }
+      if (!type) {
+        return json(res, 400, { ok: false, error: 'Invalid event type' });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
+        return json(res, 400, { ok: false, error: 'eventDate must be YYYY-MM-DD' });
+      }
+
+      const result = await pool.query(
+        `
+        INSERT INTO campaign_events
+          (campaign_id, organization_id, title, description, event_type, event_date, created_by_user_id, updated_by_user_id)
+        VALUES
+          ($1, $2, $3, $4, $5, $6::date, $7, $7)
+        RETURNING
+          id,
+          campaign_id,
+          organization_id,
+          title,
+          description,
+          event_type,
+          event_date,
+          created_by_user_id,
+          updated_by_user_id,
+          created_at,
+          updated_at
+        `,
+        [campaignId, organizationId, title, description || null, type, eventDate, user.id]
+      );
+
+      return json(res, 201, {
+        ok: true,
+        data: mapCampaignEventRow(result.rows[0]),
+      });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  const campaignEventByIdMatch = pathname.match(
+    /^\/api\/campaigns\/([0-9a-fA-F-]+)\/events\/([0-9a-fA-F-]+)\/?$/
+  );
+  if (campaignEventByIdMatch && method === 'PUT') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin' && user.role !== 'employee' && user.role !== 'brand') {
+      return json(res, 403, { ok: false, error: 'Forbidden' });
+    }
+    try {
+      const campaignId = campaignEventByIdMatch[1];
+      const eventId = campaignEventByIdMatch[2];
+      const organizationId = await getCampaignOrganizationId(campaignId);
+      if (!organizationId) {
+        return json(res, 404, { ok: false, error: 'Campaign not found' });
+      }
+      const hasAccess = await ensureOrgAccess(user, organizationId);
+      if (!hasAccess) {
+        return json(res, 403, { ok: false, error: 'Forbidden' });
+      }
+
+      const existingResult = await pool.query(
+        `
+        SELECT id, title, description, event_type, event_date
+        FROM campaign_events
+        WHERE id = $1 AND campaign_id = $2
+        `,
+        [eventId, campaignId]
+      );
+      if (existingResult.rowCount === 0) {
+        return json(res, 404, { ok: false, error: 'Event not found' });
+      }
+      const existing = existingResult.rows[0];
+
+      const body = await parseBody(req);
+      const title = Object.prototype.hasOwnProperty.call(body, 'title')
+        ? String(body.title || '').trim()
+        : existing.title;
+      const description = Object.prototype.hasOwnProperty.call(body, 'description')
+        ? String(body.description || '').trim()
+        : existing.description;
+      const type = Object.prototype.hasOwnProperty.call(body, 'type')
+        ? normalizeCampaignEventType(body.type, { fallback: null })
+        : normalizeCampaignEventType(existing.event_type, { fallback: 'milestone' });
+      const eventDate = Object.prototype.hasOwnProperty.call(body, 'eventDate')
+        ? String(body.eventDate || '').trim()
+        : typeof existing.event_date === 'string'
+          ? existing.event_date
+          : existing.event_date
+            ? existing.event_date.toISOString().slice(0, 10)
+            : '';
+
+      if (!title) {
+        return json(res, 400, { ok: false, error: 'title is required' });
+      }
+      if (!type) {
+        return json(res, 400, { ok: false, error: 'Invalid event type' });
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
+        return json(res, 400, { ok: false, error: 'eventDate must be YYYY-MM-DD' });
+      }
+
+      const updateResult = await pool.query(
+        `
+        UPDATE campaign_events
+        SET
+          title = $1,
+          description = $2,
+          event_type = $3,
+          event_date = $4::date,
+          updated_by_user_id = $5,
+          updated_at = NOW()
+        WHERE id = $6
+          AND campaign_id = $7
+        RETURNING
+          id,
+          campaign_id,
+          organization_id,
+          title,
+          description,
+          event_type,
+          event_date,
+          created_by_user_id,
+          updated_by_user_id,
+          created_at,
+          updated_at
+        `,
+        [title, description || null, type, eventDate, user.id, eventId, campaignId]
+      );
+
+      return json(res, 200, {
+        ok: true,
+        data: mapCampaignEventRow(updateResult.rows[0]),
+      });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if (campaignEventByIdMatch && method === 'DELETE') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin' && user.role !== 'employee' && user.role !== 'brand') {
+      return json(res, 403, { ok: false, error: 'Forbidden' });
+    }
+    try {
+      const campaignId = campaignEventByIdMatch[1];
+      const eventId = campaignEventByIdMatch[2];
+      const organizationId = await getCampaignOrganizationId(campaignId);
+      if (!organizationId) {
+        return json(res, 404, { ok: false, error: 'Campaign not found' });
+      }
+      const hasAccess = await ensureOrgAccess(user, organizationId);
+      if (!hasAccess) {
+        return json(res, 403, { ok: false, error: 'Forbidden' });
+      }
+
+      const deleteResult = await pool.query(
+        `
+        DELETE FROM campaign_events
+        WHERE id = $1 AND campaign_id = $2
+        RETURNING id
+        `,
+        [eventId, campaignId]
+      );
+      if (deleteResult.rowCount === 0) {
+        return json(res, 404, { ok: false, error: 'Event not found' });
+      }
+      return json(res, 200, { ok: true, id: deleteResult.rows[0].id });
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });
     }

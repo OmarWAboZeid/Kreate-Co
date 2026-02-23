@@ -18,6 +18,14 @@ export const campaignsApi = {
   create: (payload) => postJson('/api/campaigns', payload, 'Failed to create campaign'),
   update: ({ campaignId, payload }) =>
     putJson(`/api/campaigns/${campaignId}`, payload, 'Failed to update campaign'),
+  listEvents: (campaignId) =>
+    getJson(`/api/campaigns/${campaignId}/events`, 'Failed to fetch campaign events'),
+  createEvent: ({ campaignId, payload }) =>
+    postJson(`/api/campaigns/${campaignId}/events`, payload, 'Failed to create event'),
+  updateEvent: ({ campaignId, eventId, payload }) =>
+    putJson(`/api/campaigns/${campaignId}/events/${eventId}`, payload, 'Failed to update event'),
+  deleteEvent: ({ campaignId, eventId }) =>
+    deleteJson(`/api/campaigns/${campaignId}/events/${eventId}`, 'Failed to delete event'),
   creators: (campaignId) =>
     getJson(`/api/campaigns/${campaignId}/creators`, 'Failed to fetch campaign creators'),
   suggestCreator: ({ campaignId, creatorId }) =>
@@ -92,4 +100,3 @@ export const useUpdateCampaignMutation = (options = {}) => {
     ...options,
   });
 };
-
