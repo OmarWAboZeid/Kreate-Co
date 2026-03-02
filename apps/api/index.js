@@ -77,6 +77,35 @@ const ensureRuntimeSchema = async () => {
     )
     `
   );
+  await pool.query(
+    `
+    CREATE TABLE IF NOT EXISTS campaign_events (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      campaign_id uuid NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      title text NOT NULL,
+      description text,
+      event_type text NOT NULL DEFAULT 'milestone',
+      event_date date NOT NULL,
+      created_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+      updated_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+      created_at timestamptz NOT NULL DEFAULT NOW(),
+      updated_at timestamptz NOT NULL DEFAULT NOW()
+    )
+    `
+  );
+  await pool.query(
+    `
+    CREATE INDEX IF NOT EXISTS campaign_events_campaign_id_idx
+      ON campaign_events(campaign_id, event_date, created_at)
+    `
+  );
+  await pool.query(
+    `
+    CREATE INDEX IF NOT EXISTS campaign_events_organization_id_idx
+      ON campaign_events(organization_id, event_date)
+    `
+  );
 
   for (const [campaignType, labels] of Object.entries(CREATOR_STAGE_SEED)) {
     for (let index = 0; index < labels.length; index += 1) {

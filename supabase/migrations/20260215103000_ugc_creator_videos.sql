@@ -5,7 +5,9 @@ update creators
 set ugc_video_urls = '{}'::text[]
 where ugc_video_urls is null;
 
-create or replace view ugc_creators as
+drop view if exists ugc_creators;
+
+create view ugc_creators as
 select
   id,
   display_name as name,
