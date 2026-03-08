@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import CreatorFilters from '../components/CreatorFilters.jsx';
 import CampaignFormModal from '../components/CampaignFormModal.jsx';
 import CreatorGrid from '../components/CreatorGrid.jsx';
@@ -166,14 +166,44 @@ const formatShortDate = (value) => {
   });
 };
 
+const formatDateTime = (value) => {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
+const parseEventTimeToMinutes = (value) => {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+  const match = raw.match(/^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+};
+
+const formatEventTime = (value) => {
+  const minutes = parseEventTimeToMinutes(value);
+  if (minutes == null) return '';
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  const parsed = new Date(2000, 0, 1, hours, mins, 0, 0);
+  return parsed.toLocaleTimeString('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+};
+
 const CALENDAR_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
-const CALENDAR_EVENT_TYPE_OPTIONS = [
-  { value: 'milestone', label: 'Milestone' },
-  { value: 'task', label: 'Task' },
-  { value: 'deadline', label: 'Deadline' },
-  { value: 'meeting', label: 'Meeting' },
-];
 
 const parseCalendarDate = (value) => {
   if (!value) return null;
@@ -208,36 +238,6 @@ const addCalendarDays = (date, days) => {
   return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate() + Number(days || 0));
 };
 
-const normalizeEventType = (value) => {
-  const raw = String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[-_]+/g, ' ');
-  if (raw === 'task') return 'task';
-  if (raw === 'deadline') return 'deadline';
-  if (raw === 'meeting') return 'meeting';
-  if (raw === 'submission') return 'submission';
-  if (raw === 'published') return 'published';
-  return 'milestone';
-};
-
-const eventToneForType = (type) => {
-  const normalized = normalizeEventType(type);
-  if (normalized === 'submission') return 'submission';
-  if (normalized === 'published') return 'published';
-  return 'milestone';
-};
-
-const eventTypeLabel = (type) => {
-  const normalized = normalizeEventType(type);
-  if (normalized === 'task') return 'Task';
-  if (normalized === 'deadline') return 'Deadline';
-  if (normalized === 'meeting') return 'Meeting';
-  if (normalized === 'submission') return 'Submission';
-  if (normalized === 'published') return 'Published';
-  return 'Milestone';
-};
-
 const formatCompactFollowers = (value) => {
   if (value == null || value === '') return '—';
   const parsed = Number(value);
@@ -252,6 +252,61 @@ const formatRatePlaceholder = (value) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < 0) return 'Current rate not set';
   return `Current: $${parsed.toLocaleString()}`;
+};
+
+const formatMessageRole = (value) => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'admin') return 'Admin';
+  if (normalized === 'employee') return 'Team';
+  if (normalized === 'brand') return 'Brand';
+  return 'Member';
+};
+
+const CAMPAIGN_MESSAGE_EMOJIS = [
+  '😀',
+  '😂',
+  '😍',
+  '👏',
+  '🔥',
+  '🎉',
+  '✅',
+  '👍',
+  '🙏',
+  '💡',
+  '📸',
+  '🎥',
+  '📦',
+  '🚀',
+  '❤️',
+  '🙌',
+];
+
+const CAMPAIGN_MESSAGE_ATTACHMENT_ACCEPT =
+  'image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip';
+
+const MAX_CAMPAIGN_MESSAGE_ATTACHMENTS = 10;
+
+const formatFileSize = (value) => {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  if (bytes < 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+  }
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+};
+
+const getCampaignMessageAttachmentKind = (attachment) => {
+  const contentType = String(attachment?.contentType || '').toLowerCase();
+  const fileName = String(attachment?.fileName || '').toLowerCase();
+  if (contentType.startsWith('image/')) return 'image';
+  if (contentType.startsWith('video/')) return 'video';
+  if (contentType.startsWith('audio/')) return 'audio';
+  if (/\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.test(fileName)) return 'image';
+  if (/\.(mp4|mov|m4v|webm|ogv|ogg)$/i.test(fileName)) return 'video';
+  if (/\.(mp3|wav|m4a|aac|flac|oga)$/i.test(fileName)) return 'audio';
+  return 'file';
 };
 
 const normalizeExternalUrl = (value) => {
@@ -363,13 +418,21 @@ const DEFAULT_CREATOR_STAGE_OPTIONS = {
 
 export default function CampaignDetailPage() {
   const { role, campaignId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { campaigns, campaignCreators, brands, contentItems } = useAppState();
   const dispatch = useAppDispatch();
   const [creatorFilter, setCreatorFilter] = useState('all');
   const [creatorSearch, setCreatorSearch] = useState('');
   const [addContentModal, setAddContentModal] = useState({ open: false, creator: null });
-  const [contentForm, setContentForm] = useState({ link: '', platform: '', type: '', notes: '' });
+  const [contentForm, setContentForm] = useState({
+    submissionStage: 'final',
+    link: '',
+    uploadedLink: '',
+    platform: '',
+    type: '',
+    notes: '',
+  });
   const [contentUploadState, setContentUploadState] = useState({
     uploading: false,
     error: '',
@@ -397,13 +460,27 @@ export default function CampaignDetailPage() {
   const [customCalendarEvents, setCustomCalendarEvents] = useState([]);
   const [customCalendarEventsLoading, setCustomCalendarEventsLoading] = useState(false);
   const [customCalendarEventsError, setCustomCalendarEventsError] = useState('');
+  const [campaignMessages, setCampaignMessages] = useState([]);
+  const [campaignMessagesLoading, setCampaignMessagesLoading] = useState(false);
+  const [campaignMessagesError, setCampaignMessagesError] = useState('');
+  const [campaignMessageDraft, setCampaignMessageDraft] = useState('');
+  const [campaignMessageAttachments, setCampaignMessageAttachments] = useState([]);
+  const [campaignMessageSending, setCampaignMessageSending] = useState(false);
+  const [campaignMessageSendError, setCampaignMessageSendError] = useState('');
+  const [campaignEmojiPickerOpen, setCampaignEmojiPickerOpen] = useState(false);
+  const [sessionUser, setSessionUser] = useState(null);
+  const campaignMessageInputRef = useRef(null);
+  const campaignMessageAttachmentInputRef = useRef(null);
+  const campaignMessagesViewportRef = useRef(null);
+  const campaignMessagesBottomRef = useRef(null);
+  const shouldStickMessagesToBottomRef = useRef(true);
   const [calendarEventModal, setCalendarEventModal] = useState({
     open: false,
     mode: 'create',
     eventId: null,
     title: '',
     eventDate: '',
-    type: 'milestone',
+    eventTime: '',
     description: '',
     saving: false,
     error: '',
@@ -476,6 +553,29 @@ export default function CampaignDetailPage() {
   const isBrand = role === 'brand';
   const canManageCreators = isAdmin || isEmployee;
   const canManageCalendar = isAdmin || isEmployee || isBrand;
+  const campaignMessageHasUploadingAttachments = campaignMessageAttachments.some(
+    (attachment) => attachment.status === 'uploading'
+  );
+  const campaignMessageHasFailedAttachments = campaignMessageAttachments.some(
+    (attachment) => attachment.status === 'error'
+  );
+
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(location.search).get('tab');
+    if (!requestedTab) return;
+
+    if (isBrand) {
+      if (['brief', 'creators', 'analytics', 'calendar', 'messages'].includes(requestedTab)) {
+        setBrandTab(requestedTab);
+      }
+      return;
+    }
+
+    if (['overview', 'creators', 'analytics', 'calendar', 'messages'].includes(requestedTab)) {
+      setAdminTab(requestedTab);
+    }
+  }, [isBrand, location.search]);
+
   const creatorsQueryParams = useMemo(() => ({ limit: 100 }), []);
   const ugcCreatorsQuery = useUgcCreatorsQuery(creatorsQueryParams, {
     enabled: Boolean(campaignId),
@@ -575,6 +675,29 @@ export default function CampaignDetailPage() {
     };
   }, [dispatch, campaignId]);
 
+  useEffect(() => {
+    let ignore = false;
+
+    const fetchSessionUser = async () => {
+      try {
+        const res = await fetch('/api/me', { credentials: 'include' });
+        const data = await res.json();
+        if (!ignore && res.ok && data.ok) {
+          setSessionUser(data.data || null);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setSessionUser(null);
+        }
+      }
+    };
+
+    fetchSessionUser();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   const campaign = campaigns.find((item) => item.id === campaignId);
   useEffect(() => {
     if (!campaign) return;
@@ -622,6 +745,62 @@ export default function CampaignDetailPage() {
       ignore = true;
     };
   }, [campaignId]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadCampaignMessages = async ({ quiet = false } = {}) => {
+      if (!campaignId) return;
+      if (!quiet) {
+        setCampaignMessagesLoading(true);
+      }
+      try {
+        const data = await campaignsApi.listMessages(campaignId);
+        if (!ignore) {
+          setCampaignMessages(Array.isArray(data?.data) ? data.data : []);
+          setCampaignMessagesError('');
+        }
+      } catch (error) {
+        if (!ignore) {
+          setCampaignMessagesError(error?.message || 'Failed to load campaign messages.');
+          if (!quiet) {
+            setCampaignMessages([]);
+          }
+        }
+      } finally {
+        if (!ignore && !quiet) {
+          setCampaignMessagesLoading(false);
+        }
+      }
+    };
+
+    loadCampaignMessages();
+    const pollId = window.setInterval(() => {
+      loadCampaignMessages({ quiet: true });
+    }, 15000);
+
+    return () => {
+      ignore = true;
+      window.clearInterval(pollId);
+    };
+  }, [campaignId]);
+
+  useEffect(() => {
+    if (!campaignId) return;
+    shouldStickMessagesToBottomRef.current = true;
+    setCampaignMessageDraft('');
+    setCampaignMessageAttachments([]);
+    setCampaignMessageSendError('');
+    setCampaignEmojiPickerOpen(false);
+  }, [campaignId]);
+
+  useEffect(() => {
+    if (!shouldStickMessagesToBottomRef.current) return;
+    campaignMessagesBottomRef.current?.scrollIntoView({
+      block: 'end',
+      behavior: 'smooth',
+    });
+  }, [campaignMessages]);
 
   const brandOptions = useMemo(() => {
     const options = new Set(brandNames);
@@ -970,7 +1149,14 @@ export default function CampaignDetailPage() {
 
   const closeAddContentModal = () => {
     setAddContentModal({ open: false, creator: null });
-    setContentForm({ link: '', platform: '', type: '', notes: '' });
+    setContentForm({
+      submissionStage: 'final',
+      link: '',
+      uploadedLink: '',
+      platform: '',
+      type: '',
+      notes: '',
+    });
     setContentUploadState({ uploading: false, error: '', fileName: '' });
   };
 
@@ -1034,6 +1220,39 @@ export default function CampaignDetailPage() {
     return signedUrlData.objectPath;
   };
 
+  const uploadCampaignMessageAttachment = async (file) => {
+    const signedUrlRes = await fetch('/api/uploads/request-url', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: file.name,
+        size: file.size,
+        contentType: file.type,
+      }),
+    });
+    const signedUrlData = await signedUrlRes.json();
+    if (!signedUrlRes.ok || !signedUrlData.ok || !signedUrlData.uploadURL || !signedUrlData.objectPath) {
+      throw new Error(signedUrlData?.error || 'Failed to generate upload URL');
+    }
+
+    const uploadRes = await fetch(signedUrlData.uploadURL, {
+      method: 'PUT',
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+      body: file,
+    });
+    if (!uploadRes.ok) {
+      throw new Error(`Failed to upload ${file.name || 'attachment'}`);
+    }
+
+    return {
+      objectPath: signedUrlData.objectPath,
+      fileName: file.name || 'Attachment',
+      contentType: file.type || 'application/octet-stream',
+      fileSize: Number.isFinite(Number(file.size)) ? Number(file.size) : null,
+    };
+  };
+
   const handleSubmittedVideoSelect = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -1056,7 +1275,16 @@ export default function CampaignDetailPage() {
 
     try {
       const objectPath = await uploadSubmittedVideo(file);
-      setContentForm((prev) => ({ ...prev, link: objectPath }));
+      setContentForm((prev) => {
+        if (prev.submissionStage === 'draft') {
+          return { ...prev, link: objectPath };
+        }
+        return {
+          ...prev,
+          uploadedLink: objectPath,
+          link: prev.link || objectPath,
+        };
+      });
       setContentUploadState({
         uploading: false,
         error: '',
@@ -1083,7 +1311,7 @@ export default function CampaignDetailPage() {
       eventId: null,
       title: '',
       eventDate: '',
-      type: 'milestone',
+      eventTime: '',
       description: '',
       saving: false,
       error: '',
@@ -1102,7 +1330,7 @@ export default function CampaignDetailPage() {
       eventId: null,
       title: '',
       eventDate: fallbackDate,
-      type: 'milestone',
+      eventTime: '',
       description: '',
       saving: false,
       error: '',
@@ -1117,7 +1345,7 @@ export default function CampaignDetailPage() {
       eventId: event.persistedId || event.id,
       title: event.title || '',
       eventDate: String(event.eventDate || '').slice(0, 10),
-      type: normalizeEventType(event.type),
+      eventTime: String(event.eventTime || '').slice(0, 5),
       description: event.description || '',
       saving: false,
       error: '',
@@ -1130,11 +1358,111 @@ export default function CampaignDetailPage() {
     setCustomCalendarEvents(Array.isArray(data?.data) ? data.data : []);
   };
 
+  const refreshCampaignMessages = async () => {
+    if (!campaignId) return;
+    const data = await campaignsApi.listMessages(campaignId);
+    setCampaignMessages(Array.isArray(data?.data) ? data.data : []);
+    setCampaignMessagesError('');
+  };
+
+  const insertCampaignMessageEmoji = (emoji) => {
+    const value = String(emoji || '');
+    if (!value) return;
+
+    const input = campaignMessageInputRef.current;
+    if (!input) {
+      setCampaignMessageDraft((prev) => `${prev}${value}`);
+      setCampaignMessageSendError('');
+      setCampaignEmojiPickerOpen(false);
+      return;
+    }
+
+    const start = input.selectionStart ?? campaignMessageDraft.length;
+    const end = input.selectionEnd ?? campaignMessageDraft.length;
+    const nextValue = `${campaignMessageDraft.slice(0, start)}${value}${campaignMessageDraft.slice(end)}`;
+    const nextCaret = start + value.length;
+
+    setCampaignMessageDraft(nextValue);
+    setCampaignMessageSendError('');
+    setCampaignEmojiPickerOpen(false);
+
+    window.requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(nextCaret, nextCaret);
+    });
+  };
+
+  const removeCampaignMessageAttachment = (attachmentId) => {
+    setCampaignMessageAttachments((prev) =>
+      prev.filter((attachment) => attachment.id !== attachmentId)
+    );
+    if (campaignMessageSendError) {
+      setCampaignMessageSendError('');
+    }
+  };
+
+  const handleCampaignMessageAttachmentSelect = async (event) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (files.length === 0) return;
+
+    const remainingSlots = MAX_CAMPAIGN_MESSAGE_ATTACHMENTS - campaignMessageAttachments.length;
+    if (files.length > remainingSlots) {
+      setCampaignMessageSendError(
+        `You can attach up to ${MAX_CAMPAIGN_MESSAGE_ATTACHMENTS} files per message.`
+      );
+      return;
+    }
+
+    setCampaignMessageSendError('');
+    const queuedAttachments = files.map((file) => ({
+      id: makeId('campaign-attachment'),
+      fileName: file.name || 'Attachment',
+      contentType: file.type || 'application/octet-stream',
+      fileSize: Number.isFinite(Number(file.size)) ? Number(file.size) : null,
+      objectPath: '',
+      status: 'uploading',
+      error: '',
+    }));
+
+    setCampaignMessageAttachments((prev) => [...prev, ...queuedAttachments]);
+
+    queuedAttachments.forEach(async (attachment, index) => {
+      try {
+        const uploaded = await uploadCampaignMessageAttachment(files[index]);
+        setCampaignMessageAttachments((prev) =>
+          prev.map((item) =>
+            item.id === attachment.id
+              ? {
+                  ...item,
+                  ...uploaded,
+                  status: 'ready',
+                  error: '',
+                }
+              : item
+          )
+        );
+      } catch (error) {
+        setCampaignMessageAttachments((prev) =>
+          prev.map((item) =>
+            item.id === attachment.id
+              ? {
+                  ...item,
+                  status: 'error',
+                  error: error?.message || 'Failed to upload attachment.',
+                }
+              : item
+          )
+        );
+      }
+    });
+  };
+
   const submitCalendarEvent = async () => {
     if (!canManageCalendar || !campaignId) return;
     const title = String(calendarEventModal.title || '').trim();
     const eventDate = String(calendarEventModal.eventDate || '').trim();
-    const type = normalizeEventType(calendarEventModal.type);
+    const eventTime = String(calendarEventModal.eventTime || '').trim();
     const description = String(calendarEventModal.description || '').trim();
 
     if (!title) {
@@ -1148,13 +1476,20 @@ export default function CampaignDetailPage() {
       }));
       return;
     }
+    if (eventTime && !/^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/.test(eventTime)) {
+      setCalendarEventModal((prev) => ({
+        ...prev,
+        error: 'Time must be in HH:MM format.',
+      }));
+      return;
+    }
 
     setCalendarEventModal((prev) => ({ ...prev, saving: true, error: '' }));
     try {
       const payload = {
         title,
         eventDate,
-        type,
+        eventTime,
         description,
       };
       if (calendarEventModal.mode === 'edit' && calendarEventModal.eventId) {
@@ -1174,6 +1509,50 @@ export default function CampaignDetailPage() {
         saving: false,
         error: error?.message || 'Failed to save event.',
       }));
+    }
+  };
+
+  const submitCampaignMessage = async () => {
+    if (!campaignId) return;
+    const body = String(campaignMessageDraft || '').trim();
+    const attachments = campaignMessageAttachments.filter((attachment) => attachment.status === 'ready');
+
+    if (campaignMessageHasUploadingAttachments) {
+      setCampaignMessageSendError('Wait for attachments to finish uploading before sending.');
+      return;
+    }
+    if (campaignMessageHasFailedAttachments) {
+      setCampaignMessageSendError('Remove failed attachments before sending.');
+      return;
+    }
+    if (!body && attachments.length === 0) {
+      setCampaignMessageSendError('Message or attachment is required.');
+      return;
+    }
+
+    setCampaignMessageSending(true);
+    setCampaignMessageSendError('');
+    try {
+      await campaignsApi.createMessage({
+        campaignId,
+        payload: {
+          body,
+          attachments: attachments.map((attachment) => ({
+            objectPath: attachment.objectPath,
+            fileName: attachment.fileName,
+            contentType: attachment.contentType,
+            fileSize: attachment.fileSize,
+          })),
+        },
+      });
+      setCampaignMessageDraft('');
+      setCampaignMessageAttachments([]);
+      setCampaignEmojiPickerOpen(false);
+      await refreshCampaignMessages();
+    } catch (error) {
+      setCampaignMessageSendError(error?.message || 'Failed to send message.');
+    } finally {
+      setCampaignMessageSending(false);
     }
   };
 
@@ -1299,20 +1678,53 @@ export default function CampaignDetailPage() {
   };
 
   const handleAddContent = async () => {
-    if (!contentForm.link || !addContentModal.creator) return;
+    if (!addContentModal.creator) return;
     if (contentUploadState.uploading) return;
 
+    const submissionStage =
+      String(contentForm.submissionStage || '').trim().toLowerCase() === 'draft'
+        ? 'draft'
+        : 'final';
+    const contentLink = String(contentForm.link || '').trim();
+    const uploadedLink = String(contentForm.uploadedLink || '').trim();
+    const resolvedLink = submissionStage === 'draft' ? contentLink : contentLink;
+
+    if (submissionStage === 'draft' && !resolvedLink) {
+      setContentUploadState((prev) => ({
+        ...prev,
+        error: 'Please upload a draft video.',
+      }));
+      return;
+    }
+    if (submissionStage === 'final' && !resolvedLink) {
+      setContentUploadState((prev) => ({
+        ...prev,
+        error: 'Content link is required for final submission.',
+      }));
+      return;
+    }
+
     try {
+      const localContentType = contentForm.type || (submissionStage === 'draft' ? 'Draft Video' : 'Video');
+      const localAssets =
+        submissionStage === 'final'
+          ? [
+              { url: resolvedLink, label: 'Final content link' },
+              ...(uploadedLink && uploadedLink !== resolvedLink
+                ? [{ url: uploadedLink, label: 'Uploaded final video (optional)' }]
+                : []),
+            ]
+          : [{ url: resolvedLink, label: 'Draft video upload' }];
       const newContent = {
         id: makeId('content'),
         campaignId: campaign.id,
         creatorId: addContentModal.creator.id,
         platform: contentForm.platform || 'TikTok',
-        type: contentForm.type || 'Reel',
+        type: localContentType,
         caption: contentForm.notes || '',
         hashtags: '',
-        assets: [{ url: contentForm.link, label: 'Submitted content' }],
-        status: 'Pending Review',
+        assets: localAssets,
+        status: submissionStage === 'draft' ? 'Draft' : 'Pending Review',
         revisionCount: 0,
         feedback: [],
         createdAt: new Date().toISOString(),
@@ -1321,7 +1733,21 @@ export default function CampaignDetailPage() {
       await campaignsApi.updateCreatorWorkflow({
         campaignId: campaign.id,
         creatorId: addContentModal.creator.id,
-        payload: { finalVideoLink: contentForm.link },
+        payload: {
+          finalVideoLink: resolvedLink,
+          submissionStage,
+          submissionType: localContentType,
+          uploadedVideoLink: submissionStage === 'final' ? uploadedLink || null : null,
+          notes:
+            [
+              contentForm.notes || (submissionStage === 'draft' ? 'Draft submission' : 'Final submission'),
+              submissionStage === 'final' && uploadedLink && uploadedLink !== resolvedLink
+                ? `Uploaded file: ${uploadedLink}`
+                : '',
+            ]
+              .filter(Boolean)
+              .join('\n'),
+        },
       });
 
       dispatch({ type: 'LOG_CONTENT_DELIVERY', payload: { content: newContent } });
@@ -1457,6 +1883,7 @@ export default function CampaignDetailPage() {
         date: parsedDate,
         dayKey: key,
         eventDate: key,
+        eventTime: '',
         title,
         subtitle,
         type: 'milestone',
@@ -1506,6 +1933,7 @@ export default function CampaignDetailPage() {
         date: contentDate,
         dayKey,
         eventDate: dayKey,
+        eventTime: '',
         title: isPublished ? 'Content published' : 'Content submitted',
         subtitle: `${creatorName}${platform ? ` · ${platform}` : ''}`,
         type: isPublished ? 'published' : 'submission',
@@ -1519,19 +1947,21 @@ export default function CampaignDetailPage() {
       const parsedDate = parseCalendarDate(event.eventDate || event.date);
       if (!parsedDate) return;
       const dayKey = toCalendarDayKey(parsedDate);
-      const type = normalizeEventType(event.type);
+      const eventTime = String(event.eventTime || event.event_time || '').trim().slice(0, 5);
+      const timeLabel = formatEventTime(eventTime);
+      const description = String(event.description || '').trim();
       events.push({
         id: `custom-${event.id || index}`,
         persistedId: event.id || null,
         date: parsedDate,
         dayKey,
         eventDate: dayKey,
+        eventTime,
         title: event.title || 'Event',
-        subtitle: event.description || eventTypeLabel(type),
-        type,
-        description: event.description || '',
+        subtitle: [timeLabel, description].filter(Boolean).join(' · '),
+        description,
         custom: true,
-        tone: eventToneForType(type),
+        tone: 'milestone',
       });
     });
 
@@ -1543,6 +1973,7 @@ export default function CampaignDetailPage() {
           date: createdDate,
           dayKey: toCalendarDayKey(createdDate),
           eventDate: toCalendarDayKey(createdDate),
+          eventTime: '',
           title: 'Campaign created',
           subtitle: campaign.name || '',
           type: 'milestone',
@@ -1556,6 +1987,12 @@ export default function CampaignDetailPage() {
     return events.sort((left, right) => {
       const dateDelta = left.date.getTime() - right.date.getTime();
       if (dateDelta !== 0) return dateDelta;
+      const leftTime = parseEventTimeToMinutes(left.eventTime);
+      const rightTime = parseEventTimeToMinutes(right.eventTime);
+      const leftSortTime = leftTime == null ? Number.MAX_SAFE_INTEGER : leftTime;
+      const rightSortTime = rightTime == null ? Number.MAX_SAFE_INTEGER : rightTime;
+      const timeDelta = leftSortTime - rightSortTime;
+      if (timeDelta !== 0) return timeDelta;
       return String(left.title || '').localeCompare(String(right.title || ''), undefined, {
         sensitivity: 'base',
         numeric: true,
@@ -2560,6 +2997,322 @@ export default function CampaignDetailPage() {
     </section>
   );
 
+  const messagesCard = (
+    <section className="detail-card campaign-messages-section">
+      <div className="detail-card-header">
+        <div>
+          <h3>Messages</h3>
+          <p className="section-description">
+            Keep campaign communication in one thread for the brand and admin team.
+          </p>
+        </div>
+        <div className="campaign-messages-header-actions">
+          <span className="campaign-meta-chip">{campaignMessages.length} messages</span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-small"
+            onClick={refreshCampaignMessages}
+            disabled={campaignMessagesLoading || campaignMessageSending}
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+      <div className="detail-card-content campaign-messages-content">
+        <div className="campaign-messages-shell">
+          <div
+            ref={campaignMessagesViewportRef}
+            className="campaign-messages-thread"
+            onScroll={(event) => {
+              const element = event.currentTarget;
+              const distanceFromBottom =
+                element.scrollHeight - element.scrollTop - element.clientHeight;
+              shouldStickMessagesToBottomRef.current = distanceFromBottom < 72;
+            }}
+          >
+            <div className="campaign-messages-thread-intro">
+              <strong>{campaign.name || 'Campaign thread'}</strong>
+              <span>Shared between the brand and the admin team.</span>
+            </div>
+            {campaignMessagesLoading ? (
+              <p className="creator-social-empty">Loading messages...</p>
+            ) : null}
+            {campaignMessagesError ? <p className="error-text">{campaignMessagesError}</p> : null}
+            {!campaignMessagesLoading && !campaignMessagesError && campaignMessages.length === 0 ? (
+              <div className="campaign-messages-empty">
+                <p className="creator-social-empty">
+                  No messages yet. Start the thread for this campaign.
+                </p>
+              </div>
+            ) : null}
+            {campaignMessages.length > 0 ? (
+              <ul className="campaign-message-list">
+                {campaignMessages.map((message) => {
+                  const isOwnMessage = sessionUser?.id && sessionUser.id === message.senderUserId;
+                  const messageAttachments = Array.isArray(message.attachments)
+                    ? message.attachments
+                    : [];
+                  return (
+                    <li
+                      key={message.id}
+                      className={[
+                        'campaign-message-item',
+                        isOwnMessage ? 'is-own' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      {!isOwnMessage ? (
+                        <div className="campaign-message-sender">
+                          <strong>{message.senderName || 'Workspace member'}</strong>
+                          <span className="campaign-message-role">
+                            {formatMessageRole(message.senderRole)}
+                          </span>
+                        </div>
+                      ) : null}
+                      <div className="campaign-message-bubble">
+                        {messageAttachments.length > 0 ? (
+                          <div className="campaign-message-attachments">
+                            {messageAttachments.map((attachment, index) => {
+                              const attachmentUrl = resolveMediaUrl(attachment.objectPath);
+                              const attachmentKind = getCampaignMessageAttachmentKind(attachment);
+                              const attachmentLabel = attachment.fileName || `Attachment ${index + 1}`;
+                              const attachmentMeta = formatFileSize(attachment.fileSize);
+
+                              if (attachmentKind === 'image') {
+                                return (
+                                  <a
+                                    key={attachment.id || `${message.id}-attachment-${index}`}
+                                    className="campaign-message-attachment campaign-message-attachment-image"
+                                    href={attachmentUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                  >
+                                    <img src={attachmentUrl} alt={attachmentLabel} loading="lazy" />
+                                    <span className="campaign-message-attachment-caption">
+                                      <strong>{attachmentLabel}</strong>
+                                      {attachmentMeta ? <span>{attachmentMeta}</span> : null}
+                                    </span>
+                                  </a>
+                                );
+                              }
+
+                              if (attachmentKind === 'video') {
+                                return (
+                                  <div
+                                    key={attachment.id || `${message.id}-attachment-${index}`}
+                                    className="campaign-message-attachment campaign-message-attachment-video"
+                                  >
+                                    <video controls preload="metadata" src={attachmentUrl} />
+                                    <a href={attachmentUrl} target="_blank" rel="noreferrer">
+                                      <strong>{attachmentLabel}</strong>
+                                      {attachmentMeta ? <span>{attachmentMeta}</span> : null}
+                                    </a>
+                                  </div>
+                                );
+                              }
+
+                              if (attachmentKind === 'audio') {
+                                return (
+                                  <div
+                                    key={attachment.id || `${message.id}-attachment-${index}`}
+                                    className="campaign-message-attachment campaign-message-attachment-audio"
+                                  >
+                                    <audio controls preload="none" src={attachmentUrl} />
+                                    <a href={attachmentUrl} target="_blank" rel="noreferrer">
+                                      <strong>{attachmentLabel}</strong>
+                                      {attachmentMeta ? <span>{attachmentMeta}</span> : null}
+                                    </a>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <a
+                                  key={attachment.id || `${message.id}-attachment-${index}`}
+                                  className="campaign-message-attachment campaign-message-attachment-file"
+                                  href={attachmentUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  <strong>{attachmentLabel}</strong>
+                                  <span>{attachmentMeta || 'Open file'}</span>
+                                </a>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                        {message.body ? <p className="campaign-message-bubble-copy">{message.body}</p> : null}
+                        <div className="campaign-message-meta">
+                          {isOwnMessage ? (
+                            <span className="campaign-message-role">
+                              {formatMessageRole(message.senderRole)}
+                            </span>
+                          ) : null}
+                          <time>{formatDateTime(message.createdAt)}</time>
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+            <div ref={campaignMessagesBottomRef} />
+          </div>
+
+          <form
+            className="campaign-message-compose-card"
+            onSubmit={(event) => {
+              event.preventDefault();
+              submitCampaignMessage();
+            }}
+          >
+            <input
+              ref={campaignMessageAttachmentInputRef}
+              type="file"
+              hidden
+              multiple
+              accept={CAMPAIGN_MESSAGE_ATTACHMENT_ACCEPT}
+              onChange={handleCampaignMessageAttachmentSelect}
+            />
+            <div className="campaign-message-compose-head">
+              <h4>Send message</h4>
+              <span>
+                New messages also show up in notifications for this campaign.
+              </span>
+            </div>
+            <div className="campaign-message-compose-toolbar">
+              <div className="campaign-message-compose-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-small"
+                  onClick={() => setCampaignEmojiPickerOpen((prev) => !prev)}
+                >
+                  Emoji
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-small"
+                  onClick={() => campaignMessageAttachmentInputRef.current?.click()}
+                  disabled={
+                    campaignMessageSending ||
+                    campaignMessageAttachments.length >= MAX_CAMPAIGN_MESSAGE_ATTACHMENTS
+                  }
+                >
+                  Attach files
+                </button>
+              </div>
+              <span>
+                Images, videos, audio, PDFs, docs, and other files stay attached to this campaign
+                thread.
+              </span>
+            </div>
+            {campaignEmojiPickerOpen ? (
+              <div className="campaign-message-emoji-picker">
+                {CAMPAIGN_MESSAGE_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="campaign-message-emoji-button"
+                    onClick={() => insertCampaignMessageEmoji(emoji)}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {campaignMessageAttachments.length > 0 ? (
+              <ul className="campaign-message-draft-attachments">
+                {campaignMessageAttachments.map((attachment) => {
+                  const attachmentKind = getCampaignMessageAttachmentKind(attachment);
+                  const attachmentUrl = attachment.objectPath
+                    ? resolveMediaUrl(attachment.objectPath)
+                    : '';
+                  const statusLabel =
+                    attachment.status === 'uploading'
+                      ? 'Uploading...'
+                      : attachment.status === 'error'
+                        ? attachment.error || 'Upload failed'
+                        : formatFileSize(attachment.fileSize) || 'Ready';
+
+                  return (
+                    <li
+                      key={attachment.id}
+                      className={[
+                        'campaign-message-draft-attachment',
+                        attachment.status === 'error' ? 'is-error' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      <div className="campaign-message-draft-attachment-main">
+                        {attachmentKind === 'image' && attachmentUrl ? (
+                          <img
+                            className="campaign-message-draft-attachment-thumb"
+                            src={attachmentUrl}
+                            alt={attachment.fileName || 'Attachment'}
+                          />
+                        ) : (
+                          <div className="campaign-message-draft-attachment-badge">
+                            {attachmentKind === 'video'
+                              ? 'Video'
+                              : attachmentKind === 'audio'
+                                ? 'Audio'
+                                : 'File'}
+                          </div>
+                        )}
+                        <div className="campaign-message-draft-attachment-copy">
+                          <strong>{attachment.fileName || 'Attachment'}</strong>
+                          <span>{statusLabel}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="campaign-message-draft-attachment-remove"
+                        onClick={() => removeCampaignMessageAttachment(attachment.id)}
+                      >
+                        Remove
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+            <div className="campaign-message-compose-row">
+              <textarea
+                ref={campaignMessageInputRef}
+                className="input"
+                rows={3}
+                value={campaignMessageDraft}
+                onChange={(event) => {
+                  setCampaignMessageDraft(event.target.value);
+                  if (campaignMessageSendError) {
+                    setCampaignMessageSendError('');
+                  }
+                }}
+                placeholder="Write a campaign update, question, approval note, or send files..."
+              />
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={campaignMessageSending || campaignMessageHasUploadingAttachments}
+              >
+                {campaignMessageSending ? 'Sending...' : 'Send'}
+              </button>
+            </div>
+            {campaignMessageSendError ? (
+              <p className="field-error">{campaignMessageSendError}</p>
+            ) : null}
+            <p className="campaign-message-compose-hint">
+              Emojis work in text, and file uploads use the same protected object storage as other
+              app media.
+            </p>
+          </form>
+        </div>
+      </div>
+    </section>
+  );
+
   const brandCreatorTypeSections = [
     { key: 'influencer', type: 'influencer', label: 'Influencer Creators', tone: 'influencer' },
     { key: 'ugc', type: 'ugc', label: 'UGC Creators', tone: 'ugc' },
@@ -2873,6 +3626,14 @@ export default function CampaignDetailPage() {
             >
               Calendar
             </button>
+            <button
+              type="button"
+              className={brandTab === 'messages' ? 'active' : undefined}
+              onClick={() => setBrandTab('messages')}
+            >
+              Messages
+              <span className="tab-count">{campaignMessages.length}</span>
+            </button>
           </div>
         </div>
       )}
@@ -2909,6 +3670,14 @@ export default function CampaignDetailPage() {
             >
               Calendar
             </button>
+            <button
+              type="button"
+              className={adminTab === 'messages' ? 'active' : undefined}
+              onClick={() => setAdminTab('messages')}
+            >
+              Messages
+              <span className="tab-count">{campaignMessages.length}</span>
+            </button>
           </div>
           {isAdmin && (
             <div className="campaign-tab-actions">
@@ -2923,9 +3692,11 @@ export default function CampaignDetailPage() {
       {isBrand && brandTab === 'brief' ? briefCard : null}
       {isBrand && brandTab === 'analytics' ? brandAnalyticsCard : null}
       {isBrand && brandTab === 'calendar' ? calendarCard : null}
+      {isBrand && brandTab === 'messages' ? messagesCard : null}
       {!isBrand && adminTab === 'overview' ? briefCard : null}
       {!isBrand && adminTab === 'analytics' ? adminAnalyticsCard : null}
       {!isBrand && adminTab === 'calendar' ? calendarCard : null}
+      {!isBrand && adminTab === 'messages' ? messagesCard : null}
 
       {isBrand && brandTab === 'creators' ? (
         <section className="detail-card brand-creator-section">
@@ -3407,20 +4178,15 @@ export default function CampaignDetailPage() {
             />
           </label>
           <label>
-            <span>Type</span>
-            <select
+            <span>Time</span>
+            <input
               className="input"
-              value={calendarEventModal.type}
+              type="time"
+              value={calendarEventModal.eventTime}
               onChange={(event) =>
-                setCalendarEventModal((prev) => ({ ...prev, type: event.target.value }))
+                setCalendarEventModal((prev) => ({ ...prev, eventTime: event.target.value }))
               }
-            >
-              {CALENDAR_EVENT_TYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           <label>
             <span>Description</span>
@@ -3484,7 +4250,39 @@ export default function CampaignDetailPage() {
       >
         <div className="modal-form">
           <label>
-            <span>Upload Video</span>
+            <span>Submission Stage *</span>
+            <select
+              className="input"
+              value={contentForm.submissionStage}
+              onChange={(e) =>
+                {
+                  const nextStage = e.target.value === 'draft' ? 'draft' : 'final';
+                  setContentForm((prev) => ({
+                    ...prev,
+                    submissionStage: nextStage,
+                    ...(nextStage === 'draft'
+                      ? { link: '', uploadedLink: '' }
+                      : {}),
+                  }));
+                  setContentUploadState((prev) => ({
+                    ...prev,
+                    uploading: false,
+                    error: '',
+                    fileName: '',
+                  }));
+                }
+              }
+            >
+              <option value="draft">Draft</option>
+              <option value="final">Final</option>
+            </select>
+          </label>
+          <label>
+            <span>
+              {contentForm.submissionStage === 'draft'
+                ? 'Upload Draft Video *'
+                : 'Upload Final Video (Optional)'}
+            </span>
             <input
               type="file"
               className="input"
@@ -3497,17 +4295,22 @@ export default function CampaignDetailPage() {
               <p className="muted">Uploaded: {contentUploadState.fileName}</p>
             )}
           </label>
-          <label>
-            <span>Content Link *</span>
-            <input
-              type="text"
-              className="input"
-              placeholder="https://... or /objects/..."
-              value={contentForm.link}
-              onChange={(e) => setContentForm((prev) => ({ ...prev, link: e.target.value }))}
-              required
-            />
-          </label>
+          {contentForm.submissionStage === 'final' ? (
+            <label>
+              <span>Content Link *</span>
+              <input
+                type="text"
+                className="input"
+                placeholder="https://... or /objects/..."
+                value={contentForm.link}
+                onChange={(e) => setContentForm((prev) => ({ ...prev, link: e.target.value }))}
+                required
+              />
+              {contentForm.uploadedLink ? (
+                <p className="muted">Optional upload path: {contentForm.uploadedLink}</p>
+              ) : null}
+            </label>
+          ) : null}
           <label>
             <span>Platform</span>
             <select
@@ -3558,7 +4361,12 @@ export default function CampaignDetailPage() {
             type="button"
             className="btn btn-primary"
             onClick={handleAddContent}
-            disabled={!contentForm.link || contentUploadState.uploading}
+            disabled={
+              contentUploadState.uploading ||
+              (contentForm.submissionStage === 'final'
+                ? !String(contentForm.link || '').trim()
+                : !String(contentForm.link || '').trim())
+            }
           >
             Add Content
           </button>

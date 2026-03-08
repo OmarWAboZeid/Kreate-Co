@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppState } from '../state.jsx';
 
 export default function NotificationCenter({ role }) {
   const { brands } = useAppState();
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -73,21 +75,31 @@ export default function NotificationCenter({ role }) {
 
   useEffect(() => {
     if (!notificationsUrl) return;
-    const fetchNotifications = async () => {
-      setLoading(true);
+    let active = true;
+    const fetchNotifications = async ({ quiet = false } = {}) => {
+      if (!quiet) {
+        setLoading(true);
+      }
       try {
         const res = await fetch(notificationsUrl);
         const data = await res.json();
-        if (data.ok) {
+        if (active && data.ok) {
           setNotifications(data.data || []);
         }
       } catch (err) {
         console.error('Failed to fetch notifications:', err);
       } finally {
-        setLoading(false);
+        if (active && !quiet) {
+          setLoading(false);
+        }
       }
     };
     fetchNotifications();
+    const pollId = window.setInterval(() => fetchNotifications({ quiet: true }), 15000);
+    return () => {
+      active = false;
+      window.clearInterval(pollId);
+    };
   }, [notificationsUrl]);
 
   useEffect(() => {
@@ -139,6 +151,13 @@ export default function NotificationCenter({ role }) {
     }
   };
 
+  const openCampaignThread = (note) => {
+    if (!note?.campaign_id) return;
+    markRead(note);
+    setOpen(false);
+    navigate(`/app/${role}/campaigns/${note.campaign_id}?tab=messages`);
+  };
+
   return (
     <div className="notif">
       <button className="notif-trigger" type="button" onClick={() => setOpen((prev) => !prev)}>
@@ -171,18 +190,28 @@ export default function NotificationCenter({ role }) {
             <ul className="notif-list">
               {notifications.map((note) => (
                 <li key={note.id} className={note.read ? 'read' : 'unread'}>
-                  <div>
+                  <div className="notif-item-copy">
                     <p>
                       {note.organization_name ? `${note.organization_name} · ` : ''}
                       {note.message}
                     </p>
-                    <span>{note.channel}</span>
+                    <span>
+                      {note.campaign_name ? `${note.campaign_name} · ` : ''}
+                      {note.channel}
+                    </span>
                   </div>
-                  {!note.read && (
-                    <button type="button" className="link-button" onClick={() => markRead(note)}>
-                      Mark read
-                    </button>
-                  )}
+                  <div className="notif-item-actions">
+                    {note.campaign_id ? (
+                      <button type="button" className="link-button" onClick={() => openCampaignThread(note)}>
+                        Open chat
+                      </button>
+                    ) : null}
+                    {!note.read && (
+                      <button type="button" className="link-button" onClick={() => markRead(note)}>
+                        Mark read
+                      </button>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>

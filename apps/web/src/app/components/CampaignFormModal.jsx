@@ -15,6 +15,19 @@ const CREATOR_TIERS = [
   { value: 'mid-tier', label: 'Mid-tier' },
   { value: 'macro', label: 'Macro' },
 ];
+const FIELD_LABELS = Object.freeze({
+  name: 'Campaign Name',
+  brand: 'Brand',
+  status: 'Campaign Status',
+  creatorType: 'Campaign Type',
+  dealType: 'Deal Type',
+  campaignPackage: 'Campaign Package',
+  customPackage: 'Custom Package',
+  creatorTiers: 'Creator Tiers',
+  platforms: 'Platforms',
+  objectives: 'Campaign Objectives',
+  endDate: 'End Date',
+});
 
 export default function CampaignFormModal({
   open,
@@ -128,7 +141,7 @@ export default function CampaignFormModal({
       nextErrors.endDate = 'End date must be after the start date.';
     }
     return nextErrors;
-  }, [form, selectedPackage, showCreatorTiers]);
+  }, [form, role, selectedPackage, showCreatorTiers]);
 
   const showError = (field) => submitAttempted || touched[field];
   const fieldError = (field) => (showError(field) ? errors[field] : '');
@@ -142,7 +155,10 @@ export default function CampaignFormModal({
     setSubmitError('');
     const errorKeys = Object.keys(errors);
     if (errorKeys.length > 0) {
-      setSubmitError('Please fix the highlighted fields.');
+      const fieldList = Array.from(
+        new Set(errorKeys.map((field) => FIELD_LABELS[field] || field))
+      ).join(', ');
+      setSubmitError(`Please complete or fix: ${fieldList}.`);
       const firstError = errorKeys[0];
       const target = document.querySelector(`[data-field="${firstError}"]`);
       if (target && typeof target.scrollIntoView === 'function') {
@@ -227,6 +243,7 @@ export default function CampaignFormModal({
                   }}
                   placeholder="e.g. Summer Collection Launch"
                   autoFocus
+                  required
                   data-field="name"
                 />
                 {fieldError('name') && <p className="field-error">{fieldError('name')}</p>}
@@ -250,6 +267,7 @@ export default function CampaignFormModal({
                       onChange('brand', event.target.value);
                       markTouched('brand');
                     }}
+                    required
                     data-field="brand"
                   >
                     <option value="">Select brand</option>
@@ -273,6 +291,7 @@ export default function CampaignFormModal({
                       onChange('status', event.target.value);
                       markTouched('status');
                     }}
+                    required
                     data-field="status"
                   >
                     {statusOptions.map((statusOption) => (
@@ -310,6 +329,7 @@ export default function CampaignFormModal({
                     onChange('creatorType', event.target.value);
                     markTouched('creatorType');
                   }}
+                  required
                   data-field="creatorType"
                 >
                   <option value="">Select type</option>
@@ -347,6 +367,7 @@ export default function CampaignFormModal({
                     onChange('dealType', event.target.value);
                     markTouched('dealType');
                   }}
+                  required
                   data-field="dealType"
                 >
                   <option value="">Select deal type</option>
@@ -395,12 +416,14 @@ export default function CampaignFormModal({
               <h4>Campaign Package *</h4>
               <div className="campaign-form-grid">
                 <div className="campaign-field full-width">
-                  <span>Package</span>
+                  <span>Package *</span>
                   {loadingPackages ? (
                     <p className="muted">Loading packages...</p>
                   ) : (
                     <div
                       className={`pill-group ${form.creatorType === 'Hybrid' ? 'vertical' : ''}`}
+                      aria-required="true"
+                      aria-invalid={Boolean(fieldError('campaignPackage'))}
                       data-field="campaignPackage"
                     >
                       {filteredPackages.map((pkg) => (
@@ -438,6 +461,7 @@ export default function CampaignFormModal({
                         markTouched('customPackage');
                       }}
                       placeholder="Enter custom package details"
+                      required
                       data-field="customPackage"
                     />
                     {fieldError('customPackage') && (
@@ -454,7 +478,12 @@ export default function CampaignFormModal({
               <h4>Creator Tiers (Multi-select) *</h4>
               <div className="campaign-form-grid">
                 <div className="campaign-field full-width">
-                  <div className="pill-group" data-field="creatorTiers">
+                  <div
+                    className="pill-group"
+                    aria-required="true"
+                    aria-invalid={Boolean(fieldError('creatorTiers'))}
+                    data-field="creatorTiers"
+                  >
                     {CREATOR_TIERS.map((tier) => (
                       <button
                         key={tier.value}
@@ -483,7 +512,12 @@ export default function CampaignFormModal({
               <div className="campaign-form-grid">
                 <div className="campaign-field">
                   <span>Platforms *</span>
-                  <div className="pill-group" data-field="platforms">
+                  <div
+                    className="pill-group"
+                    aria-required="true"
+                    aria-invalid={Boolean(fieldError('platforms'))}
+                    data-field="platforms"
+                  >
                     {PLATFORM_OPTIONS.map((platform) => (
                       <button
                         key={platform}
@@ -532,7 +566,12 @@ export default function CampaignFormModal({
             <div className="campaign-form-grid">
               <div className="campaign-field full-width">
                 <span>Campaign Objectives (Multi-select) *</span>
-                <div className="pill-group" data-field="objectives">
+                <div
+                  className="pill-group"
+                  aria-required="true"
+                  aria-invalid={Boolean(fieldError('objectives'))}
+                  data-field="objectives"
+                >
                   {OBJECTIVES.map((obj) => (
                     <button
                       key={obj}

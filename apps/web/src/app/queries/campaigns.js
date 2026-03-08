@@ -26,6 +26,10 @@ export const campaignsApi = {
     putJson(`/api/campaigns/${campaignId}/events/${eventId}`, payload, 'Failed to update event'),
   deleteEvent: ({ campaignId, eventId }) =>
     deleteJson(`/api/campaigns/${campaignId}/events/${eventId}`, 'Failed to delete event'),
+  listMessages: (campaignId) =>
+    getJson(`/api/campaigns/${campaignId}/messages`, 'Failed to fetch campaign messages'),
+  createMessage: ({ campaignId, payload }) =>
+    postJson(`/api/campaigns/${campaignId}/messages`, payload, 'Failed to send message'),
   creators: (campaignId) =>
     getJson(`/api/campaigns/${campaignId}/creators`, 'Failed to fetch campaign creators'),
   suggestCreator: ({ campaignId, creatorId }) =>

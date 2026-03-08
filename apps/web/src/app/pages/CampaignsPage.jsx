@@ -183,9 +183,6 @@ export default function CampaignsPage() {
   };
 
   const handleCreateCampaign = async () => {
-    if (!form.name || !form.brand || form.platforms.length === 0) {
-      throw new Error('Please complete the required fields.');
-    }
     const response = await createCampaignMutation.mutateAsync({
       name: form.name,
       brand: form.brand,

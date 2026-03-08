@@ -292,11 +292,6 @@ export default function CreatorProfileModal({ creator, type, onClose, viewerRole
           ) : null}
 
           <div className="profile-modal-actions">
-            {!isBrandViewer && creator.phone ? (
-              <a href={`tel:${creator.phone}`} className="btn btn-primary">
-                Call {creator.phone}
-              </a>
-            ) : null}
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Close
             </button>

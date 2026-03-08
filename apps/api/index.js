@@ -87,11 +87,18 @@ const ensureRuntimeSchema = async () => {
       description text,
       event_type text NOT NULL DEFAULT 'milestone',
       event_date date NOT NULL,
+      event_time time,
       created_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
       updated_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
       created_at timestamptz NOT NULL DEFAULT NOW(),
       updated_at timestamptz NOT NULL DEFAULT NOW()
     )
+    `
+  );
+  await pool.query(
+    `
+    ALTER TABLE campaign_events
+      ADD COLUMN IF NOT EXISTS event_time time
     `
   );
   await pool.query(
@@ -104,6 +111,63 @@ const ensureRuntimeSchema = async () => {
     `
     CREATE INDEX IF NOT EXISTS campaign_events_organization_id_idx
       ON campaign_events(organization_id, event_date)
+    `
+  );
+  await pool.query(
+    `
+    ALTER TABLE organization_notifications
+      ADD COLUMN IF NOT EXISTS campaign_id uuid REFERENCES campaigns(id) ON DELETE CASCADE
+    `
+  );
+  await pool.query(
+    `
+    CREATE INDEX IF NOT EXISTS organization_notifications_campaign_id_idx
+      ON organization_notifications(campaign_id)
+    `
+  );
+  await pool.query(
+    `
+    CREATE TABLE IF NOT EXISTS campaign_messages (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      campaign_id uuid NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      sender_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT NOW(),
+      updated_at timestamptz NOT NULL DEFAULT NOW()
+    )
+    `
+  );
+  await pool.query(
+    `
+    CREATE INDEX IF NOT EXISTS campaign_messages_campaign_id_idx
+      ON campaign_messages(campaign_id, created_at)
+    `
+  );
+  await pool.query(
+    `
+    CREATE INDEX IF NOT EXISTS campaign_messages_organization_id_idx
+      ON campaign_messages(organization_id, created_at)
+    `
+  );
+  await pool.query(
+    `
+    CREATE TABLE IF NOT EXISTS campaign_message_attachments (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      message_id uuid NOT NULL REFERENCES campaign_messages(id) ON DELETE CASCADE,
+      object_path text NOT NULL CHECK (object_path LIKE '/objects/%'),
+      file_name text NOT NULL,
+      content_type text,
+      file_size bigint CHECK (file_size IS NULL OR file_size >= 0),
+      sort_order integer NOT NULL DEFAULT 0,
+      created_at timestamptz NOT NULL DEFAULT NOW()
+    )
+    `
+  );
+  await pool.query(
+    `
+    CREATE INDEX IF NOT EXISTS campaign_message_attachments_message_id_idx
+      ON campaign_message_attachments(message_id, sort_order, created_at)
     `
   );
 
@@ -327,6 +391,19 @@ const normalizeCampaignEventType = (value, options = {}) => {
     return CAMPAIGN_EVENT_TYPE_MAP[normalizedKey];
   }
   return null;
+};
+
+const normalizeCampaignEventTime = (value, options = {}) => {
+  const { fallback = null } = options;
+  if (value === undefined || value === null || value === '') return fallback;
+  const raw = String(value).trim();
+  if (!raw) return fallback;
+  const match = raw.match(/^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/);
+  if (!match) return null;
+  const hours = match[1];
+  const minutes = match[2];
+  const seconds = match[3] || '00';
+  return `${hours}:${minutes}:${seconds}`;
 };
 
 const readJsonBody = (req) =>
@@ -839,6 +916,13 @@ const mapCampaignEventRow = (row) => {
       : row.event_date
         ? row.event_date.toISOString().slice(0, 10)
         : null;
+  const eventTimeRaw = row.event_time;
+  const eventTime =
+    typeof eventTimeRaw === 'string'
+      ? eventTimeRaw.slice(0, 5)
+      : eventTimeRaw
+        ? String(eventTimeRaw).slice(0, 5)
+        : null;
   return {
     id: row.id,
     campaignId: row.campaign_id,
@@ -847,11 +931,58 @@ const mapCampaignEventRow = (row) => {
     description: row.description || '',
     type: normalizeCampaignEventType(row.event_type, { fallback: 'milestone' }),
     eventDate,
+    eventTime,
     createdByUserId: row.created_by_user_id || null,
     updatedByUserId: row.updated_by_user_id || null,
     createdAt: row.created_at ? row.created_at.toISOString() : null,
     updatedAt: row.updated_at ? row.updated_at.toISOString() : null,
   };
+};
+
+const mapCampaignMessageAttachmentRow = (row) => {
+  const fileSize = Number(row.file_size ?? row.fileSize);
+  const createdAt = row.created_at || row.createdAt || null;
+  return {
+    id: row.id,
+    messageId: row.message_id || row.messageId || null,
+    objectPath: row.object_path || row.objectPath || '',
+    fileName: row.file_name || row.fileName || 'Attachment',
+    contentType: row.content_type || row.contentType || '',
+    fileSize: Number.isFinite(fileSize) ? fileSize : null,
+    sortOrder: Number(row.sort_order ?? row.sortOrder) || 0,
+    createdAt: createdAt ? new Date(createdAt).toISOString() : null,
+  };
+};
+
+const mapCampaignMessageRow = (row) => ({
+  id: row.id,
+  campaignId: row.campaign_id,
+  organizationId: row.organization_id,
+  senderUserId: row.sender_user_id,
+  senderName: row.sender_name || row.sender_email || 'Workspace member',
+  senderEmail: row.sender_email || '',
+  senderRole: row.sender_role || '',
+  body: row.body || '',
+  attachments: Array.isArray(row.attachments)
+    ? row.attachments.map(mapCampaignMessageAttachmentRow)
+    : [],
+  createdAt: row.created_at ? row.created_at.toISOString() : null,
+  updatedAt: row.updated_at ? row.updated_at.toISOString() : null,
+});
+
+const summarizeNotificationText = (value, maxLength = 96) => {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}...`;
+};
+
+const summarizeCampaignMessageNotification = (body, attachmentCount) => {
+  const textSummary = summarizeNotificationText(body, 84);
+  if (textSummary) return textSummary;
+  if (attachmentCount <= 0) return 'New attachment';
+  if (attachmentCount === 1) return '1 attachment';
+  return `${attachmentCount} attachments`;
 };
 
 const CONTENT_STATUS_MAP = Object.freeze({
@@ -975,16 +1106,23 @@ const ensureOrgAccess = async (user, organizationId) => {
   return result.rowCount > 0;
 };
 
-const createOrgNotification = async (organizationId, message, channel, createdByUserId) => {
+const createOrgNotification = async (
+  organizationId,
+  message,
+  channel,
+  createdByUserId,
+  options = {}
+) => {
   if (!organizationId || !message) return null;
+  const { campaignId = null } = options;
   const result = await pool.query(
     `
     INSERT INTO organization_notifications
-      (organization_id, message, channel, created_by_user_id)
-    VALUES ($1, $2, $3, $4)
+      (organization_id, message, channel, created_by_user_id, campaign_id)
+    VALUES ($1, $2, $3, $4, $5)
     RETURNING id
     `,
-    [organizationId, message, channel || 'In-app', createdByUserId || null]
+    [organizationId, message, channel || 'In-app', createdByUserId || null, campaignId]
   );
   return result.rows[0] || null;
 };
@@ -2308,13 +2446,14 @@ const server = http.createServer(async (req, res) => {
           description,
           event_type,
           event_date,
+          event_time,
           created_by_user_id,
           updated_by_user_id,
           created_at,
           updated_at
         FROM campaign_events
         WHERE campaign_id = $1
-        ORDER BY event_date ASC, created_at ASC
+        ORDER BY event_date ASC, event_time ASC NULLS LAST, created_at ASC
         `,
         [campaignId]
       );
@@ -2348,25 +2487,40 @@ const server = http.createServer(async (req, res) => {
       const body = await parseBody(req);
       const title = String(body.title || '').trim();
       const description = String(body.description || '').trim();
-      const type = normalizeCampaignEventType(body.type, { fallback: null });
+      const type = normalizeCampaignEventType(body.type, { fallback: 'milestone' }) || 'milestone';
       const eventDate = String(body.eventDate || body.date || '').trim();
+      const eventTime = normalizeCampaignEventTime(body.eventTime ?? body.time, {
+        fallback: null,
+      });
 
       if (!title) {
         return json(res, 400, { ok: false, error: 'title is required' });
       }
-      if (!type) {
-        return json(res, 400, { ok: false, error: 'Invalid event type' });
-      }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
         return json(res, 400, { ok: false, error: 'eventDate must be YYYY-MM-DD' });
+      }
+      if (body.eventTime !== undefined || body.time !== undefined) {
+        if (eventTime === null && String(body.eventTime ?? body.time ?? '').trim() !== '') {
+          return json(res, 400, { ok: false, error: 'eventTime must be HH:MM' });
+        }
       }
 
       const result = await pool.query(
         `
         INSERT INTO campaign_events
-          (campaign_id, organization_id, title, description, event_type, event_date, created_by_user_id, updated_by_user_id)
+          (
+            campaign_id,
+            organization_id,
+            title,
+            description,
+            event_type,
+            event_date,
+            event_time,
+            created_by_user_id,
+            updated_by_user_id
+          )
         VALUES
-          ($1, $2, $3, $4, $5, $6::date, $7, $7)
+          ($1, $2, $3, $4, $5, $6::date, $7::time, $8, $8)
         RETURNING
           id,
           campaign_id,
@@ -2375,12 +2529,13 @@ const server = http.createServer(async (req, res) => {
           description,
           event_type,
           event_date,
+          event_time,
           created_by_user_id,
           updated_by_user_id,
           created_at,
           updated_at
         `,
-        [campaignId, organizationId, title, description || null, type, eventDate, user.id]
+        [campaignId, organizationId, title, description || null, type, eventDate, eventTime, user.id]
       );
 
       return json(res, 201, {
@@ -2415,7 +2570,7 @@ const server = http.createServer(async (req, res) => {
 
       const existingResult = await pool.query(
         `
-        SELECT id, title, description, event_type, event_date
+        SELECT id, title, description, event_type, event_date, event_time
         FROM campaign_events
         WHERE id = $1 AND campaign_id = $2
         `,
@@ -2433,9 +2588,12 @@ const server = http.createServer(async (req, res) => {
       const description = Object.prototype.hasOwnProperty.call(body, 'description')
         ? String(body.description || '').trim()
         : existing.description;
-      const type = Object.prototype.hasOwnProperty.call(body, 'type')
-        ? normalizeCampaignEventType(body.type, { fallback: null })
-        : normalizeCampaignEventType(existing.event_type, { fallback: 'milestone' });
+      const existingType =
+        normalizeCampaignEventType(existing.event_type, { fallback: 'milestone' }) || 'milestone';
+      const requestedType = Object.prototype.hasOwnProperty.call(body, 'type')
+        ? normalizeCampaignEventType(body.type, { fallback: existingType })
+        : existingType;
+      const type = requestedType || existingType;
       const eventDate = Object.prototype.hasOwnProperty.call(body, 'eventDate')
         ? String(body.eventDate || '').trim()
         : typeof existing.event_date === 'string'
@@ -2443,15 +2601,29 @@ const server = http.createServer(async (req, res) => {
           : existing.event_date
             ? existing.event_date.toISOString().slice(0, 10)
             : '';
+      const existingEventTime =
+        typeof existing.event_time === 'string'
+          ? existing.event_time
+          : existing.event_time
+            ? String(existing.event_time)
+            : null;
+      const hasEventTimeField =
+        Object.prototype.hasOwnProperty.call(body, 'eventTime') ||
+        Object.prototype.hasOwnProperty.call(body, 'time');
+      const eventTime = hasEventTimeField
+        ? normalizeCampaignEventTime(body.eventTime ?? body.time, { fallback: null })
+        : normalizeCampaignEventTime(existingEventTime, { fallback: null });
 
       if (!title) {
         return json(res, 400, { ok: false, error: 'title is required' });
       }
-      if (!type) {
-        return json(res, 400, { ok: false, error: 'Invalid event type' });
-      }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate)) {
         return json(res, 400, { ok: false, error: 'eventDate must be YYYY-MM-DD' });
+      }
+      if (hasEventTimeField) {
+        if (eventTime === null && String(body.eventTime ?? body.time ?? '').trim() !== '') {
+          return json(res, 400, { ok: false, error: 'eventTime must be HH:MM' });
+        }
       }
 
       const updateResult = await pool.query(
@@ -2462,10 +2634,11 @@ const server = http.createServer(async (req, res) => {
           description = $2,
           event_type = $3,
           event_date = $4::date,
-          updated_by_user_id = $5,
+          event_time = $5::time,
+          updated_by_user_id = $6,
           updated_at = NOW()
-        WHERE id = $6
-          AND campaign_id = $7
+        WHERE id = $7
+          AND campaign_id = $8
         RETURNING
           id,
           campaign_id,
@@ -2474,12 +2647,13 @@ const server = http.createServer(async (req, res) => {
           description,
           event_type,
           event_date,
+          event_time,
           created_by_user_id,
           updated_by_user_id,
           created_at,
           updated_at
         `,
-        [title, description || null, type, eventDate, user.id, eventId, campaignId]
+        [title, description || null, type, eventDate, eventTime, user.id, eventId, campaignId]
       );
 
       return json(res, 200, {
@@ -2521,6 +2695,226 @@ const server = http.createServer(async (req, res) => {
         return json(res, 404, { ok: false, error: 'Event not found' });
       }
       return json(res, 200, { ok: true, id: deleteResult.rows[0].id });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  const campaignMessagesMatch = pathname.match(
+    /^\/api\/campaigns\/([0-9a-fA-F-]+)\/messages\/?$/
+  );
+  if (campaignMessagesMatch && method === 'GET') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    try {
+      const campaignId = campaignMessagesMatch[1];
+      const organizationId = await getCampaignOrganizationId(campaignId);
+      if (!organizationId) {
+        return json(res, 404, { ok: false, error: 'Campaign not found' });
+      }
+      const hasAccess = await ensureOrgAccess(user, organizationId);
+      if (!hasAccess) {
+        return json(res, 403, { ok: false, error: 'Forbidden' });
+      }
+
+      const result = await pool.query(
+        `
+        SELECT
+          m.id,
+          m.campaign_id,
+          m.organization_id,
+          m.sender_user_id,
+          m.body,
+          m.created_at,
+          m.updated_at,
+          u.name AS sender_name,
+          u.email AS sender_email,
+          u.role AS sender_role,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', a.id,
+                'message_id', a.message_id,
+                'object_path', a.object_path,
+                'file_name', a.file_name,
+                'content_type', a.content_type,
+                'file_size', a.file_size,
+                'sort_order', a.sort_order,
+                'created_at', a.created_at
+              )
+              ORDER BY a.sort_order ASC, a.created_at ASC, a.id ASC
+            ) FILTER (WHERE a.id IS NOT NULL),
+            '[]'::json
+          ) AS attachments
+        FROM campaign_messages m
+        JOIN users u ON u.id = m.sender_user_id
+        LEFT JOIN campaign_message_attachments a ON a.message_id = m.id
+        WHERE m.campaign_id = $1
+        GROUP BY
+          m.id,
+          m.campaign_id,
+          m.organization_id,
+          m.sender_user_id,
+          m.body,
+          m.created_at,
+          m.updated_at,
+          u.name,
+          u.email,
+          u.role
+        ORDER BY m.created_at ASC, m.id ASC
+        `,
+        [campaignId]
+      );
+
+      return json(res, 200, {
+        ok: true,
+        data: result.rows.map(mapCampaignMessageRow),
+      });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if (campaignMessagesMatch && method === 'POST') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin' && user.role !== 'employee' && user.role !== 'brand') {
+      return json(res, 403, { ok: false, error: 'Forbidden' });
+    }
+    try {
+      const campaignId = campaignMessagesMatch[1];
+      const campaignContext = await getCampaignContext(campaignId);
+      const organizationId = campaignContext?.organization_id || null;
+      if (!organizationId) {
+        return json(res, 404, { ok: false, error: 'Campaign not found' });
+      }
+      const hasAccess = await ensureOrgAccess(user, organizationId);
+      if (!hasAccess) {
+        return json(res, 403, { ok: false, error: 'Forbidden' });
+      }
+
+      const body = await parseBody(req);
+      const messageBody = String(body.body || body.message || '').trim();
+      const attachmentsInput = Array.isArray(body.attachments) ? body.attachments : [];
+      let attachments = [];
+      try {
+        attachments = attachmentsInput.map((item, index) => {
+          const objectPath = String(item?.objectPath || item?.object_path || '').trim();
+          const fileName = String(item?.fileName || item?.file_name || '').trim();
+          const contentType = String(item?.contentType || item?.content_type || '').trim();
+          const rawFileSize = item?.fileSize ?? item?.file_size;
+          const fileSize = rawFileSize == null || rawFileSize === '' ? null : Number(rawFileSize);
+
+          if (!objectPath.startsWith('/objects/')) {
+            throw new Error('Attachments must use uploaded object storage paths');
+          }
+          if (!fileName) {
+            throw new Error('Attachment file name is required');
+          }
+          if (fileSize != null && (!Number.isFinite(fileSize) || fileSize < 0)) {
+            throw new Error('Attachment file size is invalid');
+          }
+
+          return {
+            objectPath,
+            fileName: fileName.slice(0, 255),
+            contentType: contentType.slice(0, 255),
+            fileSize,
+            sortOrder: index,
+          };
+        });
+      } catch (error) {
+        return json(res, 400, { ok: false, error: error.message });
+      }
+      if (!messageBody && attachments.length === 0) {
+        return json(res, 400, { ok: false, error: 'Message or attachment is required' });
+      }
+      if (messageBody.length > 4000) {
+        return json(res, 400, { ok: false, error: 'Message must be 4000 characters or fewer' });
+      }
+      if (attachments.length > 10) {
+        return json(res, 400, { ok: false, error: 'Messages can include up to 10 attachments' });
+      }
+
+      const client = await pool.connect();
+      let inserted;
+      const insertedAttachments = [];
+      try {
+        await client.query('BEGIN');
+        const result = await client.query(
+          `
+          INSERT INTO campaign_messages
+            (campaign_id, organization_id, sender_user_id, body)
+          VALUES ($1, $2, $3, $4)
+          RETURNING
+            id,
+            campaign_id,
+            organization_id,
+            sender_user_id,
+            body,
+            created_at,
+            updated_at
+          `,
+          [campaignId, organizationId, user.id, messageBody]
+        );
+        inserted = result.rows[0];
+
+        if (attachments.length > 0) {
+          for (const attachment of attachments) {
+            const attachmentResult = await client.query(
+              `
+              INSERT INTO campaign_message_attachments
+                (message_id, object_path, file_name, content_type, file_size, sort_order)
+              VALUES ($1, $2, $3, $4, $5, $6)
+              RETURNING
+                id,
+                message_id,
+                object_path,
+                file_name,
+                content_type,
+                file_size,
+                sort_order,
+                created_at
+              `,
+              [
+                inserted.id,
+                attachment.objectPath,
+                attachment.fileName,
+                attachment.contentType || null,
+                attachment.fileSize,
+                attachment.sortOrder,
+              ]
+            );
+            insertedAttachments.push(attachmentResult.rows[0]);
+          }
+        }
+
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+
+      await createOrgNotification(
+        organizationId,
+        `New message in ${campaignContext?.name || 'campaign'}: ${summarizeCampaignMessageNotification(messageBody, attachments.length)}`,
+        'Campaign message',
+        user.id,
+        { campaignId }
+      );
+
+      return json(res, 201, {
+        ok: true,
+        data: mapCampaignMessageRow({
+          ...inserted,
+          sender_name: user.name,
+          sender_email: user.email,
+          sender_role: user.role,
+          attachments: insertedAttachments,
+        }),
+      });
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });
     }
@@ -2829,7 +3223,10 @@ const server = http.createServer(async (req, res) => {
 
       const body = await parseBody(req);
       const workflowStatus = body.workflowStatus;
-      const finalVideoLink = body.finalVideoLink;
+      const finalVideoLink =
+        body.finalVideoLink === undefined ? undefined : String(body.finalVideoLink || '').trim();
+      const submissionStageRaw = String(body.submissionStage || '').trim().toLowerCase();
+      const submissionStage = submissionStageRaw === 'draft' ? 'draft' : 'final';
       const normalizedWorkflowStatus =
         workflowStatus === undefined ? undefined : String(workflowStatus || '').trim();
       if (workflowStatus === undefined && finalVideoLink === undefined) {
@@ -2854,16 +3251,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      const existingResult = await pool.query(
-        `
-        SELECT final_video_link
-        FROM campaign_participants
-        WHERE campaign_id = $1 AND creator_id = $2
-        `,
-        [campaignId, creatorId]
-      );
-
-      const previousFinalLink = existingResult.rows[0]?.final_video_link || null;
+      const finalVideoLinkForParticipant = submissionStage === 'draft' ? null : finalVideoLink || null;
 
       const updateResult = await pool.query(
         `
@@ -2873,14 +3261,15 @@ const server = http.createServer(async (req, res) => {
         WHERE campaign_id = $3 AND creator_id = $4
         RETURNING id
         `,
-        [normalizedWorkflowStatus || null, finalVideoLink || null, campaignId, creatorId]
+        [normalizedWorkflowStatus || null, finalVideoLinkForParticipant, campaignId, creatorId]
       );
 
       if (updateResult.rows.length === 0) {
         return json(res, 404, { ok: false, error: 'Participant not found' });
       }
 
-      if (finalVideoLink && finalVideoLink !== previousFinalLink) {
+      if (finalVideoLink) {
+        let createdSubmissionAsset = false;
         const existingAsset = await pool.query(
           `
           SELECT a.id
@@ -2906,6 +3295,7 @@ const server = http.createServer(async (req, res) => {
           );
           const submissionId = submissionResult.rows[0]?.id;
           if (submissionId) {
+            createdSubmissionAsset = true;
             await pool.query(
               `
               INSERT INTO content_assets
@@ -2922,14 +3312,16 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
-        const campaignContext = await getCampaignContext(campaignId);
-        const creatorName = await getCreatorDisplayName(creatorId);
-        await createOrgNotification(
-          campaignContext?.organization_id,
-          `Final video submitted for ${campaignContext?.name || 'campaign'}: ${creatorName}`,
-          'In-app',
-          user.id
-        );
+        if (createdSubmissionAsset) {
+          const campaignContext = await getCampaignContext(campaignId);
+          const creatorName = await getCreatorDisplayName(creatorId);
+          await createOrgNotification(
+            campaignContext?.organization_id,
+            `${submissionStage === 'draft' ? 'Draft video submitted' : 'Final video submitted'} for ${campaignContext?.name || 'campaign'}: ${creatorName}`,
+            'In-app',
+            user.id
+          );
+        }
       }
 
       return json(res, 200, { ok: true });
@@ -3700,9 +4092,19 @@ const server = http.createServer(async (req, res) => {
       const limitIdx = values.length;
       const result = await pool.query(
         `
-        SELECT n.id, n.organization_id, o.name as organization_name, n.message, n.channel, n.read, n.created_at
+        SELECT
+          n.id,
+          n.organization_id,
+          o.name as organization_name,
+          n.campaign_id,
+          c.name as campaign_name,
+          n.message,
+          n.channel,
+          n.read,
+          n.created_at
         FROM organization_notifications n
         JOIN organizations o ON n.organization_id = o.id
+        LEFT JOIN campaigns c ON c.id = n.campaign_id
         ${whereClause}
         ORDER BY n.created_at DESC
         LIMIT $${limitIdx}
@@ -3783,10 +4185,19 @@ const server = http.createServer(async (req, res) => {
       const limit = parseInt(urlObj.searchParams.get('limit')) || 50;
       const result = await pool.query(
         `
-        SELECT id, organization_id, message, channel, read, created_at
-        FROM organization_notifications
-        WHERE organization_id = $1
-        ORDER BY created_at DESC
+        SELECT
+          n.id,
+          n.organization_id,
+          n.campaign_id,
+          c.name as campaign_name,
+          n.message,
+          n.channel,
+          n.read,
+          n.created_at
+        FROM organization_notifications n
+        LEFT JOIN campaigns c ON c.id = n.campaign_id
+        WHERE n.organization_id = $1
+        ORDER BY n.created_at DESC
         LIMIT $2
         `,
         [organizationId, limit]
@@ -3809,18 +4220,27 @@ const server = http.createServer(async (req, res) => {
         }
       }
       const body = await parseBody(req);
-      const { message, channel } = body;
+      const { message, channel, campaignId } = body;
       if (!message || !channel) {
         return json(res, 400, { ok: false, error: 'Message and channel are required' });
+      }
+      if (campaignId) {
+        const campaignCheck = await pool.query(
+          `SELECT 1 FROM campaigns WHERE id = $1 AND organization_id = $2`,
+          [campaignId, organizationId]
+        );
+        if (campaignCheck.rowCount === 0) {
+          return json(res, 400, { ok: false, error: 'Campaign does not belong to organization' });
+        }
       }
       const result = await pool.query(
         `
         INSERT INTO organization_notifications
-          (organization_id, message, channel, created_by_user_id)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, message, channel, read, created_at
+          (organization_id, message, channel, created_by_user_id, campaign_id)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, message, channel, read, created_at, campaign_id
         `,
-        [organizationId, message, channel, user.id]
+        [organizationId, message, channel, user.id, campaignId || null]
       );
       return json(res, 201, { ok: true, data: result.rows[0] });
     } catch (error) {
@@ -3848,7 +4268,7 @@ const server = http.createServer(async (req, res) => {
         UPDATE organization_notifications
         SET read = true
         WHERE id = $1 AND organization_id = $2
-        RETURNING id, message, channel, read, created_at
+        RETURNING id, message, channel, read, created_at, campaign_id
         `,
         [notificationId, organizationId]
       );
