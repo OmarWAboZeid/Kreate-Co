@@ -170,6 +170,44 @@ const ensureRuntimeSchema = async () => {
       ON campaign_message_attachments(message_id, sort_order, created_at)
     `
   );
+  await pool.query(
+    `
+    CREATE TABLE IF NOT EXISTS organization_chat_messages (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      sender_user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT NOW(),
+      updated_at timestamptz NOT NULL DEFAULT NOW()
+    )
+    `
+  );
+  await pool.query(
+    `
+    CREATE INDEX IF NOT EXISTS organization_chat_messages_organization_id_idx
+      ON organization_chat_messages(organization_id, created_at)
+    `
+  );
+  await pool.query(
+    `
+    CREATE TABLE IF NOT EXISTS organization_chat_message_attachments (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      message_id uuid NOT NULL REFERENCES organization_chat_messages(id) ON DELETE CASCADE,
+      object_path text NOT NULL CHECK (object_path LIKE '/objects/%'),
+      file_name text NOT NULL,
+      content_type text,
+      file_size bigint CHECK (file_size IS NULL OR file_size >= 0),
+      sort_order integer NOT NULL DEFAULT 0,
+      created_at timestamptz NOT NULL DEFAULT NOW()
+    )
+    `
+  );
+  await pool.query(
+    `
+    CREATE INDEX IF NOT EXISTS organization_chat_message_attachments_message_id_idx
+      ON organization_chat_message_attachments(message_id, sort_order, created_at)
+    `
+  );
 
   for (const [campaignType, labels] of Object.entries(CREATOR_STAGE_SEED)) {
     for (let index = 0; index < labels.length; index += 1) {
@@ -1136,6 +1174,19 @@ const getCampaignContext = async (campaignId) => {
     WHERE c.id = $1
     `,
     [campaignId]
+  );
+  return result.rows[0] || null;
+};
+
+const getOrganizationContext = async (organizationId) => {
+  if (!organizationId) return null;
+  const result = await pool.query(
+    `
+    SELECT id, name
+    FROM organizations
+    WHERE id = $1
+    `,
+    [organizationId]
   );
   return result.rows[0] || null;
 };
@@ -2695,6 +2746,443 @@ const server = http.createServer(async (req, res) => {
         return json(res, 404, { ok: false, error: 'Event not found' });
       }
       return json(res, 200, { ok: true, id: deleteResult.rows[0].id });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if (pathname === '/api/chat/thread' && method === 'GET') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin' && user.role !== 'employee' && user.role !== 'brand') {
+      return json(res, 403, { ok: false, error: 'Forbidden' });
+    }
+    try {
+      const urlObj = new URL(url, `http://localhost:${PORT}`);
+      const campaignId = urlObj.searchParams.get('campaignId');
+      const requestedOrganizationId = urlObj.searchParams.get('organizationId');
+
+      if (campaignId) {
+        const campaignContext = await getCampaignContext(campaignId);
+        const organizationId = campaignContext?.organization_id || null;
+        if (!organizationId) {
+          return json(res, 404, { ok: false, error: 'Campaign not found' });
+        }
+        const hasAccess = await ensureOrgAccess(user, organizationId);
+        if (!hasAccess) {
+          return json(res, 403, { ok: false, error: 'Forbidden' });
+        }
+
+        const result = await pool.query(
+          `
+          SELECT
+            m.id,
+            m.campaign_id,
+            m.organization_id,
+            m.sender_user_id,
+            m.body,
+            m.created_at,
+            m.updated_at,
+            u.name AS sender_name,
+            u.email AS sender_email,
+            u.role AS sender_role,
+            COALESCE(
+              json_agg(
+                json_build_object(
+                  'id', a.id,
+                  'message_id', a.message_id,
+                  'object_path', a.object_path,
+                  'file_name', a.file_name,
+                  'content_type', a.content_type,
+                  'file_size', a.file_size,
+                  'sort_order', a.sort_order,
+                  'created_at', a.created_at
+                )
+                ORDER BY a.sort_order ASC, a.created_at ASC, a.id ASC
+              ) FILTER (WHERE a.id IS NOT NULL),
+              '[]'::json
+            ) AS attachments
+          FROM campaign_messages m
+          JOIN users u ON u.id = m.sender_user_id
+          LEFT JOIN campaign_message_attachments a ON a.message_id = m.id
+          WHERE m.campaign_id = $1
+          GROUP BY
+            m.id,
+            m.campaign_id,
+            m.organization_id,
+            m.sender_user_id,
+            m.body,
+            m.created_at,
+            m.updated_at,
+            u.name,
+            u.email,
+            u.role
+          ORDER BY m.created_at ASC, m.id ASC
+          `,
+          [campaignId]
+        );
+
+        return json(res, 200, {
+          ok: true,
+          data: {
+            thread: {
+              scope: 'campaign',
+              campaignId,
+              organizationId,
+              title: campaignContext?.name || 'Campaign chat',
+              subtitle: `${campaignContext?.organization_name || 'Brand'} campaign thread`,
+              organizationName: campaignContext?.organization_name || '',
+            },
+            messages: result.rows.map(mapCampaignMessageRow),
+          },
+        });
+      }
+
+      const organizationContext =
+        user.role === 'brand'
+          ? await getBrandMembership(user.id)
+          : await getOrganizationContext(requestedOrganizationId);
+
+      if (!organizationContext?.id) {
+        return json(res, 400, {
+          ok: false,
+          error: 'Organization context is required for workspace chat',
+        });
+      }
+
+      const hasAccess = await ensureOrgAccess(user, organizationContext.id);
+      if (!hasAccess) {
+        return json(res, 403, { ok: false, error: 'Forbidden' });
+      }
+
+      const result = await pool.query(
+        `
+        SELECT
+          m.id,
+          NULL::uuid AS campaign_id,
+          m.organization_id,
+          m.sender_user_id,
+          m.body,
+          m.created_at,
+          m.updated_at,
+          u.name AS sender_name,
+          u.email AS sender_email,
+          u.role AS sender_role,
+          COALESCE(
+            json_agg(
+              json_build_object(
+                'id', a.id,
+                'message_id', a.message_id,
+                'object_path', a.object_path,
+                'file_name', a.file_name,
+                'content_type', a.content_type,
+                'file_size', a.file_size,
+                'sort_order', a.sort_order,
+                'created_at', a.created_at
+              )
+              ORDER BY a.sort_order ASC, a.created_at ASC, a.id ASC
+            ) FILTER (WHERE a.id IS NOT NULL),
+            '[]'::json
+          ) AS attachments
+        FROM organization_chat_messages m
+        JOIN users u ON u.id = m.sender_user_id
+        LEFT JOIN organization_chat_message_attachments a ON a.message_id = m.id
+        WHERE m.organization_id = $1
+        GROUP BY
+          m.id,
+          m.organization_id,
+          m.sender_user_id,
+          m.body,
+          m.created_at,
+          m.updated_at,
+          u.name,
+          u.email,
+          u.role
+        ORDER BY m.created_at ASC, m.id ASC
+        `,
+        [organizationContext.id]
+      );
+
+      return json(res, 200, {
+        ok: true,
+        data: {
+          thread: {
+            scope: 'workspace',
+            campaignId: null,
+            organizationId: organizationContext.id,
+            title: `${organizationContext.name || 'Workspace'} chat`,
+            subtitle: 'General discussion outside a specific campaign',
+            organizationName: organizationContext.name || '',
+          },
+          messages: result.rows.map(mapCampaignMessageRow),
+        },
+      });
+    } catch (error) {
+      return json(res, 500, { ok: false, error: error.message });
+    }
+  }
+
+  if (pathname === '/api/chat/thread' && method === 'POST') {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    if (user.role !== 'admin' && user.role !== 'employee' && user.role !== 'brand') {
+      return json(res, 403, { ok: false, error: 'Forbidden' });
+    }
+    try {
+      const body = await parseBody(req);
+      const campaignId = String(body.campaignId || '').trim();
+      const requestedOrganizationId = String(body.organizationId || '').trim();
+      const messageBody = String(body.body || body.message || '').trim();
+      const attachmentsInput = Array.isArray(body.attachments) ? body.attachments : [];
+
+      let attachments = [];
+      try {
+        attachments = attachmentsInput.map((item, index) => {
+          const objectPath = String(item?.objectPath || item?.object_path || '').trim();
+          const fileName = String(item?.fileName || item?.file_name || '').trim();
+          const contentType = String(item?.contentType || item?.content_type || '').trim();
+          const rawFileSize = item?.fileSize ?? item?.file_size;
+          const fileSize = rawFileSize == null || rawFileSize === '' ? null : Number(rawFileSize);
+
+          if (!objectPath.startsWith('/objects/')) {
+            throw new Error('Attachments must use uploaded object storage paths');
+          }
+          if (!fileName) {
+            throw new Error('Attachment file name is required');
+          }
+          if (fileSize != null && (!Number.isFinite(fileSize) || fileSize < 0)) {
+            throw new Error('Attachment file size is invalid');
+          }
+
+          return {
+            objectPath,
+            fileName: fileName.slice(0, 255),
+            contentType: contentType.slice(0, 255),
+            fileSize,
+            sortOrder: index,
+          };
+        });
+      } catch (error) {
+        return json(res, 400, { ok: false, error: error.message });
+      }
+
+      if (!messageBody && attachments.length === 0) {
+        return json(res, 400, { ok: false, error: 'Message or attachment is required' });
+      }
+      if (messageBody.length > 4000) {
+        return json(res, 400, { ok: false, error: 'Message must be 4000 characters or fewer' });
+      }
+      if (attachments.length > 10) {
+        return json(res, 400, { ok: false, error: 'Messages can include up to 10 attachments' });
+      }
+
+      if (campaignId) {
+        const campaignContext = await getCampaignContext(campaignId);
+        const organizationId = campaignContext?.organization_id || null;
+        if (!organizationId) {
+          return json(res, 404, { ok: false, error: 'Campaign not found' });
+        }
+        const hasAccess = await ensureOrgAccess(user, organizationId);
+        if (!hasAccess) {
+          return json(res, 403, { ok: false, error: 'Forbidden' });
+        }
+
+        const client = await pool.connect();
+        let inserted;
+        const insertedAttachments = [];
+        try {
+          await client.query('BEGIN');
+          const result = await client.query(
+            `
+            INSERT INTO campaign_messages
+              (campaign_id, organization_id, sender_user_id, body)
+            VALUES ($1, $2, $3, $4)
+            RETURNING
+              id,
+              campaign_id,
+              organization_id,
+              sender_user_id,
+              body,
+              created_at,
+              updated_at
+            `,
+            [campaignId, organizationId, user.id, messageBody]
+          );
+          inserted = result.rows[0];
+
+          if (attachments.length > 0) {
+            for (const attachment of attachments) {
+              const attachmentResult = await client.query(
+                `
+                INSERT INTO campaign_message_attachments
+                  (message_id, object_path, file_name, content_type, file_size, sort_order)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING
+                  id,
+                  message_id,
+                  object_path,
+                  file_name,
+                  content_type,
+                  file_size,
+                  sort_order,
+                  created_at
+                `,
+                [
+                  inserted.id,
+                  attachment.objectPath,
+                  attachment.fileName,
+                  attachment.contentType || null,
+                  attachment.fileSize,
+                  attachment.sortOrder,
+                ]
+              );
+              insertedAttachments.push(attachmentResult.rows[0]);
+            }
+          }
+
+          await client.query('COMMIT');
+        } catch (error) {
+          await client.query('ROLLBACK');
+          throw error;
+        } finally {
+          client.release();
+        }
+
+        await createOrgNotification(
+          organizationId,
+          `New message in ${campaignContext?.name || 'campaign'}: ${summarizeCampaignMessageNotification(messageBody, attachments.length)}`,
+          'Campaign message',
+          user.id,
+          { campaignId }
+        );
+
+        return json(res, 201, {
+          ok: true,
+          data: {
+            thread: {
+              scope: 'campaign',
+              campaignId,
+              organizationId,
+              title: campaignContext?.name || 'Campaign chat',
+              subtitle: `${campaignContext?.organization_name || 'Brand'} campaign thread`,
+              organizationName: campaignContext?.organization_name || '',
+            },
+            message: mapCampaignMessageRow({
+              ...inserted,
+              sender_name: user.name,
+              sender_email: user.email,
+              sender_role: user.role,
+              attachments: insertedAttachments,
+            }),
+          },
+        });
+      }
+
+      const organizationContext =
+        user.role === 'brand'
+          ? await getBrandMembership(user.id)
+          : await getOrganizationContext(requestedOrganizationId);
+
+      if (!organizationContext?.id) {
+        return json(res, 400, {
+          ok: false,
+          error: 'Organization context is required for workspace chat',
+        });
+      }
+
+      const hasAccess = await ensureOrgAccess(user, organizationContext.id);
+      if (!hasAccess) {
+        return json(res, 403, { ok: false, error: 'Forbidden' });
+      }
+
+      const client = await pool.connect();
+      let inserted;
+      const insertedAttachments = [];
+      try {
+        await client.query('BEGIN');
+        const result = await client.query(
+          `
+          INSERT INTO organization_chat_messages
+            (organization_id, sender_user_id, body)
+          VALUES ($1, $2, $3)
+          RETURNING
+            id,
+            NULL::uuid AS campaign_id,
+            organization_id,
+            sender_user_id,
+            body,
+            created_at,
+            updated_at
+          `,
+          [organizationContext.id, user.id, messageBody]
+        );
+        inserted = result.rows[0];
+
+        if (attachments.length > 0) {
+          for (const attachment of attachments) {
+            const attachmentResult = await client.query(
+              `
+              INSERT INTO organization_chat_message_attachments
+                (message_id, object_path, file_name, content_type, file_size, sort_order)
+              VALUES ($1, $2, $3, $4, $5, $6)
+              RETURNING
+                id,
+                message_id,
+                object_path,
+                file_name,
+                content_type,
+                file_size,
+                sort_order,
+                created_at
+              `,
+              [
+                inserted.id,
+                attachment.objectPath,
+                attachment.fileName,
+                attachment.contentType || null,
+                attachment.fileSize,
+                attachment.sortOrder,
+              ]
+            );
+            insertedAttachments.push(attachmentResult.rows[0]);
+          }
+        }
+
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+
+      await createOrgNotification(
+        organizationContext.id,
+        `New workspace message: ${summarizeCampaignMessageNotification(messageBody, attachments.length)}`,
+        'Workspace chat',
+        user.id
+      );
+
+      return json(res, 201, {
+        ok: true,
+        data: {
+          thread: {
+            scope: 'workspace',
+            campaignId: null,
+            organizationId: organizationContext.id,
+            title: `${organizationContext.name || 'Workspace'} chat`,
+            subtitle: 'General discussion outside a specific campaign',
+            organizationName: organizationContext.name || '',
+          },
+          message: mapCampaignMessageRow({
+            ...inserted,
+            sender_name: user.name,
+            sender_email: user.email,
+            sender_role: user.role,
+            attachments: insertedAttachments,
+          }),
+        },
+      });
     } catch (error) {
       return json(res, 500, { ok: false, error: error.message });
     }

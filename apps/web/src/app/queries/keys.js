@@ -20,6 +20,10 @@ export const queryKeys = {
     details: (campaignId) => ['campaigns', 'details', campaignId],
     creators: (campaignId) => ['campaigns', campaignId, 'creators'],
   },
+  chat: {
+    all: ['chat'],
+    thread: (params = {}) => ['chat', 'thread', normalizeParams(params)],
+  },
   content: {
     all: ['content'],
     list: (params = {}) => ['content', 'list', normalizeParams(params)],

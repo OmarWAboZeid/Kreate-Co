@@ -151,11 +151,15 @@ export default function NotificationCenter({ role }) {
     }
   };
 
-  const openCampaignThread = (note) => {
-    if (!note?.campaign_id) return;
+  const openChatThread = (note) => {
+    if (!note?.campaign_id && !note?.organization_id) return;
     markRead(note);
     setOpen(false);
-    navigate(`/app/${role}/campaigns/${note.campaign_id}?tab=messages`);
+    if (note.campaign_id) {
+      navigate(`/app/${role}/campaigns/${note.campaign_id}?chat=open`);
+      return;
+    }
+    navigate(`/app/${role}/campaigns?chat=open&organizationId=${note.organization_id}`);
   };
 
   return (
@@ -201,8 +205,8 @@ export default function NotificationCenter({ role }) {
                     </span>
                   </div>
                   <div className="notif-item-actions">
-                    {note.campaign_id ? (
-                      <button type="button" className="link-button" onClick={() => openCampaignThread(note)}>
+                    {note.campaign_id || /message|chat/i.test(String(note.channel || '')) ? (
+                      <button type="button" className="link-button" onClick={() => openChatThread(note)}>
                         Open chat
                       </button>
                     ) : null}

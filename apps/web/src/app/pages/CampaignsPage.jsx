@@ -159,7 +159,7 @@ export default function CampaignsPage() {
         name: wizardData.name,
         brand: wizardData.brand,
         status: 'Planning',
-        platforms: wizardData.influencer?.platforms || ['Instagram'],
+        platforms: wizardData.influencer?.platforms || [],
         objectives: wizardData.objectives,
         campaignType: wizardData.campaignType,
         campaignTypeDetail: wizardData.campaignTypeDetail || null,

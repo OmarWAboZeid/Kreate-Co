@@ -1,23 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-const STEPS = {
-  NAME: 1,
-  OBJECTIVES: 2,
-  START_DATE: 3,
-  CAMPAIGN_TYPE: 4,
-  PAYMENT_TYPE: 5,
-  CREATOR_TIERS: 6,
-  UGC_PERSONA: 7,
-  UGC_GENDER: 8,
-  UGC_AGE: 9,
-  UGC_VIDEOS: 10,
-  INFLUENCER_NICHE: 11,
-  INFLUENCER_PLATFORMS: 12,
-  INFLUENCER_BUDGET: 13,
-  REVIEW: 14,
+const STEP_IDS = {
+  BASICS: 'basics',
+  UGC: 'ugc',
+  INFLUENCER: 'influencer',
+  REVIEW: 'review',
 };
 
 const OBJECTIVES = ['Awareness', 'Sales', 'Launch', 'Content Bank'];
+const CAMPAIGN_TYPES = ['UGC', 'Influencer', 'Hybrid'];
+const PAYMENT_TYPES = ['Collab', 'Paid', 'Mix'];
+const GENDER_OPTIONS = ['Female', 'Male', 'Any'];
+const AGE_OPTIONS = ['18-24', '25-34', '35-44', '45+', 'Any'];
 
 const CREATOR_TIERS = [
   { value: 'nano', label: 'Nano', desc: '1K-10K followers' },
@@ -46,13 +40,18 @@ const BUDGET_OPTIONS = [
   { value: 'tbd', label: 'To be discussed' },
 ];
 
+const getPaymentTypeLabel = (paymentType) =>
+  paymentType === 'Collab' ? 'Barter/Gifted' : paymentType;
+
+const formatList = (values) => values.filter(Boolean).join(', ');
+
 export default function CampaignWizard({ onClose, onSubmit, brandName }) {
   const [layoutOffsets, setLayoutOffsets] = useState({
     top: 0,
     left: 0,
     right: 0,
   });
-  const [currentStep, setCurrentStep] = useState(STEPS.NAME);
+  const [currentStep, setCurrentStep] = useState(STEP_IDS.BASICS);
   const [form, setForm] = useState({
     name: '',
     brandName: brandName || '',
@@ -60,16 +59,32 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
     startDate: '',
     campaignType: '',
     paymentType: '',
+    creatorAgeRange: '',
     creatorTiers: [],
     ugcPersona: '',
     ugcGender: '',
-    ugcAgeRange: '',
     ugcVideos: '',
     ugcVideosOther: '',
     influencerNiche: '',
     influencerPlatforms: [],
     influencerBudget: '',
   });
+
+  const requiresPaymentType =
+    form.campaignType === 'Influencer' || form.campaignType === 'Hybrid';
+  const showUgcStep = form.campaignType === 'UGC' || form.campaignType === 'Hybrid';
+  const showInfluencerStep =
+    form.campaignType === 'Influencer' || form.campaignType === 'Hybrid';
+
+  const flowSteps = useMemo(() => {
+    const steps = [STEP_IDS.BASICS];
+    if (showUgcStep) steps.push(STEP_IDS.UGC);
+    if (showInfluencerStep) steps.push(STEP_IDS.INFLUENCER);
+    steps.push(STEP_IDS.REVIEW);
+    return steps;
+  }, [showInfluencerStep, showUgcStep]);
+
+  const currentStepIndex = Math.max(flowSteps.indexOf(currentStep), 0);
 
   const updateForm = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -81,7 +96,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
       return {
         ...prev,
         creatorTiers: exists
-          ? prev.creatorTiers.filter((t) => t !== tier)
+          ? prev.creatorTiers.filter((item) => item !== tier)
           : [...prev.creatorTiers, tier],
       };
     });
@@ -93,600 +108,85 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
       return {
         ...prev,
         influencerPlatforms: exists
-          ? prev.influencerPlatforms.filter((p) => p !== platform)
+          ? prev.influencerPlatforms.filter((item) => item !== platform)
           : [...prev.influencerPlatforms, platform],
       };
     });
   };
 
-  const getPaymentTypeLabel = (paymentType) =>
-    paymentType === 'Collab' ? 'Barter/Gifted' : paymentType;
-
-  const getNextStep = () => {
-    switch (currentStep) {
-      case STEPS.NAME:
-        return STEPS.OBJECTIVES;
-      case STEPS.OBJECTIVES:
-        return STEPS.START_DATE;
-      case STEPS.START_DATE:
-        return STEPS.CAMPAIGN_TYPE;
-      case STEPS.CAMPAIGN_TYPE:
-        if (form.campaignType === 'UGC') return STEPS.UGC_PERSONA;
-        return STEPS.PAYMENT_TYPE;
-      case STEPS.PAYMENT_TYPE:
-        if (form.campaignType === 'UGC') return STEPS.UGC_PERSONA;
-        return STEPS.CREATOR_TIERS;
-      case STEPS.CREATOR_TIERS:
-        if (form.campaignType === 'Hybrid') return STEPS.UGC_PERSONA;
-        if (form.campaignType === 'Influencer') return STEPS.UGC_AGE;
-        return STEPS.INFLUENCER_NICHE;
-      case STEPS.UGC_PERSONA:
-        return STEPS.UGC_GENDER;
-      case STEPS.UGC_GENDER:
-        return STEPS.UGC_AGE;
-      case STEPS.UGC_AGE:
-        if (form.campaignType === 'Influencer') return STEPS.INFLUENCER_NICHE;
-        return STEPS.UGC_VIDEOS;
-      case STEPS.UGC_VIDEOS:
-        if (form.campaignType === 'Hybrid') return STEPS.INFLUENCER_NICHE;
-        return STEPS.REVIEW;
-      case STEPS.INFLUENCER_NICHE:
-        return STEPS.INFLUENCER_PLATFORMS;
-      case STEPS.INFLUENCER_PLATFORMS:
-        return STEPS.INFLUENCER_BUDGET;
-      case STEPS.INFLUENCER_BUDGET:
-        return STEPS.REVIEW;
-      default:
-        return currentStep + 1;
-    }
-  };
-
-  const getPrevStep = () => {
-    switch (currentStep) {
-      case STEPS.OBJECTIVES:
-        return STEPS.NAME;
-      case STEPS.START_DATE:
-        return STEPS.OBJECTIVES;
-      case STEPS.CAMPAIGN_TYPE:
-        return STEPS.START_DATE;
-      case STEPS.PAYMENT_TYPE:
-        return STEPS.CAMPAIGN_TYPE;
-      case STEPS.CREATOR_TIERS:
-        return STEPS.PAYMENT_TYPE;
-      case STEPS.UGC_PERSONA:
-        if (form.campaignType === 'Hybrid') return STEPS.CREATOR_TIERS;
-        if (form.campaignType === 'UGC') return STEPS.CAMPAIGN_TYPE;
-        return STEPS.PAYMENT_TYPE;
-      case STEPS.UGC_GENDER:
-        return STEPS.UGC_PERSONA;
-      case STEPS.UGC_AGE:
-        if (form.campaignType === 'Influencer') return STEPS.CREATOR_TIERS;
-        return STEPS.UGC_GENDER;
-      case STEPS.UGC_VIDEOS:
-        return STEPS.UGC_AGE;
-      case STEPS.INFLUENCER_NICHE:
-        if (form.campaignType === 'Hybrid') return STEPS.UGC_VIDEOS;
-        if (form.campaignType === 'Influencer') return STEPS.UGC_AGE;
-        return STEPS.CREATOR_TIERS;
-      case STEPS.INFLUENCER_PLATFORMS:
-        return STEPS.INFLUENCER_NICHE;
-      case STEPS.INFLUENCER_BUDGET:
-        return STEPS.INFLUENCER_PLATFORMS;
-      case STEPS.REVIEW:
-        if (form.campaignType === 'UGC') return STEPS.UGC_VIDEOS;
-        return STEPS.INFLUENCER_BUDGET;
-      default:
-        return currentStep - 1;
-    }
-  };
-
   const canProceed = () => {
     switch (currentStep) {
-      case STEPS.NAME:
-        return form.name.trim().length > 0;
-      case STEPS.OBJECTIVES:
-        return form.objectives.length > 0;
-      case STEPS.START_DATE:
-        return form.startDate.length > 0;
-      case STEPS.CAMPAIGN_TYPE:
-        return form.campaignType.length > 0;
-      case STEPS.PAYMENT_TYPE:
-        return form.paymentType.length > 0;
-      case STEPS.CREATOR_TIERS:
-        return form.creatorTiers.length > 0;
-      case STEPS.UGC_PERSONA:
-        return form.ugcPersona.trim().length > 0;
-      case STEPS.UGC_GENDER:
-        return form.ugcGender.length > 0;
-      case STEPS.UGC_AGE:
-        return form.ugcAgeRange.length > 0;
-      case STEPS.UGC_VIDEOS:
+      case STEP_IDS.BASICS:
+        if (!form.name.trim()) return false;
+        if (!form.objectives) return false;
+        if (!form.startDate) return false;
+        if (!form.campaignType) return false;
+        if (requiresPaymentType && !form.paymentType) return false;
+        return Boolean(form.creatorAgeRange);
+      case STEP_IDS.UGC:
+        if (!form.ugcPersona.trim()) return false;
+        if (!form.ugcGender) return false;
+        if (!form.ugcVideos) return false;
         if (form.ugcVideos === 'other') return form.ugcVideosOther.trim().length > 0;
-        return form.ugcVideos.length > 0;
-      case STEPS.INFLUENCER_NICHE:
-        return form.influencerNiche.length > 0;
-      case STEPS.INFLUENCER_PLATFORMS:
-        return form.influencerPlatforms.length > 0;
-      case STEPS.INFLUENCER_BUDGET:
-        return form.influencerBudget.length > 0;
+        return true;
+      case STEP_IDS.INFLUENCER:
+        if (form.creatorTiers.length === 0) return false;
+        if (!form.influencerNiche) return false;
+        if (form.influencerPlatforms.length === 0) return false;
+        return Boolean(form.influencerBudget);
       default:
         return true;
     }
   };
 
   const handleNext = () => {
-    if (canProceed()) {
-      setCurrentStep(getNextStep());
+    if (!canProceed()) return;
+    const nextStep = flowSteps[currentStepIndex + 1];
+    if (nextStep) {
+      setCurrentStep(nextStep);
     }
   };
 
   const handleBack = () => {
-    if (currentStep > STEPS.NAME) {
-      setCurrentStep(getPrevStep());
-    }
+    if (currentStepIndex === 0) return;
+    setCurrentStep(flowSteps[currentStepIndex - 1]);
   };
 
   const handleSubmit = () => {
     const ugcCount = form.ugcVideos === 'other' ? form.ugcVideosOther : form.ugcVideos;
-    
+
     onSubmit({
       name: form.name,
       brand: form.brandName,
-      objectives: form.objectives,
+      objectives: form.objectives ? [form.objectives.toLowerCase()] : [],
       startDate: form.startDate,
       campaignType: form.campaignType,
       paymentType: form.paymentType,
-      creatorAgeRange: form.ugcAgeRange || null,
+      creatorAgeRange: form.creatorAgeRange || null,
       creatorTiers: form.creatorTiers,
       ugcCount: ugcCount || null,
       ugc:
-        form.campaignType === 'UGC' || form.campaignType === 'Hybrid'
+        showUgcStep
           ? {
               persona: form.ugcPersona,
               gender: form.ugcGender,
-              ageRange: form.ugcAgeRange,
+              ageRange: form.creatorAgeRange,
             }
           : null,
       influencer:
-        form.campaignType === 'Influencer' || form.campaignType === 'Hybrid'
+        showInfluencerStep
           ? {
               niche: form.influencerNiche,
               platforms: form.influencerPlatforms,
               tiers: form.creatorTiers,
-              ageRange: form.ugcAgeRange,
+              ageRange: form.creatorAgeRange,
               budget: form.influencerBudget,
             }
           : null,
     });
   };
 
-  const getFlowSteps = () => {
-    const baseSteps = [
-      STEPS.NAME,
-      STEPS.OBJECTIVES,
-      STEPS.START_DATE,
-      STEPS.CAMPAIGN_TYPE,
-    ];
-
-    if (!form.campaignType) {
-      return [
-        ...baseSteps,
-        STEPS.PAYMENT_TYPE,
-        STEPS.CREATOR_TIERS,
-        STEPS.UGC_PERSONA,
-        STEPS.UGC_GENDER,
-        STEPS.UGC_AGE,
-        STEPS.UGC_VIDEOS,
-        STEPS.INFLUENCER_NICHE,
-        STEPS.INFLUENCER_PLATFORMS,
-        STEPS.INFLUENCER_BUDGET,
-        STEPS.REVIEW,
-      ];
-    }
-
-    if (form.campaignType === 'UGC') {
-      return [
-        ...baseSteps,
-        STEPS.UGC_PERSONA,
-        STEPS.UGC_GENDER,
-        STEPS.UGC_AGE,
-        STEPS.UGC_VIDEOS,
-        STEPS.REVIEW,
-      ];
-    }
-
-    if (form.campaignType === 'Influencer') {
-      return [
-        ...baseSteps,
-        STEPS.PAYMENT_TYPE,
-        STEPS.CREATOR_TIERS,
-        STEPS.UGC_AGE,
-        STEPS.INFLUENCER_NICHE,
-        STEPS.INFLUENCER_PLATFORMS,
-        STEPS.INFLUENCER_BUDGET,
-        STEPS.REVIEW,
-      ];
-    }
-
-    return [
-      ...baseSteps,
-      STEPS.PAYMENT_TYPE,
-      STEPS.CREATOR_TIERS,
-      STEPS.UGC_PERSONA,
-      STEPS.UGC_GENDER,
-      STEPS.UGC_AGE,
-      STEPS.UGC_VIDEOS,
-      STEPS.INFLUENCER_NICHE,
-      STEPS.INFLUENCER_PLATFORMS,
-      STEPS.INFLUENCER_BUDGET,
-      STEPS.REVIEW,
-    ];
-  };
-
-  const getProgress = () => {
-    const flowSteps = getFlowSteps();
-    const index = Math.max(flowSteps.indexOf(currentStep), 0);
-    return Math.min(((index + 1) / flowSteps.length) * 100, 100);
-  };
-
-  const renderStepContent = () => {
-    switch (currentStep) {
-      case STEPS.NAME:
-        return (
-          <div className="wizard-step">
-            <h3>What's your campaign called?</h3>
-            <input
-              className="input wizard-input"
-              value={form.name}
-              onChange={(e) => updateForm('name', e.target.value)}
-              placeholder="e.g. Summer Collection Launch"
-              autoFocus
-            />
-          </div>
-        );
-
-      case STEPS.OBJECTIVES:
-        return (
-          <div className="wizard-step">
-            <h3>What's your main objective?</h3>
-            <div className="wizard-options">
-              {OBJECTIVES.map((obj) => (
-                <button
-                  key={obj}
-                  type="button"
-                  className={`wizard-option ${form.objectives === obj ? 'active' : ''}`}
-                  onClick={() => updateForm('objectives', obj)}
-                >
-                  {obj}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-
-      case STEPS.START_DATE:
-        return (
-          <div className="wizard-step">
-            <h3>When should this campaign start?</h3>
-            <input
-              className="input wizard-input"
-              type="date"
-              value={form.startDate}
-              onChange={(e) => updateForm('startDate', e.target.value)}
-            />
-          </div>
-        );
-
-      case STEPS.CAMPAIGN_TYPE:
-        return (
-          <div className="wizard-step">
-            <h3>What type of campaign is this?</h3>
-            <div className="wizard-options">
-              <button
-                type="button"
-                className={`wizard-option-card ${form.campaignType === 'UGC' ? 'active' : ''}`}
-                onClick={() => updateForm('campaignType', 'UGC')}
-              >
-                <span className="wizard-option-title">UGC</span>
-              </button>
-              <button
-                type="button"
-                className={`wizard-option-card ${form.campaignType === 'Influencer' ? 'active' : ''}`}
-                onClick={() => updateForm('campaignType', 'Influencer')}
-              >
-                <span className="wizard-option-title">Influencer</span>
-              </button>
-              <button
-                type="button"
-                className={`wizard-option-card ${form.campaignType === 'Hybrid' ? 'active' : ''}`}
-                onClick={() => updateForm('campaignType', 'Hybrid')}
-              >
-                <span className="wizard-option-title">Hybrid</span>
-              </button>
-            </div>
-          </div>
-        );
-
-      case STEPS.PAYMENT_TYPE:
-        return (
-          <div className="wizard-step">
-            <h3>How will creators be compensated?</h3>
-            <div className="wizard-options">
-              <button
-                type="button"
-                className={`wizard-option-card ${form.paymentType === 'Collab' ? 'active' : ''}`}
-                onClick={() => updateForm('paymentType', 'Collab')}
-              >
-                <span className="wizard-option-title">Barter/Gifted</span>
-              </button>
-              <button
-                type="button"
-                className={`wizard-option-card ${form.paymentType === 'Paid' ? 'active' : ''}`}
-                onClick={() => updateForm('paymentType', 'Paid')}
-              >
-                <span className="wizard-option-title">Paid</span>
-              </button>
-              <button
-                type="button"
-                className={`wizard-option-card ${form.paymentType === 'Mix' ? 'active' : ''}`}
-                onClick={() => updateForm('paymentType', 'Mix')}
-              >
-                <span className="wizard-option-title">Mix</span>
-              </button>
-            </div>
-          </div>
-        );
-
-      case STEPS.CREATOR_TIERS:
-        return (
-          <div className="wizard-step">
-            <h3>What influencer tiers do you prefer?</h3>
-            <div className="wizard-options-grid">
-              {CREATOR_TIERS.map((tier) => (
-                <button
-                  key={tier.value}
-                  type="button"
-                  className={`wizard-option-card ${form.creatorTiers.includes(tier.value) ? 'active' : ''}`}
-                  onClick={() => toggleCreatorTier(tier.value)}
-                >
-                  <span className="wizard-option-title">{tier.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-
-      case STEPS.UGC_PERSONA:
-        return (
-          <div className="wizard-step">
-            <h3>Describe your ideal creator persona</h3>
-            <textarea
-              className="input wizard-textarea"
-              value={form.ugcPersona}
-              onChange={(e) => updateForm('ugcPersona', e.target.value)}
-              placeholder="e.g. Young, trendy, lifestyle-focused individual who loves fashion..."
-              rows={4}
-            />
-          </div>
-        );
-
-      case STEPS.UGC_GENDER:
-        return (
-          <div className="wizard-step">
-            <h3>Preferred creator gender?</h3>
-            <div className="wizard-options">
-              {['Female', 'Male', 'Any'].map((gender) => (
-                <button
-                  key={gender}
-                  type="button"
-                  className={`wizard-option ${form.ugcGender === gender ? 'active' : ''}`}
-                  onClick={() => updateForm('ugcGender', gender)}
-                >
-                  {gender}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-
-      case STEPS.UGC_AGE:
-        return (
-          <div className="wizard-step">
-            <h3>What's the age of the creators you're looking for?</h3>
-            <div className="wizard-options">
-              {['18-24', '25-34', '35-44', '45+', 'Any'].map((age) => (
-                <button
-                  key={age}
-                  type="button"
-                  className={`wizard-option ${form.ugcAgeRange === age ? 'active' : ''}`}
-                  onClick={() => updateForm('ugcAgeRange', age)}
-                >
-                  {age}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-
-      case STEPS.UGC_VIDEOS:
-        return (
-          <div className="wizard-step">
-            <h3>How many videos do you need?</h3>
-            <div className="wizard-options">
-              {UGC_VIDEO_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  className={`wizard-option ${form.ugcVideos === opt.value ? 'active' : ''}`}
-                  onClick={() => updateForm('ugcVideos', opt.value)}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-            {form.ugcVideos === 'other' && (
-              <input
-                className="input wizard-input"
-                type="number"
-                value={form.ugcVideosOther}
-                onChange={(e) => updateForm('ugcVideosOther', e.target.value)}
-                placeholder="Enter number of videos"
-              />
-            )}
-          </div>
-        );
-
-      case STEPS.INFLUENCER_NICHE:
-        return (
-          <div className="wizard-step">
-            <h3>What niche should influencers be in?</h3>
-            <div className="wizard-options">
-              {NICHES.map((niche) => (
-                <button
-                  key={niche}
-                  type="button"
-                  className={`wizard-option ${form.influencerNiche === niche ? 'active' : ''}`}
-                  onClick={() => updateForm('influencerNiche', niche)}
-                >
-                  {niche}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-
-      case STEPS.INFLUENCER_PLATFORMS:
-        return (
-          <div className="wizard-step">
-            <h3>Which platforms should they post on?</h3>
-            <div className="wizard-options">
-              {PLATFORMS.map((platform) => (
-                <button
-                  key={platform}
-                  type="button"
-                  className={`wizard-option ${form.influencerPlatforms.includes(platform) ? 'active' : ''}`}
-                  onClick={() => togglePlatform(platform)}
-                >
-                  {platform}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-
-      case STEPS.INFLUENCER_BUDGET:
-        return (
-          <div className="wizard-step">
-            <h3>What's your budget for creators?</h3>
-            <div className="wizard-options">
-              {BUDGET_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  className={`wizard-option ${form.influencerBudget === opt.value ? 'active' : ''}`}
-                  onClick={() => updateForm('influencerBudget', opt.value)}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-
-      case STEPS.REVIEW:
-        return (
-          <div className="wizard-step">
-            <h3>Campaign overview</h3>
-            <div className="wizard-review">
-              <div className="review-section">
-                <h4>Campaign Details</h4>
-                <div className="review-item">
-                  <span>Campaign Name</span>
-                  <strong>{form.name}</strong>
-                </div>
-                <div className="review-item">
-                  <span>Objective</span>
-                  <strong>{form.objectives}</strong>
-                </div>
-                <div className="review-item">
-                  <span>Start Date</span>
-                  <strong>{form.startDate}</strong>
-                </div>
-                <div className="review-item">
-                  <span>Campaign Type</span>
-                  <strong>{form.campaignType}</strong>
-                </div>
-                {form.paymentType && (
-                  <div className="review-item">
-                    <span>Payment Type</span>
-                    <strong>{getPaymentTypeLabel(form.paymentType)}</strong>
-                  </div>
-                )}
-              </div>
-
-              {(form.campaignType === 'UGC' || form.campaignType === 'Hybrid') && (
-                <div className="review-section">
-                  <h4>UGC Requirements</h4>
-                  <div className="review-item">
-                    <span>Persona</span>
-                    <strong>{form.ugcPersona}</strong>
-                  </div>
-                  <div className="review-item">
-                    <span>Gender</span>
-                    <strong>{form.ugcGender}</strong>
-                  </div>
-                  <div className="review-item">
-                    <span>Age Range</span>
-                    <strong>{form.ugcAgeRange}</strong>
-                  </div>
-                  <div className="review-item">
-                    <span>Number of Videos</span>
-                    <strong>
-                      {form.ugcVideos === 'other' ? form.ugcVideosOther : form.ugcVideos}
-                    </strong>
-                  </div>
-                </div>
-              )}
-
-              {(form.campaignType === 'Influencer' || form.campaignType === 'Hybrid') && (
-                <div className="review-section">
-                  <h4>Influencer Requirements</h4>
-                  <div className="review-item">
-                    <span>Creator Tiers</span>
-                    <strong>
-                      {form.creatorTiers
-                        .map((t) => CREATOR_TIERS.find((ct) => ct.value === t)?.label)
-                        .join(', ')}
-                    </strong>
-                  </div>
-                  <div className="review-item">
-                    <span>Age Range</span>
-                    <strong>{form.ugcAgeRange}</strong>
-                  </div>
-                  <div className="review-item">
-                    <span>Niche</span>
-                    <strong>{form.influencerNiche}</strong>
-                  </div>
-                  <div className="review-item">
-                    <span>Platforms</span>
-                    <strong>{form.influencerPlatforms.join(', ')}</strong>
-                  </div>
-                  <div className="review-item">
-                    <span>Budget</span>
-                    <strong>
-                      {BUDGET_OPTIONS.find((b) => b.value === form.influencerBudget)?.label}
-                    </strong>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
+  const getProgress = () => Math.min(((currentStepIndex + 1) / flowSteps.length) * 100, 100);
 
   useEffect(() => {
     const topbar = document.querySelector('.app-topbar');
@@ -698,7 +198,10 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
       const mainRect = appMain.getBoundingClientRect();
       const nextTop = Math.max(0, Math.ceil(topbarRect.bottom || 0));
       const nextLeft = Math.max(0, Math.ceil(mainRect.left || 0));
-      const nextRight = Math.max(0, Math.ceil(window.innerWidth - (mainRect.right || window.innerWidth)));
+      const nextRight = Math.max(
+        0,
+        Math.ceil(window.innerWidth - (mainRect.right || window.innerWidth))
+      );
       setLayoutOffsets((prev) => {
         if (prev.top === nextTop && prev.left === nextLeft && prev.right === nextRight) {
           return prev;
@@ -723,6 +226,306 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
       if (observer) observer.disconnect();
     };
   }, []);
+
+  const renderSummaryItem = (label, value) => (
+    <div className="wizard-summary-item" key={label}>
+      <span className="label">{label}</span>
+      <span className="value">{value || '—'}</span>
+    </div>
+  );
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case STEP_IDS.BASICS:
+        return (
+          <div className="wizard-step wizard-step-grouped">
+            <h3>Campaign basics</h3>
+            <p>Start with the shared campaign details. The next step changes with your selections.</p>
+            <div className="wizard-step-grid">
+              <div className="wizard-input-group">
+                <label>Campaign name</label>
+                <input
+                  className="input"
+                  value={form.name}
+                  onChange={(event) => updateForm('name', event.target.value)}
+                  placeholder="e.g. Summer Collection Launch"
+                  autoFocus
+                />
+              </div>
+
+              <div className="wizard-input-group">
+                <label>Main objective</label>
+                <div className="wizard-options wizard-options-left">
+                  {OBJECTIVES.map((objective) => (
+                    <button
+                      key={objective}
+                      type="button"
+                      className={`wizard-option ${form.objectives === objective ? 'active' : ''}`}
+                      onClick={() => updateForm('objectives', objective)}
+                    >
+                      {objective}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="wizard-step-grid wizard-step-grid-two">
+                <div className="wizard-input-group">
+                  <label>Start date</label>
+                  <input
+                    className="input"
+                    type="date"
+                    value={form.startDate}
+                    onChange={(event) => updateForm('startDate', event.target.value)}
+                  />
+                </div>
+
+                <div className="wizard-input-group">
+                  <label>Creator age range</label>
+                  <div className="wizard-options wizard-options-left">
+                    {AGE_OPTIONS.map((age) => (
+                      <button
+                        key={age}
+                        type="button"
+                        className={`wizard-option ${form.creatorAgeRange === age ? 'active' : ''}`}
+                        onClick={() => updateForm('creatorAgeRange', age)}
+                      >
+                        {age}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="wizard-input-group">
+                <label>Campaign type</label>
+                <div className="wizard-options-grid wizard-options-grid-left">
+                  {CAMPAIGN_TYPES.map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      className={`wizard-option-card ${form.campaignType === type ? 'active' : ''}`}
+                      onClick={() => updateForm('campaignType', type)}
+                    >
+                      <span className="wizard-option-title">{type}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {requiresPaymentType ? (
+                <div className="wizard-input-group">
+                  <label>Compensation</label>
+                  <div className="wizard-options wizard-options-left">
+                    {PAYMENT_TYPES.map((paymentType) => (
+                      <button
+                        key={paymentType}
+                        type="button"
+                        className={`wizard-option ${form.paymentType === paymentType ? 'active' : ''}`}
+                        onClick={() => updateForm('paymentType', paymentType)}
+                      >
+                        {getPaymentTypeLabel(paymentType)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        );
+
+      case STEP_IDS.UGC:
+        return (
+          <div className="wizard-step wizard-step-grouped">
+            <h3>UGC requirements</h3>
+            <p>Define the creator profile and output for this UGC brief.</p>
+            <div className="wizard-step-grid">
+              <div className="wizard-input-group">
+                <label>Creator persona</label>
+                <textarea
+                  className="input wizard-textarea wizard-textarea-wide"
+                  value={form.ugcPersona}
+                  onChange={(event) => updateForm('ugcPersona', event.target.value)}
+                  placeholder="e.g. Young, trendy, lifestyle-focused individual who loves fashion..."
+                  rows={4}
+                />
+              </div>
+
+              <div className="wizard-input-group">
+                <label>Preferred gender</label>
+                <div className="wizard-options wizard-options-left">
+                  {GENDER_OPTIONS.map((gender) => (
+                    <button
+                      key={gender}
+                      type="button"
+                      className={`wizard-option ${form.ugcGender === gender ? 'active' : ''}`}
+                      onClick={() => updateForm('ugcGender', gender)}
+                    >
+                      {gender}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="wizard-input-group">
+                <label>Number of videos</label>
+                <div className="wizard-options wizard-options-left">
+                  {UGC_VIDEO_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`wizard-option ${form.ugcVideos === option.value ? 'active' : ''}`}
+                      onClick={() => updateForm('ugcVideos', option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                {form.ugcVideos === 'other' ? (
+                  <input
+                    className="input wizard-input-sm"
+                    type="number"
+                    value={form.ugcVideosOther}
+                    onChange={(event) => updateForm('ugcVideosOther', event.target.value)}
+                    placeholder="Videos"
+                  />
+                ) : null}
+              </div>
+            </div>
+          </div>
+        );
+
+      case STEP_IDS.INFLUENCER:
+        return (
+          <div className="wizard-step wizard-step-grouped">
+            <h3>Influencer requirements</h3>
+            <p>Choose the tiers, channels, and budget for the influencer shortlist.</p>
+            <div className="wizard-step-grid">
+              <div className="wizard-input-group">
+                <label>Creator tiers</label>
+                <div className="wizard-options-grid wizard-options-grid-left">
+                  {CREATOR_TIERS.map((tier) => (
+                    <button
+                      key={tier.value}
+                      type="button"
+                      className={`wizard-option-card ${form.creatorTiers.includes(tier.value) ? 'active' : ''}`}
+                      onClick={() => toggleCreatorTier(tier.value)}
+                    >
+                      <span className="wizard-option-title">{tier.label}</span>
+                      <span className="wizard-option-meta">{tier.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="wizard-step-grid wizard-step-grid-two">
+                <div className="wizard-input-group">
+                  <label>Niche</label>
+                  <div className="wizard-options wizard-options-left">
+                    {NICHES.map((niche) => (
+                      <button
+                        key={niche}
+                        type="button"
+                        className={`wizard-option ${form.influencerNiche === niche ? 'active' : ''}`}
+                        onClick={() => updateForm('influencerNiche', niche)}
+                      >
+                        {niche}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="wizard-input-group">
+                  <label>Platforms</label>
+                  <div className="wizard-options wizard-options-left">
+                    {PLATFORMS.map((platform) => (
+                      <button
+                        key={platform}
+                        type="button"
+                        className={`wizard-option ${form.influencerPlatforms.includes(platform) ? 'active' : ''}`}
+                        onClick={() => togglePlatform(platform)}
+                      >
+                        {platform}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="wizard-input-group">
+                <label>Budget</label>
+                <div className="wizard-options wizard-options-left">
+                  {BUDGET_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={`wizard-option ${form.influencerBudget === option.value ? 'active' : ''}`}
+                      onClick={() => updateForm('influencerBudget', option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+
+      case STEP_IDS.REVIEW:
+        return (
+          <div className="wizard-step wizard-review">
+            <h3>Campaign overview</h3>
+            <div className="wizard-summary">
+              {renderSummaryItem('Campaign Name', form.name)}
+              {renderSummaryItem('Objective', form.objectives)}
+              {renderSummaryItem('Start Date', form.startDate)}
+              {renderSummaryItem('Campaign Type', form.campaignType)}
+              {renderSummaryItem('Creator Age Range', form.creatorAgeRange)}
+              {requiresPaymentType
+                ? renderSummaryItem('Payment Type', getPaymentTypeLabel(form.paymentType))
+                : null}
+
+              {showUgcStep ? <div className="wizard-summary-section">UGC Requirements</div> : null}
+              {showUgcStep ? renderSummaryItem('Persona', form.ugcPersona) : null}
+              {showUgcStep ? renderSummaryItem('Gender', form.ugcGender) : null}
+              {showUgcStep
+                ? renderSummaryItem(
+                    'Videos',
+                    form.ugcVideos === 'other' ? form.ugcVideosOther : form.ugcVideos
+                  )
+                : null}
+
+              {showInfluencerStep ? (
+                <div className="wizard-summary-section">Influencer Requirements</div>
+              ) : null}
+              {showInfluencerStep
+                ? renderSummaryItem(
+                    'Creator Tiers',
+                    formatList(
+                      form.creatorTiers.map(
+                        (tier) => CREATOR_TIERS.find((item) => item.value === tier)?.label || ''
+                      )
+                    )
+                  )
+                : null}
+              {showInfluencerStep ? renderSummaryItem('Niche', form.influencerNiche) : null}
+              {showInfluencerStep
+                ? renderSummaryItem('Platforms', formatList(form.influencerPlatforms))
+                : null}
+              {showInfluencerStep
+                ? renderSummaryItem(
+                    'Budget',
+                    BUDGET_OPTIONS.find((item) => item.value === form.influencerBudget)?.label || ''
+                  )
+                : null}
+            </div>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  };
 
   return (
     <div
@@ -749,22 +552,17 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
           <button
             type="button"
             className="btn btn-secondary"
-            onClick={currentStep === STEPS.NAME ? onClose : handleBack}
+            onClick={currentStepIndex === 0 ? onClose : handleBack}
           >
-            {currentStep === STEPS.NAME ? 'Cancel' : 'Back'}
+            {currentStepIndex === 0 ? 'Cancel' : 'Back'}
           </button>
-          {currentStep === STEPS.REVIEW ? (
+          {currentStep === STEP_IDS.REVIEW ? (
             <button type="button" className="btn btn-primary" onClick={handleSubmit}>
               Create Campaign
             </button>
           ) : (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleNext}
-              disabled={!canProceed()}
-            >
-              Next
+            <button type="button" className="btn btn-primary" onClick={handleNext}>
+              Continue
             </button>
           )}
         </div>

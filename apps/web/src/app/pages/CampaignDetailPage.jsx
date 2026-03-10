@@ -40,6 +40,12 @@ const inferCreatorType = (creator) => {
 };
 
 const toText = (value) => String(value || '').trim().toLowerCase();
+const CAMPAIGN_TIER_LABELS = {
+  nano: 'Nano',
+  micro: 'Micro',
+  'mid-tier': 'Mid-tier',
+  macro: 'Macro',
+};
 
 const matchesNiche = (creator, selectedNiche) => {
   if (!selectedNiche) return true;
@@ -71,6 +77,21 @@ const matchesFollowerRange = (creator, selectedRange) => {
   if (selectedRange === 'macro') return followers >= 100000 && followers < 1000000;
   if (selectedRange === 'mega') return followers >= 1000000;
   return true;
+};
+
+const matchesCampaignTier = (creator, tier) => {
+  const followers = Number(creator?.followers ?? creator?.followers_count);
+  if (!Number.isFinite(followers)) return false;
+  if (tier === 'nano') return followers >= 1000 && followers < 10000;
+  if (tier === 'micro') return followers >= 10000 && followers < 100000;
+  if (tier === 'mid-tier') return followers >= 100000 && followers < 500000;
+  if (tier === 'macro') return followers >= 500000;
+  return true;
+};
+
+const matchesAnyCampaignTier = (creator, tiers) => {
+  if (!Array.isArray(tiers) || tiers.length === 0) return true;
+  return tiers.some((tier) => matchesCampaignTier(creator, tier));
 };
 
 const matchesPlatform = (creator, selectedPlatform) => {
@@ -423,6 +444,7 @@ export default function CampaignDetailPage() {
   const { campaigns, campaignCreators, brands, contentItems } = useAppState();
   const dispatch = useAppDispatch();
   const [creatorFilter, setCreatorFilter] = useState('all');
+  const [creatorTypeFilter, setCreatorTypeFilter] = useState('all');
   const [creatorSearch, setCreatorSearch] = useState('');
   const [addContentModal, setAddContentModal] = useState({ open: false, creator: null });
   const [contentForm, setContentForm] = useState({
@@ -565,13 +587,13 @@ export default function CampaignDetailPage() {
     if (!requestedTab) return;
 
     if (isBrand) {
-      if (['brief', 'creators', 'analytics', 'calendar', 'messages'].includes(requestedTab)) {
+      if (['brief', 'creators', 'analytics', 'calendar'].includes(requestedTab)) {
         setBrandTab(requestedTab);
       }
       return;
     }
 
-    if (['overview', 'creators', 'analytics', 'calendar', 'messages'].includes(requestedTab)) {
+    if (['overview', 'creators', 'analytics', 'calendar'].includes(requestedTab)) {
       setAdminTab(requestedTab);
     }
   }, [isBrand, location.search]);
@@ -675,29 +697,6 @@ export default function CampaignDetailPage() {
     };
   }, [dispatch, campaignId]);
 
-  useEffect(() => {
-    let ignore = false;
-
-    const fetchSessionUser = async () => {
-      try {
-        const res = await fetch('/api/me', { credentials: 'include' });
-        const data = await res.json();
-        if (!ignore && res.ok && data.ok) {
-          setSessionUser(data.data || null);
-        }
-      } catch (error) {
-        if (!ignore) {
-          setSessionUser(null);
-        }
-      }
-    };
-
-    fetchSessionUser();
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
   const campaign = campaigns.find((item) => item.id === campaignId);
   useEffect(() => {
     if (!campaign) return;
@@ -746,62 +745,6 @@ export default function CampaignDetailPage() {
     };
   }, [campaignId]);
 
-  useEffect(() => {
-    let ignore = false;
-
-    const loadCampaignMessages = async ({ quiet = false } = {}) => {
-      if (!campaignId) return;
-      if (!quiet) {
-        setCampaignMessagesLoading(true);
-      }
-      try {
-        const data = await campaignsApi.listMessages(campaignId);
-        if (!ignore) {
-          setCampaignMessages(Array.isArray(data?.data) ? data.data : []);
-          setCampaignMessagesError('');
-        }
-      } catch (error) {
-        if (!ignore) {
-          setCampaignMessagesError(error?.message || 'Failed to load campaign messages.');
-          if (!quiet) {
-            setCampaignMessages([]);
-          }
-        }
-      } finally {
-        if (!ignore && !quiet) {
-          setCampaignMessagesLoading(false);
-        }
-      }
-    };
-
-    loadCampaignMessages();
-    const pollId = window.setInterval(() => {
-      loadCampaignMessages({ quiet: true });
-    }, 15000);
-
-    return () => {
-      ignore = true;
-      window.clearInterval(pollId);
-    };
-  }, [campaignId]);
-
-  useEffect(() => {
-    if (!campaignId) return;
-    shouldStickMessagesToBottomRef.current = true;
-    setCampaignMessageDraft('');
-    setCampaignMessageAttachments([]);
-    setCampaignMessageSendError('');
-    setCampaignEmojiPickerOpen(false);
-  }, [campaignId]);
-
-  useEffect(() => {
-    if (!shouldStickMessagesToBottomRef.current) return;
-    campaignMessagesBottomRef.current?.scrollIntoView({
-      block: 'end',
-      behavior: 'smooth',
-    });
-  }, [campaignMessages]);
-
   const brandOptions = useMemo(() => {
     const options = new Set(brandNames);
     if (campaign?.brand) {
@@ -817,8 +760,24 @@ export default function CampaignDetailPage() {
     allCreators.forEach((creator) => map.set(creator.id, creator));
     return map;
   }, [allCreators]);
+  const normalizedCampaignType = ['UGC', 'Influencer', 'Hybrid'].includes(campaign?.campaignType)
+    ? campaign.campaignType
+    : 'Hybrid';
+  const campaignAllowsUGC = normalizedCampaignType !== 'Influencer';
+  const campaignAllowsInfluencer = normalizedCampaignType !== 'UGC';
+  const campaignTierCriteria = useMemo(() => {
+    if (!Array.isArray(campaign?.creatorTiers)) return [];
+    return campaign.creatorTiers.map((tier) => toText(tier)).filter(Boolean);
+  }, [campaign?.creatorTiers]);
+  const campaignPlatformCriteria = useMemo(() => {
+    if (!Array.isArray(campaign?.platforms)) return [];
+    return campaign.platforms
+      .map((platform) => toText(platform))
+      .filter((platform) => platform === 'instagram' || platform === 'tiktok');
+  }, [campaign?.platforms]);
 
   const filteredUgcCreators = useMemo(() => {
+    if (!campaignAllowsUGC) return [];
     return ugcCreators.filter((creator) => {
       const searchText = toText(`${creator?.name || ''} ${creator?.handle || ''} ${creator?.niche || ''}`);
       if (ugcFilters.search && !searchText.includes(toText(ugcFilters.search))) {
@@ -829,14 +788,22 @@ export default function CampaignDetailPage() {
       if (!matchesAgeRange(creator.age, ugcFilters.age)) return false;
       return true;
     });
-  }, [ugcCreators, ugcFilters]);
+  }, [ugcCreators, ugcFilters, campaignAllowsUGC]);
 
   const filteredInfluencerCreators = useMemo(() => {
+    if (!campaignAllowsInfluencer) return [];
     return influencers.filter((creator) => {
       const searchText = toText(
         `${creator?.name || ''} ${creator?.tiktok_handle || ''} ${creator?.instagram_handle || ''} ${creator?.niche || ''} ${creator?.category || ''}`
       );
       if (influencerFilters.search && !searchText.includes(toText(influencerFilters.search))) {
+        return false;
+      }
+      if (!matchesAnyCampaignTier(creator, campaignTierCriteria)) return false;
+      if (
+        campaignPlatformCriteria.length > 0 &&
+        !campaignPlatformCriteria.some((platform) => matchesPlatform(creator, platform))
+      ) {
         return false;
       }
       if (!matchesFollowerRange(creator, influencerFilters.followerCount)) return false;
@@ -858,9 +825,25 @@ export default function CampaignDetailPage() {
       }
       return true;
     });
-  }, [influencers, influencerFilters]);
+  }, [
+    influencers,
+    influencerFilters,
+    campaignAllowsInfluencer,
+    campaignTierCriteria,
+    campaignPlatformCriteria,
+  ]);
 
   const suggestCreators = suggestTab === 'ugc' ? filteredUgcCreators : filteredInfluencerCreators;
+  useEffect(() => {
+    if (campaignAllowsUGC && campaignAllowsInfluencer) return;
+    if (!campaignAllowsUGC && suggestTab === 'ugc') {
+      setSuggestTab('influencer');
+      return;
+    }
+    if (!campaignAllowsInfluencer && suggestTab === 'influencer') {
+      setSuggestTab('ugc');
+    }
+  }, [campaignAllowsUGC, campaignAllowsInfluencer, suggestTab]);
 
   if (!campaign) {
     return (
@@ -882,22 +865,25 @@ export default function CampaignDetailPage() {
   const shortlistCreators = creatorState.shortlist.map((id) => creatorMap.get(id)).filter(Boolean);
 
   const filteredCreators = useMemo(() => {
-    let result = shortlistCreators;
+    let result = shortlistCreators.filter(
+      (c) => creatorState.approvals[c.id] !== 'Brand Rejected'
+    );
     if (creatorFilter === 'approved') {
       result = result.filter((c) => creatorState.approvals[c.id] === 'Brand Approved');
-    } else if (creatorFilter === 'rejected') {
-      result = result.filter((c) => creatorState.approvals[c.id] === 'Brand Rejected');
     } else if (creatorFilter === 'pending') {
       result = result.filter(
         (c) => !creatorState.approvals[c.id] || creatorState.approvals[c.id] === 'Suggested'
       );
+    }
+    if (creatorTypeFilter !== 'all') {
+      result = result.filter((c) => inferCreatorType(c) === creatorTypeFilter);
     }
     if (creatorSearch) {
       const search = creatorSearch.toLowerCase();
       result = result.filter((c) => c.name.toLowerCase().includes(search));
     }
     return result;
-  }, [shortlistCreators, creatorFilter, creatorSearch, creatorState.approvals]);
+  }, [shortlistCreators, creatorFilter, creatorTypeFilter, creatorSearch, creatorState.approvals]);
   const filteredCreatorBuckets = useMemo(() => {
     const buckets = { pending: [], approved: [], rejected: [] };
     filteredCreators.forEach((creator) => {
@@ -920,7 +906,50 @@ export default function CampaignDetailPage() {
     }),
     [filteredCreatorBuckets]
   );
-  const adminCreatorTypeBuckets = useMemo(() => splitCreatorsByType(shortlistCreators), [shortlistCreators]);
+  const campaignScopedAdminCreators = useMemo(
+    () =>
+      shortlistCreators.filter((creator) => {
+        const creatorType = inferCreatorType(creator);
+        if (creatorType === 'ugc') {
+          return campaignAllowsUGC;
+        }
+        if (!campaignAllowsInfluencer) {
+          return false;
+        }
+        if (!matchesAnyCampaignTier(creator, campaignTierCriteria)) {
+          return false;
+        }
+        if (
+          campaignPlatformCriteria.length > 0 &&
+          !campaignPlatformCriteria.some((platform) => matchesPlatform(creator, platform))
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    [
+      shortlistCreators,
+      campaignAllowsUGC,
+      campaignAllowsInfluencer,
+      campaignTierCriteria,
+      campaignPlatformCriteria,
+    ]
+  );
+  const adminCreatorTypeBuckets = useMemo(
+    () => splitCreatorsByType(campaignScopedAdminCreators),
+    [campaignScopedAdminCreators]
+  );
+  const activeAdminCreatorFilterTab =
+    campaignAllowsUGC && campaignAllowsInfluencer
+      ? adminCreatorFilterTab
+      : campaignAllowsUGC
+        ? 'ugc'
+        : 'influencer';
+  useEffect(() => {
+    if (adminCreatorFilterTab !== activeAdminCreatorFilterTab) {
+      setAdminCreatorFilterTab(activeAdminCreatorFilterTab);
+    }
+  }, [adminCreatorFilterTab, activeAdminCreatorFilterTab]);
   const hasAdminInfluencerEngagementData = useMemo(
     () =>
       adminCreatorTypeBuckets.influencer.some((creator) => {
@@ -935,8 +964,10 @@ export default function CampaignDetailPage() {
     }
   }, [hasAdminInfluencerEngagementData, adminInfluencerCreatorFilters.engagementRate]);
   const filteredAdminCreators = useMemo(() => {
-    const selectedType = adminCreatorFilterTab;
-    const typeFiltered = shortlistCreators.filter((creator) => inferCreatorType(creator) === selectedType);
+    const selectedType = activeAdminCreatorFilterTab;
+    const typeFiltered = campaignScopedAdminCreators.filter(
+      (creator) => inferCreatorType(creator) === selectedType
+    );
     if (selectedType === 'ugc') {
       return typeFiltered.filter((creator) => {
         const searchText = toText(`${creator?.name || ''} ${creator?.handle || ''} ${creator?.niche || ''}`);
@@ -984,11 +1015,25 @@ export default function CampaignDetailPage() {
       return true;
     });
   }, [
-    shortlistCreators,
-    adminCreatorFilterTab,
+    campaignScopedAdminCreators,
+    activeAdminCreatorFilterTab,
     adminUgcCreatorFilters,
     adminInfluencerCreatorFilters,
   ]);
+  const filteredAdminCreatorBuckets = useMemo(() => {
+    const buckets = { pending: [], approved: [], rejected: [] };
+    filteredAdminCreators.forEach((creator) => {
+      const decision = creatorState.approvals?.[creator.id] || 'Suggested';
+      if (decision === 'Brand Approved') {
+        buckets.approved.push(creator);
+      } else if (decision === 'Brand Rejected') {
+        buckets.rejected.push(creator);
+      } else {
+        buckets.pending.push(creator);
+      }
+    });
+    return buckets;
+  }, [filteredAdminCreators, creatorState.approvals]);
 
   const openCreatorProfile = (creator, type) => {
     setSelectedCreator(creator);
@@ -1793,10 +1838,8 @@ export default function CampaignDetailPage() {
     return updatedCampaign;
   };
 
-  const campaignType = campaign.campaignType || 'Hybrid';
-  const campaignStageType = ['UGC', 'Influencer', 'Hybrid'].includes(campaignType)
-    ? campaignType
-    : 'Hybrid';
+  const campaignType = normalizedCampaignType;
+  const campaignStageType = campaignType;
   const creatorStageOptions = useMemo(() => {
     const configuredStages = creatorStageDefinitions
       .filter(
@@ -1823,6 +1866,12 @@ export default function CampaignDetailPage() {
   const isInfluencer = campaignType === 'Influencer';
   const showUGC = isUGC || isHybrid || !campaignType;
   const showInfluencer = isInfluencer || isHybrid || !campaignType;
+  const campaignTierCriteriaLabel = campaignTierCriteria
+    .map((tier) => CAMPAIGN_TIER_LABELS[tier] || tier)
+    .join(', ');
+  const campaignPlatformCriteriaLabel = campaignPlatformCriteria
+    .map((platform) => platform.charAt(0).toUpperCase() + platform.slice(1))
+    .join(', ');
   const objectives = Array.isArray(campaign.objectives)
     ? campaign.objectives
     : [campaign.objectives || 'Awareness'];
@@ -3434,16 +3483,6 @@ export default function CampaignDetailPage() {
     );
   };
 
-  const renderBrandRejectedActions = (creator) => (
-    <button
-      type="button"
-      className="btn btn-secondary btn-small"
-      onClick={() => handleDecision(creator.id, 'Suggested')}
-    >
-      Undo Decision
-    </button>
-  );
-
   const renderBrandCreatorTypeSections = (
     typedCreators,
     renderActions,
@@ -3610,7 +3649,6 @@ export default function CampaignDetailPage() {
               onClick={() => setBrandTab('creators')}
             >
               Creator Review
-              <span className="tab-count">{brandCreatorBuckets.pending.length}</span>
             </button>
             <button
               type="button"
@@ -3625,14 +3663,6 @@ export default function CampaignDetailPage() {
               onClick={() => setBrandTab('calendar')}
             >
               Calendar
-            </button>
-            <button
-              type="button"
-              className={brandTab === 'messages' ? 'active' : undefined}
-              onClick={() => setBrandTab('messages')}
-            >
-              Messages
-              <span className="tab-count">{campaignMessages.length}</span>
             </button>
           </div>
         </div>
@@ -3654,7 +3684,6 @@ export default function CampaignDetailPage() {
               onClick={() => setAdminTab('creators')}
             >
               Creators
-              <span className="tab-count">{shortlistCreators.length}</span>
             </button>
             <button
               type="button"
@@ -3670,14 +3699,6 @@ export default function CampaignDetailPage() {
             >
               Calendar
             </button>
-            <button
-              type="button"
-              className={adminTab === 'messages' ? 'active' : undefined}
-              onClick={() => setAdminTab('messages')}
-            >
-              Messages
-              <span className="tab-count">{campaignMessages.length}</span>
-            </button>
           </div>
           {isAdmin && (
             <div className="campaign-tab-actions">
@@ -3692,11 +3713,9 @@ export default function CampaignDetailPage() {
       {isBrand && brandTab === 'brief' ? briefCard : null}
       {isBrand && brandTab === 'analytics' ? brandAnalyticsCard : null}
       {isBrand && brandTab === 'calendar' ? calendarCard : null}
-      {isBrand && brandTab === 'messages' ? messagesCard : null}
       {!isBrand && adminTab === 'overview' ? briefCard : null}
       {!isBrand && adminTab === 'analytics' ? adminAnalyticsCard : null}
       {!isBrand && adminTab === 'calendar' ? calendarCard : null}
-      {!isBrand && adminTab === 'messages' ? messagesCard : null}
 
       {isBrand && brandTab === 'creators' ? (
         <section className="detail-card brand-creator-section">
@@ -3714,13 +3733,24 @@ export default function CampaignDetailPage() {
               <span>
                 <strong>{brandCreatorBuckets.approved.length}</strong> Approved
               </span>
-              <span>
-                <strong>{brandCreatorBuckets.rejected.length}</strong> Rejected
-              </span>
             </div>
           </div>
           <div className="detail-card-content brand-creator-content">
             <div className="creator-network-filters">
+              {isHybrid && (
+                <div className="add-creators-modal-tabs campaign-creators-filter-tabs">
+                  {[['all', 'All'], ['influencer', 'Influencers'], ['ugc', 'UGC']].map(([val, label]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      className={`tab-button ${creatorTypeFilter === val ? 'active' : ''}`}
+                      onClick={() => setCreatorTypeFilter(val)}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <input
                 type="text"
                 className="input"
@@ -3736,7 +3766,6 @@ export default function CampaignDetailPage() {
                 <option value="all">All Creators</option>
                 <option value="pending">Pending</option>
                 <option value="approved">Approved</option>
-                <option value="rejected">Rejected</option>
               </select>
             </div>
 
@@ -3773,19 +3802,6 @@ export default function CampaignDetailPage() {
                   </div>
                 )}
 
-                {filteredCreatorBuckets.rejected.length > 0 && (
-                  <div className="brand-creator-group brand-creator-group-rejected">
-                    <div className="brand-creator-group-header">
-                      <h4>Rejected creators</h4>
-                      <span>{filteredCreatorBuckets.rejected.length} creators</span>
-                    </div>
-                    {renderBrandCreatorTypeSections(
-                      filteredCreatorBucketsByType.rejected,
-                      renderBrandRejectedActions,
-                      { includeStatus: false }
-                    )}
-                  </div>
-                )}
               </div>
             )}
           </div>
@@ -3801,30 +3817,34 @@ export default function CampaignDetailPage() {
             </div>
             <div className="creator-network-filters">
               <div className="add-creators-modal-tabs campaign-creators-filter-tabs">
-                <button
-                  type="button"
-                  className={`tab-button ${adminCreatorFilterTab === 'ugc' ? 'active' : ''}`}
-                  onClick={() => setAdminCreatorFilterTab('ugc')}
-                >
-                  UGC Creators ({adminCreatorTypeBuckets.ugc.length})
-                </button>
-                <button
-                  type="button"
-                  className={`tab-button ${adminCreatorFilterTab === 'influencer' ? 'active' : ''}`}
-                  onClick={() => setAdminCreatorFilterTab('influencer')}
-                >
-                  Influencers ({adminCreatorTypeBuckets.influencer.length})
-                </button>
+                {showUGC ? (
+                  <button
+                    type="button"
+                    className={`tab-button ${activeAdminCreatorFilterTab === 'ugc' ? 'active' : ''}`}
+                    onClick={() => setAdminCreatorFilterTab('ugc')}
+                  >
+                    UGC Creators
+                  </button>
+                ) : null}
+                {showInfluencer ? (
+                  <button
+                    type="button"
+                    className={`tab-button ${activeAdminCreatorFilterTab === 'influencer' ? 'active' : ''}`}
+                    onClick={() => setAdminCreatorFilterTab('influencer')}
+                  >
+                    Influencers
+                  </button>
+                ) : null}
               </div>
               <CreatorFilters
-                type={adminCreatorFilterTab}
+                type={activeAdminCreatorFilterTab}
                 filters={
-                  adminCreatorFilterTab === 'ugc'
+                  activeAdminCreatorFilterTab === 'ugc'
                     ? adminUgcCreatorFilters
                     : adminInfluencerCreatorFilters
                 }
                 onChange={
-                  adminCreatorFilterTab === 'ugc'
+                  activeAdminCreatorFilterTab === 'ugc'
                     ? setAdminUgcCreatorFilters
                     : setAdminInfluencerCreatorFilters
                 }
@@ -3855,145 +3875,166 @@ export default function CampaignDetailPage() {
                       <th>Creator</th>
                       <th>Brand Decision</th>
                       <th>Campaign Status</th>
-                      {adminCreatorFilterTab === 'ugc' ? <th>Channels</th> : null}
+                      {activeAdminCreatorFilterTab === 'ugc' ? <th>Channels</th> : null}
                       <th className="campaign-admin-creators-actions-head">Actions</th>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {filteredAdminCreators.map((creator) => {
-                      const creatorTypeKey = inferCreatorType(creator);
-                      const creatorType = creatorTypeKey === 'ugc' ? 'UGC' : 'Influencer';
-                      const followersLabel = formatCompactFollowers(
-                        creator.followers ?? creator.followers_count
-                      );
-                      const audienceMeta =
-                        creatorTypeKey === 'ugc' || followersLabel === '—'
-                          ? `${creator.niche || creator.category || 'General'} · ${creatorType}`
-                          : `${followersLabel} followers · ${creator.niche || creator.category || 'General'} · ${creatorType}`;
-                      const currentDecision = creatorState.approvals?.[creator.id] || 'Suggested';
-                      const isApproved = currentDecision === 'Brand Approved';
-                      const isRejected = currentDecision === 'Brand Rejected';
-                      const workflowStatus =
-                        creatorState.outreach?.[creator.id]?.workflowStatus ||
-                        creatorStageOptions[0] ||
-                        'Sourced';
-                      const decisionLabel = isApproved
-                        ? 'Approved'
-                        : isRejected
-                          ? 'Rejected'
-                          : 'Awaiting Approval';
-                      const socialEntries = getCreatorSocialEntries(creator);
-                      const ugcVideoUrls =
-                        creatorTypeKey === 'ugc'
-                          ? normalizeCreatorVideoUrls(creator).map(resolveMediaUrl).filter(Boolean)
-                          : [];
-                      return (
-                        <tr key={creator.id}>
-                          <td>
-                            <div className="campaign-admin-creator-cell">
-                              <img
-                                src={resolveAvatarSrc(creator.profile_image)}
-                                alt={creator.name || creator.display_name || 'Creator'}
-                                className="creator-avatar-sm"
-                                onError={handleAvatarError}
-                              />
-                              <div className="campaign-admin-creator-meta">
-                                <strong>
-                                  <button
-                                    type="button"
-                                    className="campaign-creators-name-btn"
-                                    onClick={() =>
-                                      openCreatorProfile(creator, inferCreatorType(creator))
-                                    }
-                                  >
-                                    {creator.name || creator.display_name || 'Creator'}
-                                  </button>
-                                </strong>
-                                <span>{audienceMeta}</span>
-                                {socialEntries.length > 0 ? (
-                                  <div className="creator-list-v3-social-icons campaign-admin-creator-social-icons">
-                                    {socialEntries.map((entry) => (
-                                      <a
-                                        key={`${creator.id}-${entry.key}`}
-                                        href={entry.href}
-                                        className={`creator-list-v3-social-icon ${entry.key}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        title={entry.label}
-                                        aria-label={entry.label}
-                                      >
-                                        <SocialPlatformIcon platform={entry.key} />
-                                      </a>
-                                    ))}
+                    </thead>
+                    <tbody>
+                      {[
+                        { key: 'pending', label: 'Waiting Approval' },
+                        { key: 'approved', label: 'Approved' },
+                        { key: 'rejected', label: 'Rejected' },
+                      ].flatMap((section) => {
+                        const creatorsInSection = filteredAdminCreatorBuckets[section.key] || [];
+                        if (creatorsInSection.length === 0) return [];
+                        return [
+                          <tr
+                          key={`group-${section.key}`}
+                          className={`campaign-admin-creators-group-row campaign-admin-creators-group-row-${section.key}`}
+                        >
+                          <td colSpan={activeAdminCreatorFilterTab === 'ugc' ? 5 : 4}>
+                            <div className="campaign-admin-creators-group-header">
+                              <h4>{section.label}</h4>
+                              <span>{creatorsInSection.length} creators</span>
+                            </div>
+                          </td>
+                          </tr>,
+                          ...creatorsInSection.map((creator) => {
+                            const creatorTypeKey = inferCreatorType(creator);
+                            const creatorType = creatorTypeKey === 'ugc' ? 'UGC' : 'Influencer';
+                            const followersLabel = formatCompactFollowers(
+                              creator.followers ?? creator.followers_count
+                            );
+                            const audienceMeta =
+                              creatorTypeKey === 'ugc' || followersLabel === '—'
+                                ? `${creator.niche || creator.category || 'General'} · ${creatorType}`
+                                : `${followersLabel} followers · ${creator.niche || creator.category || 'General'} · ${creatorType}`;
+                            const currentDecision = creatorState.approvals?.[creator.id] || 'Suggested';
+                            const isApproved = currentDecision === 'Brand Approved';
+                            const isRejected = currentDecision === 'Brand Rejected';
+                            const workflowStatus =
+                              creatorState.outreach?.[creator.id]?.workflowStatus ||
+                              creatorStageOptions[0] ||
+                              'Sourced';
+                            const decisionLabel = isApproved
+                              ? 'Approved'
+                              : isRejected
+                                ? 'Rejected'
+                                : 'Awaiting Approval';
+                            const socialEntries = getCreatorSocialEntries(creator);
+                            const ugcVideoUrls =
+                              creatorTypeKey === 'ugc'
+                                ? normalizeCreatorVideoUrls(creator).map(resolveMediaUrl).filter(Boolean)
+                                : [];
+                            return (
+                              <tr key={`${section.key}-${creator.id}`}>
+                                <td>
+                                  <div className="campaign-admin-creator-cell">
+                                    <img
+                                      src={resolveAvatarSrc(creator.profile_image)}
+                                      alt={creator.name || creator.display_name || 'Creator'}
+                                      className="creator-avatar-sm"
+                                      onError={handleAvatarError}
+                                    />
+                                    <div className="campaign-admin-creator-meta">
+                                      <strong>
+                                        <button
+                                          type="button"
+                                          className="campaign-creators-name-btn"
+                                          onClick={() =>
+                                            openCreatorProfile(creator, inferCreatorType(creator))
+                                          }
+                                        >
+                                          {creator.name || creator.display_name || 'Creator'}
+                                        </button>
+                                      </strong>
+                                      <span>{audienceMeta}</span>
+                                      {socialEntries.length > 0 ? (
+                                        <div className="creator-list-v3-social-icons campaign-admin-creator-social-icons">
+                                          {socialEntries.map((entry) => (
+                                            <a
+                                              key={`${creator.id}-${entry.key}`}
+                                              href={entry.href}
+                                              className={`creator-list-v3-social-icon ${entry.key}`}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              title={entry.label}
+                                              aria-label={entry.label}
+                                            >
+                                              <SocialPlatformIcon platform={entry.key} />
+                                            </a>
+                                          ))}
+                                        </div>
+                                      ) : null}
+                                    </div>
                                   </div>
+                                </td>
+                                <td>
+                                  <StatusPill status={decisionLabel} />
+                                </td>
+                                <td>
+                                  {isApproved ? (
+                                    <select
+                                      className="input creator-status-select"
+                                      value={workflowStatus}
+                                      onChange={(event) =>
+                                        handleWorkflowStatusUpdate(creator.id, event.target.value)
+                                      }
+                                      disabled={!canManageCreators}
+                                    >
+                                      {creatorStageOptions.map((statusLabel) => (
+                                        <option key={statusLabel} value={statusLabel}>
+                                          {statusLabel}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <span className="creator-stage-pill creator-stage-pill-muted">
+                                      {isRejected ? 'Not active' : 'Awaiting brand approval'}
+                                    </span>
+                                  )}
+                                </td>
+                                {activeAdminCreatorFilterTab === 'ugc' ? (
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="creator-social-link creator-social-link-button"
+                                      onClick={() => openUgcVideosModal(creator)}
+                                    >
+                                      UGC Videos {ugcVideoUrls.length > 0 ? `(${ugcVideoUrls.length})` : ''}
+                                    </button>
+                                  </td>
                                 ) : null}
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <StatusPill status={decisionLabel} />
-                          </td>
-                          <td>
-                            {isApproved ? (
-                              <select
-                                className="input creator-status-select"
-                                value={workflowStatus}
-                                onChange={(event) =>
-                                  handleWorkflowStatusUpdate(creator.id, event.target.value)
-                                }
-                                disabled={!canManageCreators}
-                              >
-                                {creatorStageOptions.map((statusLabel) => (
-                                  <option key={statusLabel} value={statusLabel}>
-                                    {statusLabel}
-                                  </option>
-                                ))}
-                              </select>
-                            ) : (
-                              <span className="creator-stage-pill creator-stage-pill-muted">
-                                {isRejected ? 'Not active' : 'Awaiting brand approval'}
-                              </span>
-                            )}
-                          </td>
-                          {adminCreatorFilterTab === 'ugc' ? (
-                            <td>
-                              <button
-                                type="button"
-                                className="creator-social-link creator-social-link-button"
-                                onClick={() => openUgcVideosModal(creator)}
-                              >
-                                UGC Videos {ugcVideoUrls.length > 0 ? `(${ugcVideoUrls.length})` : ''}
-                              </button>
-                            </td>
-                          ) : null}
-                          <td className="campaign-admin-creators-actions">
-                            <div className="campaign-admin-creators-actions-wrap">
-                              {canManageCreators && currentDecision === 'Suggested' ? (
-                                <button
-                                  type="button"
-                                  className="btn btn-secondary btn-small"
-                                  onClick={() => handleUndoSuggestCreator(creator.id)}
-                                >
-                                  Undo Suggest
-                                </button>
-                              ) : null}
-                              {canManageCreators && isApproved ? (
-                                <button
-                                  type="button"
-                                  className="btn btn-primary btn-small"
-                                  onClick={() => setAddContentModal({ open: true, creator })}
-                                >
-                                  Add Content
-                                </button>
-                              ) : null}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                                <td className="campaign-admin-creators-actions">
+                                  <div className="campaign-admin-creators-actions-wrap">
+                                    {canManageCreators && currentDecision === 'Suggested' ? (
+                                      <button
+                                        type="button"
+                                        className="btn btn-secondary btn-small"
+                                        onClick={() => handleUndoSuggestCreator(creator.id)}
+                                      >
+                                        Undo Suggest
+                                      </button>
+                                    ) : null}
+                                    {canManageCreators && isApproved ? (
+                                      <button
+                                        type="button"
+                                        className="btn btn-primary btn-small"
+                                        onClick={() => setAddContentModal({ open: true, creator })}
+                                      >
+                                        Add Content
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }),
+                        ];
+                      })}
+                    </tbody>
+                  </table>
+                </div>
             )}
           </div>
         </section>
@@ -4008,20 +4049,24 @@ export default function CampaignDetailPage() {
       >
         <div className="add-creators-modal-body">
           <div className="add-creators-modal-tabs">
-            <button
-              type="button"
-              className={`tab-button ${suggestTab === 'ugc' ? 'active' : ''}`}
-              onClick={() => setSuggestTab('ugc')}
-            >
-              UGC Creators ({ugcCreators.length})
-            </button>
-            <button
-              type="button"
-              className={`tab-button ${suggestTab === 'influencer' ? 'active' : ''}`}
-              onClick={() => setSuggestTab('influencer')}
-            >
-              Influencers ({influencers.length})
-            </button>
+            {showUGC ? (
+              <button
+                type="button"
+                className={`tab-button ${suggestTab === 'ugc' ? 'active' : ''}`}
+                onClick={() => setSuggestTab('ugc')}
+              >
+                UGC Creators
+              </button>
+            ) : null}
+            {showInfluencer ? (
+              <button
+                type="button"
+                className={`tab-button ${suggestTab === 'influencer' ? 'active' : ''}`}
+                onClick={() => setSuggestTab('influencer')}
+              >
+                Influencers
+              </button>
+            ) : null}
           </div>
           <div className="add-creators-modal-search">
             <input
@@ -4047,13 +4092,29 @@ export default function CampaignDetailPage() {
               hideSearch
             />
           </div>
+          {suggestTab === 'influencer' &&
+          (campaignTierCriteria.length > 0 || campaignPlatformCriteria.length > 0) ? (
+            <p className="muted">
+              Auto-filtered by campaign brief:
+              {campaignTierCriteria.length > 0 ? ` tiers (${campaignTierCriteriaLabel})` : ''}
+              {campaignTierCriteria.length > 0 && campaignPlatformCriteria.length > 0 ? ' ·' : ''}
+              {campaignPlatformCriteria.length > 0
+                ? ` platforms (${campaignPlatformCriteriaLabel})`
+                : ''}
+            </p>
+          ) : null}
           <div className="add-creators-modal-results">
             {loading ? (
               <div className="loading-state">Loading creators...</div>
             ) : suggestCreators.length === 0 ? (
               <EmptyState
                 title="No creators found"
-                description="Try adjusting your search or filters."
+                description={
+                  suggestTab === 'influencer' &&
+                  (campaignTierCriteria.length > 0 || campaignPlatformCriteria.length > 0)
+                    ? 'Try adjusting your search/filters or update campaign brief criteria.'
+                    : 'Try adjusting your search or filters.'
+                }
               />
             ) : (
               <div className="add-creators-modal-list">

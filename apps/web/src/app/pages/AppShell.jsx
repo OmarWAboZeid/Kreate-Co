@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AppStateProvider } from '../state.jsx';
+import ContextChatWidget from '../components/ContextChatWidget.jsx';
 import NotificationCenter from '../components/NotificationCenter.jsx';
 import { roleConfig } from '../config/roles.js';
 import { useAuth } from '../../hooks/useAuth.jsx';
@@ -231,6 +232,7 @@ function ShellInner() {
         <main className="app-content">
           <Outlet />
         </main>
+        <ContextChatWidget />
       </div>
     </div>
   );
