@@ -446,6 +446,7 @@ export default function CampaignDetailPage() {
   const [creatorFilter, setCreatorFilter] = useState('all');
   const [creatorTypeFilter, setCreatorTypeFilter] = useState('all');
   const [creatorSearch, setCreatorSearch] = useState('');
+  const [approvedGroupExpanded, setApprovedGroupExpanded] = useState(false);
   const [addContentModal, setAddContentModal] = useState({ open: false, creator: null });
   const [contentForm, setContentForm] = useState({
     submissionStage: 'final',
@@ -1878,10 +1879,7 @@ export default function CampaignDetailPage() {
   const platformSummary = (campaign.platforms || []).length
     ? campaign.platforms.join(', ')
     : 'TBD';
-  const platformCountLabel =
-    Array.isArray(campaign.platforms) && campaign.platforms.length > 0
-      ? `${campaign.platforms.length} platform${campaign.platforms.length > 1 ? 's' : ''}`
-      : 'Platform TBD';
+
   const formatSummary = (campaign.contentFormat || []).length
     ? campaign.contentFormat.join(', ')
     : 'TBD';
@@ -3528,6 +3526,24 @@ export default function CampaignDetailPage() {
         </div>
         <StatusPill status={campaign.status || 'Planning'} />
       </div>
+      <div className="campaign-health-row">
+        <div className="campaign-health-stat">
+          <strong>{shortlistCreators.length}</strong>
+          <span>Creators</span>
+        </div>
+        <div className="campaign-health-stat approved">
+          <strong>{brandCreatorBuckets.approved.length}</strong>
+          <span>Approved</span>
+        </div>
+        <div className="campaign-health-stat pending">
+          <strong>{brandCreatorBuckets.pending.length}</strong>
+          <span>Pending</span>
+        </div>
+        <div className="campaign-health-stat content">
+          <strong>{campaignContent.length}</strong>
+          <span>Content pieces</span>
+        </div>
+      </div>
       <div className="detail-card-content">
         <div className="brand-brief-table">
           <div className="brand-brief-group">Campaign Summary</div>
@@ -3629,7 +3645,9 @@ export default function CampaignDetailPage() {
         <div className="campaign-header-meta">
           <StatusPill status={campaign.status} />
           <span className="campaign-meta-chip">{campaignType}</span>
-          <span className="campaign-meta-chip">{platformCountLabel}</span>
+          {platformSummary !== 'TBD' && (
+            <span className="campaign-meta-chip">{platformSummary}</span>
+          )}
         </div>
       </div>
 
@@ -3716,7 +3734,6 @@ export default function CampaignDetailPage() {
       {!isBrand && adminTab === 'overview' ? briefCard : null}
       {!isBrand && adminTab === 'analytics' ? adminAnalyticsCard : null}
       {!isBrand && adminTab === 'calendar' ? calendarCard : null}
-
       {isBrand && brandTab === 'creators' ? (
         <section className="detail-card brand-creator-section">
           <div className="detail-card-header">
@@ -3777,10 +3794,15 @@ export default function CampaignDetailPage() {
             ) : (
               <div className="brand-creator-list">
                 {filteredCreatorBuckets.pending.length > 0 && (
-                  <div className="brand-creator-group brand-creator-group-pending">
+                  <div className="brand-creator-group brand-creator-group-pending brand-creator-group-attention">
                     <div className="brand-creator-group-header">
-                      <h4>Awaiting your approval</h4>
-                      <span>{filteredCreatorBuckets.pending.length} creators</span>
+                      <div className="brand-creator-group-header-label">
+                        <span className="brand-creator-attention-dot" />
+                        <h4>Awaiting your approval</h4>
+                      </div>
+                      <span className="brand-creator-group-count">
+                        {filteredCreatorBuckets.pending.length} creator{filteredCreatorBuckets.pending.length !== 1 ? 's' : ''}
+                      </span>
                     </div>
                     {renderBrandCreatorTypeSections(
                       filteredCreatorBucketsByType.pending,
@@ -3791,17 +3813,23 @@ export default function CampaignDetailPage() {
 
                 {filteredCreatorBuckets.approved.length > 0 && (
                   <div className="brand-creator-group brand-creator-group-approved">
-                    <div className="brand-creator-group-header">
+                    <button
+                      type="button"
+                      className="brand-creator-group-header brand-creator-group-toggle"
+                      onClick={() => setApprovedGroupExpanded((v) => !v)}
+                    >
                       <h4>Approved creators</h4>
-                      <span>{filteredCreatorBuckets.approved.length} creators</span>
-                    </div>
-                    {renderBrandCreatorTypeSections(
+                      <span className="brand-creator-group-count">
+                        {filteredCreatorBuckets.approved.length} creator{filteredCreatorBuckets.approved.length !== 1 ? 's' : ''}
+                        <span className="brand-creator-toggle-icon">{approvedGroupExpanded ? '▲' : '▼'}</span>
+                      </span>
+                    </button>
+                    {approvedGroupExpanded && renderBrandCreatorTypeSections(
                       filteredCreatorBucketsByType.approved,
                       renderBrandApprovedActions
                     )}
                   </div>
                 )}
-
               </div>
             )}
           </div>

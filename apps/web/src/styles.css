@@ -12908,3 +12908,496 @@ body.modal-open {
     justify-self: end;
   }
 }
+
+/* =============================================
+   UI/UX REVAMP — NEW ELEMENTS
+   ============================================= */
+
+/* --- Layout: Topbar tightened --- */
+.app-topbar {
+  padding: 16px 36px;
+}
+
+/* --- Layout: Content breathing room --- */
+.app-content {
+  padding: 28px 36px 40px;
+}
+
+/* --- Layout: Page header — branded anchor line --- */
+.page-header {
+  padding-bottom: 16px;
+  position: relative;
+}
+.page-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--gradient-accent);
+  opacity: 0.4;
+  border-radius: 2px;
+}
+.page-header h2 {
+  color: var(--color-crimson-dark);
+}
+
+/* --- Layout: Filters bar — subtle zone --- */
+.filters-bar {
+  background: rgba(var(--color-crimson-rgb), 0.025);
+  border: 1px solid rgba(var(--color-crimson-rgb), 0.07);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+/* --- Sidebar: Nav Icons --- */
+.app-nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.app-nav-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+.app-nav a.active .app-nav-icon,
+.app-nav a:hover .app-nav-icon {
+  opacity: 1;
+}
+
+/* --- Sidebar: User Footer --- */
+.app-sidebar {
+  display: flex;
+  flex-direction: column;
+}
+.app-sidebar > .app-nav {
+  flex: 1;
+}
+.app-sidebar-footer {
+  padding: 14px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.app-user-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.app-user-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(var(--color-sand-rgb), 0.25);
+  color: var(--color-sand-light);
+  font-weight: 700;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(var(--color-sand-rgb), 0.3);
+}
+.app-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.app-user-info strong {
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app-user-info small {
+  color: rgba(var(--color-sand-rgb), 0.7);
+  font-size: 0.72rem;
+  text-transform: capitalize;
+}
+.app-signout-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.55);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, color 0.15s;
+}
+.app-signout-btn:hover {
+  background: rgba(var(--color-sand-rgb), 0.12);
+  color: var(--color-sand-light);
+  border-color: rgba(var(--color-sand-rgb), 0.25);
+}
+
+/* --- Campaigns: Summary Stats Bar --- */
+.campaigns-summary-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.campaigns-stat-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 12px 22px;
+  border-radius: 12px;
+  background: var(--color-white);
+  border: 1px solid rgba(var(--color-crimson-rgb), 0.1);
+  min-width: 84px;
+  position: relative;
+  overflow: hidden;
+}
+/* brand gradient top accent on every chip */
+.campaigns-stat-chip::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--gradient-accent);
+  opacity: 0.35;
+}
+.campaigns-stat-chip strong {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--color-crimson-dark);
+  line-height: 1;
+}
+.campaigns-stat-chip span {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: rgba(var(--color-crimson-rgb), 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+/* Active → sand (positive brand color) */
+.campaigns-stat-chip.active {
+  background: rgba(var(--color-sand-rgb), 0.08);
+  border-color: rgba(var(--color-sand-rgb), 0.25);
+}
+.campaigns-stat-chip.active::before { opacity: 0; }
+.campaigns-stat-chip.active strong { color: var(--color-sand-dark); }
+.campaigns-stat-chip.active span   { color: var(--color-sand-dark); opacity: 0.75; }
+/* Planning → crimson light (in-motion) */
+.campaigns-stat-chip.planning {
+  background: rgba(var(--color-crimson-rgb), 0.04);
+  border-color: rgba(var(--color-crimson-rgb), 0.15);
+}
+.campaigns-stat-chip.planning::before { opacity: 0.6; }
+.campaigns-stat-chip.planning strong { color: var(--color-crimson-light); }
+.campaigns-stat-chip.planning span   { color: var(--color-crimson-light); opacity: 0.75; }
+/* Done → crimson dark (complete) */
+.campaigns-stat-chip.done {
+  background: rgba(var(--color-crimson-rgb), 0.06);
+  border-color: rgba(var(--color-crimson-rgb), 0.18);
+}
+.campaigns-stat-chip.done::before { background: var(--gradient-primary); opacity: 0.5; }
+.campaigns-stat-chip.done strong { color: var(--color-crimson-dark); }
+.campaigns-stat-chip.done span   { color: var(--color-crimson-dark); opacity: 0.65; }
+
+/* --- Campaign Detail: Health Row --- */
+.campaign-health-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, rgba(var(--color-crimson-rgb), 0.03) 0%, rgba(var(--color-sand-rgb), 0.04) 100%);
+  border-bottom: 1px solid rgba(var(--color-crimson-rgb), 0.07);
+}
+.campaign-health-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: var(--color-white);
+  border: 1px solid rgba(var(--color-crimson-rgb), 0.08);
+  min-width: 76px;
+  box-shadow: var(--shadow-sm);
+}
+.campaign-health-stat strong {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-crimson-dark);
+  line-height: 1;
+}
+.campaign-health-stat span {
+  font-size: 0.67rem;
+  font-weight: 600;
+  color: rgba(var(--color-crimson-rgb), 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+/* Approved → sand */
+.campaign-health-stat.approved {
+  border-color: rgba(var(--color-sand-rgb), 0.3);
+  background: rgba(var(--color-sand-rgb), 0.06);
+}
+.campaign-health-stat.approved strong { color: var(--color-sand-dark); }
+/* Pending → crimson light */
+.campaign-health-stat.pending {
+  border-color: rgba(var(--color-crimson-rgb), 0.2);
+  background: rgba(var(--color-crimson-rgb), 0.04);
+}
+.campaign-health-stat.pending strong { color: var(--color-crimson-light); }
+/* Content → crimson dark */
+.campaign-health-stat.content {
+  border-color: rgba(var(--color-crimson-rgb), 0.15);
+  background: rgba(var(--color-crimson-rgb), 0.05);
+}
+.campaign-health-stat.content strong { color: var(--color-crimson-dark); }
+
+/* --- Creator Review: Pending Attention Group --- */
+.brand-creator-group-attention {
+  border: 1.5px solid rgba(var(--color-crimson-rgb), 0.2);
+  border-radius: 14px;
+  background: rgba(var(--color-crimson-rgb), 0.025);
+  padding: 4px;
+}
+.brand-creator-group-header-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.brand-creator-attention-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-sand-dark);
+  flex-shrink: 0;
+  animation: pulse-dot 1.8s infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.75); }
+}
+.brand-creator-group-count {
+  font-size: 0.82rem;
+  color: rgba(var(--color-crimson-rgb), 0.55);
+  font-weight: 500;
+}
+.brand-creator-group-toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  padding: 12px 4px;
+}
+.brand-creator-group-toggle h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-dark);
+}
+.brand-creator-toggle-icon {
+  margin-left: 6px;
+  font-size: 0.65rem;
+  opacity: 0.4;
+}
+
+/* --- Creators Page: Filter Toggle --- */
+.creators-filter-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.creators-filter-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+.creators-filter-toggle-btn.active {
+  background: rgba(var(--color-crimson-rgb), 0.07);
+  border-color: rgba(var(--color-crimson-rgb), 0.22);
+  color: var(--color-crimson);
+}
+.creators-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-crimson);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.creators-filter-toggle-icon {
+  font-size: 0.6rem;
+  opacity: 0.45;
+  margin-left: 2px;
+}
+
+/* =============================================
+   CAMPAIGN DETAIL PAGE — RESTRUCTURE
+   ============================================= */
+
+/* Zero out the inner padding — .app-content already handles outer spacing */
+.campaign-details-page {
+  padding: 0;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ---- Hero Header ---- */
+.campaign-details-header {
+  background: linear-gradient(135deg, var(--color-crimson-dark) 0%, var(--color-crimson) 60%, var(--color-crimson-light) 100%);
+  border: none;
+  border-radius: 18px;
+  padding: 22px 26px 20px;
+  margin-bottom: 0;
+  box-shadow: 0 6px 24px rgba(var(--color-crimson-rgb), 0.22);
+  position: relative;
+  overflow: hidden;
+}
+/* subtle decorative grain on hero */
+.campaign-details-header::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 80% 50%, rgba(var(--color-sand-rgb), 0.08) 0%, transparent 65%);
+  pointer-events: none;
+}
+
+/* Back link — white on hero */
+.campaign-details-header .link-button {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: color 0.15s;
+}
+.campaign-details-header .link-button:hover {
+  color: #fff;
+}
+
+/* Campaign title */
+.campaign-details-header .campaign-title-row h1 {
+  color: #fff;
+  font-size: 1.65rem;
+  font-weight: 800;
+  line-height: 1.15;
+  white-space: normal;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+/* Brand name pill — inverted for hero */
+.campaign-details-header .campaign-brand-name {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Meta chips — ghost style on hero */
+.campaign-details-header .campaign-meta-chip {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.88);
+}
+
+/* Status pill — ensure readability on crimson bg */
+.campaign-details-header .status-pill {
+  background: rgba(255, 255, 255, 0.18) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  backdrop-filter: blur(4px);
+}
+
+/* ---- Tab Navigation ---- */
+.campaign-details-tab-row {
+  background: var(--color-white);
+  border: 1px solid rgba(var(--color-crimson-rgb), 0.1);
+  border-radius: 14px;
+  padding: 6px 10px;
+  margin-bottom: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Tab buttons */
+.brand-tab-bar {
+  gap: 2px;
+}
+.brand-tab-bar button {
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: rgba(var(--color-crimson-rgb), 0.55);
+  transition: background 0.15s, color 0.15s;
+}
+.brand-tab-bar button:hover:not(.active) {
+  background: rgba(var(--color-crimson-rgb), 0.06);
+  color: var(--color-crimson);
+}
+.brand-tab-bar button.active {
+  background: var(--color-crimson);
+  color: var(--color-white);
+  box-shadow: 0 3px 10px rgba(var(--color-crimson-rgb), 0.25);
+}
+
+/* ---- Brief Card ---- */
+.brand-brief-table {
+  border-color: rgba(var(--color-crimson-rgb), 0.1);
+}
+.brand-brief-group {
+  background: linear-gradient(90deg, rgba(var(--color-crimson-rgb), 0.07) 0%, rgba(var(--color-sand-rgb), 0.06) 100%);
+  color: var(--color-crimson-dark);
+  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+}
+.brand-brief-row {
+  border-top-color: rgba(var(--color-crimson-rgb), 0.05);
+}
+.brand-brief-row:nth-child(even) {
+  background: rgba(var(--color-crimson-rgb), 0.02);
+}
+.brand-brief-row span {
+  color: rgba(var(--color-crimson-rgb), 0.55);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+.brand-brief-row strong {
+  color: var(--color-dark);
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+/* ---- Creator Groups — brand palette borders ---- */
+/* Replace off-brand amber/green with crimson/sand */
+.brand-creator-group-pending {
+  border-left-color: var(--color-crimson-light);
+}
+.brand-creator-group-approved {
+  border-left-color: var(--color-sand-dark);
+}
+
+/* ---- Responsive adjustments ---- */
+@media (max-width: 900px) {
+  .campaign-details-header {
+    padding: 16px 18px 14px;
+    border-radius: 14px;
+  }
+  .campaign-details-header .campaign-title-row h1 {
+    font-size: 1.35rem;
+  }
+}

@@ -45,7 +45,7 @@ const getPaymentTypeLabel = (paymentType) =>
 
 const formatList = (values) => values.filter(Boolean).join(', ');
 
-export default function CampaignWizard({ onClose, onSubmit, brandName }) {
+export default function CampaignWizard({ onClose, onSubmit, brandName, brands }) {
   const [layoutOffsets, setLayoutOffsets] = useState({
     top: 0,
     left: 0,
@@ -118,6 +118,7 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
     switch (currentStep) {
       case STEP_IDS.BASICS:
         if (!form.name.trim()) return false;
+        if (brands?.length && !form.brandName) return false;
         if (!form.objectives) return false;
         if (!form.startDate) return false;
         if (!form.campaignType) return false;
@@ -252,6 +253,22 @@ export default function CampaignWizard({ onClose, onSubmit, brandName }) {
                   autoFocus
                 />
               </div>
+
+              {brands?.length > 0 && (
+                <div className="wizard-input-group">
+                  <label>Brand</label>
+                  <select
+                    className="input"
+                    value={form.brandName}
+                    onChange={(event) => updateForm('brandName', event.target.value)}
+                  >
+                    <option value="">Select a brand</option>
+                    {brands.map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="wizard-input-group">
                 <label>Main objective</label>

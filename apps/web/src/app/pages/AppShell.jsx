@@ -202,10 +202,28 @@ function ShellInner() {
               to={item.to}
               className={({ isActive }) => (isActive ? 'active' : undefined)}
             >
+              {item.icon && (
+                // eslint-disable-next-line react/no-danger
+                <span className="app-nav-icon" dangerouslySetInnerHTML={{ __html: item.icon }} />
+              )}
               {item.label}
             </NavLink>
           ))}
         </nav>
+        <div className="app-sidebar-footer">
+          <div className="app-user-chip">
+            <span className="app-user-avatar">
+              {(user?.name || role || '?')[0].toUpperCase()}
+            </span>
+            <div className="app-user-info">
+              <strong>{user?.name || role}</strong>
+              <small>{role}</small>
+            </div>
+          </div>
+          <button type="button" className="app-signout-btn" onClick={handleLogout}>
+            Sign out
+          </button>
+        </div>
       </aside>
 
       <div className="app-main">
@@ -223,9 +241,6 @@ function ShellInner() {
             <h1>{topbarTitle}</h1>
           </div>
           <div className="app-topbar-actions">
-            <button type="button" className="btn btn-secondary" onClick={handleLogout}>
-              Logout
-            </button>
             <NotificationCenter role={role} />
           </div>
         </header>

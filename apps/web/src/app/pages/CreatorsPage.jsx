@@ -181,6 +181,7 @@ export default function CreatorsPage() {
 
   const [ugcPage, setUgcPage] = useState(1);
   const [influencerPage, setInfluencerPage] = useState(1);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const [ugcFilters, setUgcFilters] = useState({
     search: '',
@@ -250,6 +251,12 @@ export default function CreatorsPage() {
   useEffect(() => {
     setInfluencerPage(1);
   }, [influencerFilters]);
+
+  const activeFilterCount = useMemo(() => {
+    const ugcActive = Object.values(ugcFilters).filter(Boolean).length;
+    const influencerActive = Object.values(influencerFilters).filter(Boolean).length;
+    return activeTab === 'ugc' ? ugcActive : influencerActive;
+  }, [ugcFilters, influencerFilters, activeTab]);
 
   const filteredUgc = useMemo(() => {
     return ugcCreators.filter((creator) => {
@@ -981,14 +988,30 @@ export default function CreatorsPage() {
         </button>
       </div>
 
+      <div className="creators-filter-toggle-row">
+        <button
+          type="button"
+          className={`btn btn-secondary creators-filter-toggle-btn ${filtersOpen ? 'active' : ''}`}
+          onClick={() => setFiltersOpen((v) => !v)}
+        >
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="creators-filter-badge">{activeFilterCount}</span>
+          )}
+          <span className="creators-filter-toggle-icon">{filtersOpen ? '▲' : '▼'}</span>
+        </button>
+      </div>
+
       {activeTab === 'ugc' && (
         <>
-          <CreatorFilters
-            type="ugc"
-            filters={ugcFilters}
-            onChange={setUgcFilters}
-            niches={NICHES}
-          />
+          {filtersOpen && (
+            <CreatorFilters
+              type="ugc"
+              filters={ugcFilters}
+              onChange={setUgcFilters}
+              niches={NICHES}
+            />
+          )}
 
           <div className="compact-creator-grid">
             <CreatorGrid
@@ -1028,13 +1051,15 @@ export default function CreatorsPage() {
 
       {activeTab === 'influencer' && (
         <>
-          <CreatorFilters
-            type="influencer"
-            filters={influencerFilters}
-            onChange={setInfluencerFilters}
-            niches={NICHES}
-            disableEngagementRate={!hasInfluencerEngagementData}
-          />
+          {filtersOpen && (
+            <CreatorFilters
+              type="influencer"
+              filters={influencerFilters}
+              onChange={setInfluencerFilters}
+              niches={NICHES}
+              disableEngagementRate={!hasInfluencerEngagementData}
+            />
+          )}
 
           <div className="compact-creator-grid">
             <CreatorGrid
