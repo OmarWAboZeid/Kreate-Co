@@ -17,6 +17,14 @@ async function comparePasswords(supplied, stored) {
   return crypto.timingSafeEqual(hashedBuf, suppliedBuf);
 }
 
+function generateRandomToken(size = 32) {
+  return crypto.randomBytes(size).toString('hex');
+}
+
+function hashToken(value) {
+  return crypto.createHash('sha256').update(String(value || '')).digest('hex');
+}
+
 function generateSessionId() {
   return crypto.randomBytes(32).toString('hex');
 }
@@ -64,6 +72,7 @@ async function getSessionUser(pool, req) {
        u.logo_url,
        u.role,
        u.status,
+       u.email_verified_at,
        u.created_at,
        brand_membership.organization_id AS brand_id,
        brand_membership.organization_name AS brand_name
@@ -102,6 +111,8 @@ async function cleanExpiredSessions(pool) {
 module.exports = {
   hashPassword,
   comparePasswords,
+  generateRandomToken,
+  hashToken,
   generateSessionId,
   parseCookies,
   setSessionCookie,

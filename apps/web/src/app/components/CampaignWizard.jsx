@@ -240,113 +240,140 @@ export default function CampaignWizard({ onClose, onSubmit, brandName, brands })
       case STEP_IDS.BASICS:
         return (
           <div className="wizard-step wizard-step-grouped">
+            <div className="wizard-step-meta">
+              <span>{`Step ${currentStepIndex + 1} of ${flowSteps.length}`}</span>
+            </div>
             <h3>Campaign basics</h3>
             <p>Start with the shared campaign details. The next step changes with your selections.</p>
-            <div className="wizard-step-grid">
-              <div className="wizard-input-group">
-                <label>Campaign name</label>
-                <input
-                  className="input"
-                  value={form.name}
-                  onChange={(event) => updateForm('name', event.target.value)}
-                  placeholder="e.g. Summer Collection Launch"
-                  autoFocus
-                />
-              </div>
-
-              {brands?.length > 0 && (
-                <div className="wizard-input-group">
-                  <label>Brand</label>
-                  <select
-                    className="input"
-                    value={form.brandName}
-                    onChange={(event) => updateForm('brandName', event.target.value)}
-                  >
-                    <option value="">Select a brand</option>
-                    {brands.map((b) => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
+            <div className="wizard-step-grid wizard-step-grid-tight">
+              <section className="wizard-section-card">
+                <div className="wizard-section-head">
+                  <h4>General</h4>
                 </div>
-              )}
+                <div className="wizard-form-grid wizard-form-grid-two">
+                  <div className="wizard-input-group">
+                    <label>Campaign name</label>
+                    <input
+                      className="input"
+                      value={form.name}
+                      onChange={(event) => updateForm('name', event.target.value)}
+                      placeholder="e.g. Summer Collection Launch"
+                      autoFocus
+                    />
+                  </div>
 
-              <div className="wizard-input-group">
-                <label>Main objective</label>
-                <div className="wizard-options wizard-options-left">
-                  {OBJECTIVES.map((objective) => (
-                    <button
-                      key={objective}
-                      type="button"
-                      className={`wizard-option ${form.objectives === objective ? 'active' : ''}`}
-                      onClick={() => updateForm('objectives', objective)}
-                    >
-                      {objective}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="wizard-step-grid wizard-step-grid-two">
-                <div className="wizard-input-group">
-                  <label>Start date</label>
-                  <input
-                    className="input"
-                    type="date"
-                    value={form.startDate}
-                    onChange={(event) => updateForm('startDate', event.target.value)}
-                  />
-                </div>
-
-                <div className="wizard-input-group">
-                  <label>Creator age range</label>
-                  <div className="wizard-options wizard-options-left">
-                    {AGE_OPTIONS.map((age) => (
-                      <button
-                        key={age}
-                        type="button"
-                        className={`wizard-option ${form.creatorAgeRange === age ? 'active' : ''}`}
-                        onClick={() => updateForm('creatorAgeRange', age)}
+                  {brands?.length > 0 ? (
+                    <div className="wizard-input-group">
+                      <label>Brand</label>
+                      <select
+                        className="input"
+                        value={form.brandName}
+                        onChange={(event) => updateForm('brandName', event.target.value)}
                       >
-                        {age}
+                        <option value="">Select a brand</option>
+                        {brands.map((b) => (
+                          <option key={b} value={b}>
+                            {b}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : brandName ? (
+                    <div className="wizard-input-group">
+                      <label>Brand</label>
+                      <div className="wizard-field-value">{brandName}</div>
+                    </div>
+                  ) : null}
+
+                  <div className="wizard-input-group">
+                    <label>Start date</label>
+                    <input
+                      className="input"
+                      type="date"
+                      value={form.startDate}
+                      onChange={(event) => updateForm('startDate', event.target.value)}
+                    />
+                  </div>
+
+                  <div className="wizard-input-group">
+                    <label>Creator age range</label>
+                    <div className="wizard-options wizard-options-left">
+                      {AGE_OPTIONS.map((age) => (
+                        <button
+                          key={age}
+                          type="button"
+                          className={`wizard-option ${form.creatorAgeRange === age ? 'active' : ''}`}
+                          onClick={() => updateForm('creatorAgeRange', age)}
+                        >
+                          {age}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="wizard-section-card">
+                <div className="wizard-section-head">
+                  <h4>Goal</h4>
+                </div>
+                <div className="wizard-input-group">
+                  <label>Main objective</label>
+                  <div className="wizard-options wizard-options-left">
+                    {OBJECTIVES.map((objective) => (
+                      <button
+                        key={objective}
+                        type="button"
+                        className={`wizard-option ${form.objectives === objective ? 'active' : ''}`}
+                        onClick={() => updateForm('objectives', objective)}
+                      >
+                        {objective}
                       </button>
                     ))}
                   </div>
                 </div>
-              </div>
+              </section>
 
-              <div className="wizard-input-group">
-                <label>Campaign type</label>
-                <div className="wizard-options-grid wizard-options-grid-left">
-                  {CAMPAIGN_TYPES.map((type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      className={`wizard-option-card ${form.campaignType === type ? 'active' : ''}`}
-                      onClick={() => updateForm('campaignType', type)}
-                    >
-                      <span className="wizard-option-title">{type}</span>
-                    </button>
-                  ))}
+              <section className="wizard-section-card">
+                <div className="wizard-section-head">
+                  <h4>Setup</h4>
                 </div>
-              </div>
-
-              {requiresPaymentType ? (
-                <div className="wizard-input-group">
-                  <label>Compensation</label>
-                  <div className="wizard-options wizard-options-left">
-                    {PAYMENT_TYPES.map((paymentType) => (
-                      <button
-                        key={paymentType}
-                        type="button"
-                        className={`wizard-option ${form.paymentType === paymentType ? 'active' : ''}`}
-                        onClick={() => updateForm('paymentType', paymentType)}
-                      >
-                        {getPaymentTypeLabel(paymentType)}
-                      </button>
-                    ))}
+                <div className="wizard-step-grid wizard-step-grid-tight">
+                  <div className="wizard-input-group">
+                    <label>Campaign type</label>
+                    <div className="wizard-options-grid wizard-options-grid-left">
+                      {CAMPAIGN_TYPES.map((type) => (
+                        <button
+                          key={type}
+                          type="button"
+                          className={`wizard-option-card ${form.campaignType === type ? 'active' : ''}`}
+                          onClick={() => updateForm('campaignType', type)}
+                        >
+                          <span className="wizard-option-title">{type}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
+
+                  {requiresPaymentType ? (
+                    <div className="wizard-input-group">
+                      <label>Compensation</label>
+                      <div className="wizard-options wizard-options-left">
+                        {PAYMENT_TYPES.map((paymentType) => (
+                          <button
+                            key={paymentType}
+                            type="button"
+                            className={`wizard-option ${form.paymentType === paymentType ? 'active' : ''}`}
+                            onClick={() => updateForm('paymentType', paymentType)}
+                          >
+                            {getPaymentTypeLabel(paymentType)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
+              </section>
             </div>
           </div>
         );
@@ -354,60 +381,75 @@ export default function CampaignWizard({ onClose, onSubmit, brandName, brands })
       case STEP_IDS.UGC:
         return (
           <div className="wizard-step wizard-step-grouped">
+            <div className="wizard-step-meta">
+              <span>{`Step ${currentStepIndex + 1} of ${flowSteps.length}`}</span>
+            </div>
             <h3>UGC requirements</h3>
             <p>Define the creator profile and output for this UGC brief.</p>
-            <div className="wizard-step-grid">
-              <div className="wizard-input-group">
-                <label>Creator persona</label>
-                <textarea
-                  className="input wizard-textarea wizard-textarea-wide"
-                  value={form.ugcPersona}
-                  onChange={(event) => updateForm('ugcPersona', event.target.value)}
-                  placeholder="e.g. Young, trendy, lifestyle-focused individual who loves fashion..."
-                  rows={4}
-                />
-              </div>
-
-              <div className="wizard-input-group">
-                <label>Preferred gender</label>
-                <div className="wizard-options wizard-options-left">
-                  {GENDER_OPTIONS.map((gender) => (
-                    <button
-                      key={gender}
-                      type="button"
-                      className={`wizard-option ${form.ugcGender === gender ? 'active' : ''}`}
-                      onClick={() => updateForm('ugcGender', gender)}
-                    >
-                      {gender}
-                    </button>
-                  ))}
+            <div className="wizard-step-grid wizard-step-grid-tight">
+              <section className="wizard-section-card">
+                <div className="wizard-section-head">
+                  <h4>Creator brief</h4>
                 </div>
-              </div>
-
-              <div className="wizard-input-group">
-                <label>Number of videos</label>
-                <div className="wizard-options wizard-options-left">
-                  {UGC_VIDEO_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`wizard-option ${form.ugcVideos === option.value ? 'active' : ''}`}
-                      onClick={() => updateForm('ugcVideos', option.value)}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-                {form.ugcVideos === 'other' ? (
-                  <input
-                    className="input wizard-input-sm"
-                    type="number"
-                    value={form.ugcVideosOther}
-                    onChange={(event) => updateForm('ugcVideosOther', event.target.value)}
-                    placeholder="Videos"
+                <div className="wizard-input-group">
+                  <label>Creator persona</label>
+                  <textarea
+                    className="input wizard-textarea wizard-textarea-wide"
+                    value={form.ugcPersona}
+                    onChange={(event) => updateForm('ugcPersona', event.target.value)}
+                    placeholder="e.g. Young, trendy, lifestyle-focused individual who loves fashion..."
+                    rows={4}
                   />
-                ) : null}
-              </div>
+                </div>
+              </section>
+
+              <section className="wizard-section-card">
+                <div className="wizard-section-head">
+                  <h4>Deliverables</h4>
+                </div>
+                <div className="wizard-form-grid wizard-form-grid-two">
+                  <div className="wizard-input-group">
+                    <label>Preferred gender</label>
+                    <div className="wizard-options wizard-options-left">
+                      {GENDER_OPTIONS.map((gender) => (
+                        <button
+                          key={gender}
+                          type="button"
+                          className={`wizard-option ${form.ugcGender === gender ? 'active' : ''}`}
+                          onClick={() => updateForm('ugcGender', gender)}
+                        >
+                          {gender}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="wizard-input-group">
+                    <label>Number of videos</label>
+                    <div className="wizard-options wizard-options-left">
+                      {UGC_VIDEO_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`wizard-option ${form.ugcVideos === option.value ? 'active' : ''}`}
+                          onClick={() => updateForm('ugcVideos', option.value)}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    {form.ugcVideos === 'other' ? (
+                      <input
+                        className="input wizard-input-sm"
+                        type="number"
+                        value={form.ugcVideosOther}
+                        onChange={(event) => updateForm('ugcVideosOther', event.target.value)}
+                        placeholder="Videos"
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
         );
@@ -415,11 +457,16 @@ export default function CampaignWizard({ onClose, onSubmit, brandName, brands })
       case STEP_IDS.INFLUENCER:
         return (
           <div className="wizard-step wizard-step-grouped">
+            <div className="wizard-step-meta">
+              <span>{`Step ${currentStepIndex + 1} of ${flowSteps.length}`}</span>
+            </div>
             <h3>Influencer requirements</h3>
             <p>Choose the tiers, channels, and budget for the influencer shortlist.</p>
-            <div className="wizard-step-grid">
-              <div className="wizard-input-group">
-                <label>Creator tiers</label>
+            <div className="wizard-step-grid wizard-step-grid-tight">
+              <section className="wizard-section-card">
+                <div className="wizard-section-head">
+                  <h4>Creator tiers</h4>
+                </div>
                 <div className="wizard-options-grid wizard-options-grid-left">
                   {CREATOR_TIERS.map((tier) => (
                     <button
@@ -433,57 +480,67 @@ export default function CampaignWizard({ onClose, onSubmit, brandName, brands })
                     </button>
                   ))}
                 </div>
-              </div>
+              </section>
 
-              <div className="wizard-step-grid wizard-step-grid-two">
+              <section className="wizard-section-card">
+                <div className="wizard-section-head">
+                  <h4>Targeting</h4>
+                </div>
+                <div className="wizard-form-grid wizard-form-grid-two">
+                  <div className="wizard-input-group">
+                    <label>Niche</label>
+                    <div className="wizard-options wizard-options-left">
+                      {NICHES.map((niche) => (
+                        <button
+                          key={niche}
+                          type="button"
+                          className={`wizard-option ${form.influencerNiche === niche ? 'active' : ''}`}
+                          onClick={() => updateForm('influencerNiche', niche)}
+                        >
+                          {niche}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="wizard-input-group">
+                    <label>Platforms</label>
+                    <div className="wizard-options wizard-options-left">
+                      {PLATFORMS.map((platform) => (
+                        <button
+                          key={platform}
+                          type="button"
+                          className={`wizard-option ${form.influencerPlatforms.includes(platform) ? 'active' : ''}`}
+                          onClick={() => togglePlatform(platform)}
+                        >
+                          {platform}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="wizard-section-card">
+                <div className="wizard-section-head">
+                  <h4>Budget</h4>
+                </div>
                 <div className="wizard-input-group">
-                  <label>Niche</label>
+                  <label>Estimated budget</label>
                   <div className="wizard-options wizard-options-left">
-                    {NICHES.map((niche) => (
+                    {BUDGET_OPTIONS.map((option) => (
                       <button
-                        key={niche}
+                        key={option.value}
                         type="button"
-                        className={`wizard-option ${form.influencerNiche === niche ? 'active' : ''}`}
-                        onClick={() => updateForm('influencerNiche', niche)}
+                        className={`wizard-option ${form.influencerBudget === option.value ? 'active' : ''}`}
+                        onClick={() => updateForm('influencerBudget', option.value)}
                       >
-                        {niche}
+                        {option.label}
                       </button>
                     ))}
                   </div>
                 </div>
-
-                <div className="wizard-input-group">
-                  <label>Platforms</label>
-                  <div className="wizard-options wizard-options-left">
-                    {PLATFORMS.map((platform) => (
-                      <button
-                        key={platform}
-                        type="button"
-                        className={`wizard-option ${form.influencerPlatforms.includes(platform) ? 'active' : ''}`}
-                        onClick={() => togglePlatform(platform)}
-                      >
-                        {platform}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="wizard-input-group">
-                <label>Budget</label>
-                <div className="wizard-options wizard-options-left">
-                  {BUDGET_OPTIONS.map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={`wizard-option ${form.influencerBudget === option.value ? 'active' : ''}`}
-                      onClick={() => updateForm('influencerBudget', option.value)}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              </section>
             </div>
           </div>
         );
@@ -491,9 +548,13 @@ export default function CampaignWizard({ onClose, onSubmit, brandName, brands })
       case STEP_IDS.REVIEW:
         return (
           <div className="wizard-step wizard-review">
+            <div className="wizard-step-meta wizard-step-meta-center">
+              <span>{`Step ${currentStepIndex + 1} of ${flowSteps.length}`}</span>
+            </div>
             <h3>Campaign overview</h3>
             <div className="wizard-summary">
               {renderSummaryItem('Campaign Name', form.name)}
+              {renderSummaryItem('Brand', form.brandName)}
               {renderSummaryItem('Objective', form.objectives)}
               {renderSummaryItem('Start Date', form.startDate)}
               {renderSummaryItem('Campaign Type', form.campaignType)}

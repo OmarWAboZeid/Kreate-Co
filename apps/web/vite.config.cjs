@@ -14,6 +14,10 @@ module.exports = defineConfig({
         target: 'http://localhost:4000',
         changeOrigin: true,
       },
+      '/objects': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+      },
     },
   },
 });

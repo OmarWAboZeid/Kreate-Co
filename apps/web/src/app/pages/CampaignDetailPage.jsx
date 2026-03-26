@@ -176,6 +176,36 @@ const formatVideoType = (value) => {
   return raw;
 };
 
+const formatPlatformLabel = (value) => {
+  const raw = String(value || '').trim();
+  const normalized = raw.toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'tiktok') return 'TikTok';
+  if (normalized === 'instagram') return 'Instagram';
+  if (normalized === 'facebook') return 'Facebook';
+  if (normalized === 'youtube') return 'YouTube';
+  return raw;
+};
+
+const inferSubmittedContentPlatform = (link, fallbackPlatforms = []) => {
+  const source = String(link || '').trim().toLowerCase();
+  if (source.includes('tiktok')) return 'TikTok';
+  if (source.includes('instagram')) return 'Instagram';
+  if (source.includes('facebook')) return 'Facebook';
+  if (source.includes('youtube')) return 'YouTube';
+  if (!Array.isArray(fallbackPlatforms)) return 'Unspecified';
+  const fallback = fallbackPlatforms.map((platform) => formatPlatformLabel(platform)).find(Boolean);
+  return fallback || 'Unspecified';
+};
+
+const EMPTY_CREATOR_SUBMISSION_SUMMARY = Object.freeze({
+  entries: [],
+  latestEntry: null,
+  totalCount: 0,
+  hasDraft: false,
+  hasFinal: false,
+});
+
 const formatShortDate = (value) => {
   if (!value) return '';
   const parsed = new Date(value);
@@ -421,6 +451,52 @@ const resolveMediaUrl = (value) => {
   return `/${raw.replace(/^\/+/, '')}`;
 };
 
+const looksLikeVideoUrl = (url) => {
+  if (!url) return false;
+  const raw = String(url).trim();
+  if (!raw) return false;
+  if (raw.startsWith('/objects/')) return true;
+  return /\.(mp4|mov|m4v|webm|ogv|ogg)(\?|#|$)/i.test(raw);
+};
+
+const inferSubmissionStage = (item) => {
+  const type = String(item?.type || '').trim().toLowerCase();
+  if (type.includes('draft')) return 'Draft';
+  const status = String(item?.status || '').trim().toLowerCase();
+  if (status === 'draft') return 'Draft';
+  return 'Final';
+};
+
+const extractUploadedLinksFromNotes = (notes) =>
+  String(notes || '')
+    .split(/\r?\n/g)
+    .map((line) => {
+      const match = line.match(/^uploaded file:\s*(.+)$/i);
+      return match ? resolveMediaUrl(match[1]) : '';
+    })
+    .filter(Boolean);
+
+const getSubmissionTimestamp = (value) => {
+  const timestamp = new Date(value || 0).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const compareSubmissionEntries = (left, right) => {
+  const timeDelta = getSubmissionTimestamp(right.createdAt) - getSubmissionTimestamp(left.createdAt);
+  if (timeDelta !== 0) return timeDelta;
+  const leftIsVideo = looksLikeVideoUrl(left.link);
+  const rightIsVideo = looksLikeVideoUrl(right.link);
+  if (leftIsVideo !== rightIsVideo) {
+    return leftIsVideo ? -1 : 1;
+  }
+  if (left.stage !== right.stage) {
+    return left.stage === 'Final' ? -1 : 1;
+  }
+  return String(left.link || '').localeCompare(String(right.link || ''), undefined, {
+    sensitivity: 'base',
+  });
+};
+
 const getCreatorSocialEntries = (creator) =>
   [
     { key: 'tiktok', label: 'TikTok', url: creator?.tiktok_url },
@@ -446,14 +522,12 @@ export default function CampaignDetailPage() {
   const [creatorFilter, setCreatorFilter] = useState('all');
   const [creatorTypeFilter, setCreatorTypeFilter] = useState('all');
   const [creatorSearch, setCreatorSearch] = useState('');
-  const [approvedGroupExpanded, setApprovedGroupExpanded] = useState(false);
+  const [approvedGroupExpanded, setApprovedGroupExpanded] = useState(true);
   const [addContentModal, setAddContentModal] = useState({ open: false, creator: null });
   const [contentForm, setContentForm] = useState({
     submissionStage: 'final',
     link: '',
     uploadedLink: '',
-    platform: '',
-    type: '',
     notes: '',
   });
   const [contentUploadState, setContentUploadState] = useState({
@@ -1199,8 +1273,6 @@ export default function CampaignDetailPage() {
       submissionStage: 'final',
       link: '',
       uploadedLink: '',
-      platform: '',
-      type: '',
       notes: '',
     });
     setContentUploadState({ uploading: false, error: '', fileName: '' });
@@ -1232,11 +1304,7 @@ export default function CampaignDetailPage() {
     });
   };
 
-  const isLikelyVideoUrl = (url) => {
-    if (!url) return false;
-    if (url.startsWith('/objects/')) return true;
-    return /\.(mp4|mov|m4v|webm|ogv|ogg)(\?|#|$)/i.test(url);
-  };
+  const isLikelyVideoUrl = (url) => looksLikeVideoUrl(url);
 
   const uploadSubmittedVideo = async (file) => {
     const signedUrlRes = await fetch('/api/uploads/request-url', {
@@ -1733,7 +1801,7 @@ export default function CampaignDetailPage() {
         : 'final';
     const contentLink = String(contentForm.link || '').trim();
     const uploadedLink = String(contentForm.uploadedLink || '').trim();
-    const resolvedLink = submissionStage === 'draft' ? contentLink : contentLink;
+    const resolvedLink = contentLink;
 
     if (submissionStage === 'draft' && !resolvedLink) {
       setContentUploadState((prev) => ({
@@ -1751,7 +1819,11 @@ export default function CampaignDetailPage() {
     }
 
     try {
-      const localContentType = contentForm.type || (submissionStage === 'draft' ? 'Draft Video' : 'Video');
+      const localContentType = submissionStage === 'draft' ? 'Draft Video' : 'Video';
+      const inferredPlatform = inferSubmittedContentPlatform(
+        resolvedLink || uploadedLink,
+        campaign?.platforms
+      );
       const localAssets =
         submissionStage === 'final'
           ? [
@@ -1765,7 +1837,7 @@ export default function CampaignDetailPage() {
         id: makeId('content'),
         campaignId: campaign.id,
         creatorId: addContentModal.creator.id,
-        platform: contentForm.platform || 'TikTok',
+        platform: inferredPlatform,
         type: localContentType,
         caption: contentForm.notes || '',
         hashtags: '',
@@ -1916,6 +1988,96 @@ export default function CampaignDetailPage() {
     creatorMap.get(creatorId) ||
     creatorMap.get(Number(creatorId)) ||
     shortlistCreators.find((item) => String(item.id) === creatorId);
+  const creatorSubmissionSummaryById = useMemo(() => {
+    const summaryById = {};
+
+    analyticsCreatorIds.forEach((creatorId) => {
+      const creatorKey = String(creatorId);
+      const workflowEntry = creatorState.outreach?.[creatorKey] || {};
+      const entries = [];
+
+      campaignContent
+        .filter((item) => String(item.creatorId) === creatorKey)
+        .forEach((item, index) => {
+          const stage = inferSubmissionStage(item);
+          const createdAt = item.createdAt || item.submittedAt || '';
+          const defaultStatus =
+            String(item.status || '').trim() || (stage === 'Draft' ? 'Draft' : 'Pending Review');
+          const registerEntry = (link, options = {}) => {
+            const resolvedLink = resolveMediaUrl(link);
+            if (!resolvedLink) return;
+            entries.push({
+              id: options.id || `${creatorKey}-submission-${index}-${entries.length}`,
+              link: resolvedLink,
+              stage,
+              kind: looksLikeVideoUrl(resolvedLink) ? 'Video' : 'URL',
+              type: options.type || formatVideoType(item.type),
+              status: options.status || defaultStatus,
+              platform:
+                options.platform ||
+                item.platform ||
+                inferSubmittedContentPlatform(resolvedLink, campaign?.platforms),
+              createdAt,
+              source: options.source || 'content',
+            });
+          };
+
+          const primaryLink = resolveMediaUrl(extractContentLink(item));
+          registerEntry(primaryLink, {
+            id: item.id || `${creatorKey}-content-${index}`,
+          });
+
+          extractUploadedLinksFromNotes(item.notes).forEach((uploadedLink, uploadedIndex) => {
+            if (resolveMediaUrl(uploadedLink) === primaryLink) return;
+            registerEntry(uploadedLink, {
+              id: `${item.id || `${creatorKey}-content-${index}`}-upload-${uploadedIndex}`,
+              type: stage === 'Draft' ? 'Draft Video' : 'Uploaded Video',
+              source: 'content-upload',
+            });
+          });
+        });
+
+      const workflowVideoLink = resolveMediaUrl(workflowEntry.finalVideoLink);
+      if (workflowVideoLink) {
+        entries.push({
+          id: `${creatorKey}-workflow`,
+          link: workflowVideoLink,
+          stage: 'Final',
+          kind: looksLikeVideoUrl(workflowVideoLink) ? 'Video' : 'URL',
+          type: 'Video',
+          status: workflowEntry.workflowStatus || 'Submitted',
+          platform: inferSubmittedContentPlatform(workflowVideoLink, campaign?.platforms),
+          createdAt: '',
+          source: 'workflow',
+        });
+      }
+
+      const seen = new Set();
+      const dedupedEntries = entries
+        .filter((entry) => entry.link)
+        .sort(compareSubmissionEntries)
+        .filter((entry) => {
+          const dedupeKey = `${String(entry.stage || '').toLowerCase()}::${String(entry.link || '')
+            .trim()
+            .toLowerCase()}`;
+          if (seen.has(dedupeKey)) return false;
+          seen.add(dedupeKey);
+          return true;
+        });
+
+      summaryById[creatorKey] = {
+        entries: dedupedEntries,
+        latestEntry: dedupedEntries[0] || null,
+        totalCount: dedupedEntries.length,
+        hasDraft: dedupedEntries.some((entry) => entry.stage === 'Draft'),
+        hasFinal: dedupedEntries.some((entry) => entry.stage === 'Final'),
+      };
+    });
+
+    return summaryById;
+  }, [analyticsCreatorIds, campaignContent, creatorState.outreach, campaign?.platforms]);
+  const getCreatorSubmissionSummary = (creatorId) =>
+    creatorSubmissionSummaryById[String(creatorId)] || EMPTY_CREATOR_SUBMISSION_SUMMARY;
   const campaignCalendarEvents = useMemo(() => {
     const events = [];
     const usedMilestoneDates = new Set();
@@ -3381,6 +3543,83 @@ export default function CampaignDetailPage() {
     );
   };
 
+  const renderSubmissionActionButton = (
+    entry,
+    creatorName,
+    { videoLabel = 'Preview Video', linkLabel = 'Open Link' } = {}
+  ) => {
+    const submissionLink = resolveMediaUrl(entry?.link);
+    if (!submissionLink) return null;
+
+    if (looksLikeVideoUrl(submissionLink)) {
+      return (
+        <button
+          type="button"
+          className="btn btn-secondary btn-small"
+          onClick={() =>
+            openVideoPreview(
+              submissionLink,
+              `${creatorName || 'Creator'} - ${String(entry?.stage || 'Submitted').toLowerCase()} upload`
+            )
+          }
+        >
+          {videoLabel}
+        </button>
+      );
+    }
+
+    return (
+      <a
+        href={submissionLink}
+        className="btn btn-secondary btn-small"
+        target="_blank"
+        rel="noreferrer"
+      >
+        {linkLabel}
+      </a>
+    );
+  };
+
+  const renderBrandCreatorContentCell = (creator) => {
+    const summary = getCreatorSubmissionSummary(creator.id);
+    const latestEntry = summary.latestEntry;
+
+    if (!latestEntry) {
+      return (
+        <div className="creator-submission-summary creator-submission-summary-empty">
+          <span>No upload yet</span>
+        </div>
+      );
+    }
+
+    const dateLabel = formatShortDate(latestEntry.createdAt);
+    const summaryLabel =
+      summary.totalCount > 1
+        ? `${summary.totalCount} uploads`
+        : latestEntry.stage === 'Draft'
+          ? 'Draft uploaded'
+          : latestEntry.kind === 'Video'
+            ? 'Video uploaded'
+            : 'Link submitted';
+
+    return (
+      <div className="creator-submission-summary">
+        <div className="creator-submission-summary-badges">
+          <span className={`creator-submission-badge creator-submission-badge-${latestEntry.stage.toLowerCase()}`}>
+            {latestEntry.stage}
+          </span>
+          <span className="creator-submission-badge creator-submission-badge-kind">
+            {latestEntry.kind}
+          </span>
+        </div>
+        <span className="creator-submission-summary-copy">
+          {summaryLabel}
+          {dateLabel ? ` · ${dateLabel}` : ''}
+        </span>
+      </div>
+    );
+  };
+
   const renderBrandCreatorMeta = (creator) => {
     const creatorTypeKey = inferCreatorType(creator);
     const followers = formatCompactFollowers(creator?.followers ?? creator?.followers_count);
@@ -3391,8 +3630,8 @@ export default function CampaignDetailPage() {
     return niche;
   };
 
-  const getBrandCreatorColumns = ({ includeStatus = true } = {}) =>
-    includeStatus
+  const getBrandCreatorColumns = ({ includeStatus = true, includeContent = false } = {}) => [
+    ...(includeStatus
       ? [
           {
             key: 'status',
@@ -3402,7 +3641,19 @@ export default function CampaignDetailPage() {
             render: (creator) => renderBrandCreatorStatusCell(creator),
           },
         ]
-      : [];
+      : []),
+    ...(includeContent
+      ? [
+          {
+            key: 'submission',
+            label: 'Latest Upload',
+            raw: true,
+            className: 'creator-list-v3-metric-submission',
+            render: (creator) => renderBrandCreatorContentCell(creator),
+          },
+        ]
+      : []),
+  ];
 
   const renderBrandPendingActions = (creator) => (
     <>
@@ -3424,8 +3675,9 @@ export default function CampaignDetailPage() {
   );
 
   const renderBrandApprovedActions = (creator) => {
-    const finalLink = creatorState.outreach?.[creator.id]?.finalVideoLink || '';
-    if (!finalLink) {
+    const summary = getCreatorSubmissionSummary(creator.id);
+    const latestEntry = summary.latestEntry;
+    if (!latestEntry) {
       return (
         <>
           <button
@@ -3438,38 +3690,13 @@ export default function CampaignDetailPage() {
         </>
       );
     }
-    if (isLikelyVideoUrl(finalLink)) {
-      return (
-        <>
-          <button
-            type="button"
-            className="btn btn-secondary btn-small"
-            onClick={() =>
-              openVideoPreview(finalLink, `${creator.name || 'Creator'} - submitted video`)
-            }
-          >
-            Preview Video
-          </button>
-          <button
-            type="button"
-            className="btn btn-secondary btn-small"
-            onClick={() => handleDecision(creator.id, 'Suggested')}
-          >
-            Undo Decision
-          </button>
-        </>
-      );
-    }
+
     return (
       <>
-        <a
-          className="btn btn-secondary btn-small"
-          href={finalLink}
-          target="_blank"
-          rel="noreferrer"
-        >
-          View Link
-        </a>
+        {renderSubmissionActionButton(latestEntry, creator.name || creator.display_name || 'Creator', {
+          videoLabel: latestEntry.stage === 'Draft' ? 'Preview Draft' : 'Preview Upload',
+          linkLabel: latestEntry.stage === 'Draft' ? 'Open Draft' : 'Open Link',
+        })}
         <button
           type="button"
           className="btn btn-secondary btn-small"
@@ -3484,7 +3711,7 @@ export default function CampaignDetailPage() {
   const renderBrandCreatorTypeSections = (
     typedCreators,
     renderActions,
-    { includeStatus = true } = {}
+    { includeStatus = true, includeContent = false } = {}
   ) =>
     brandCreatorTypeSections.map((section) => {
       const creatorsByType = typedCreators?.[section.key] || [];
@@ -3508,7 +3735,7 @@ export default function CampaignDetailPage() {
             type={section.type}
             onOpenProfile={openCreatorProfile}
             renderActions={renderActions}
-            customColumns={getBrandCreatorColumns({ includeStatus })}
+            customColumns={getBrandCreatorColumns({ includeStatus, includeContent })}
             renderMainMeta={renderBrandCreatorMeta}
             showViewButton={false}
             showSocialIcons
@@ -3806,7 +4033,8 @@ export default function CampaignDetailPage() {
                     </div>
                     {renderBrandCreatorTypeSections(
                       filteredCreatorBucketsByType.pending,
-                      renderBrandPendingActions
+                      renderBrandPendingActions,
+                      { includeStatus: false, includeContent: false }
                     )}
                   </div>
                 )}
@@ -3826,7 +4054,8 @@ export default function CampaignDetailPage() {
                     </button>
                     {approvedGroupExpanded && renderBrandCreatorTypeSections(
                       filteredCreatorBucketsByType.approved,
-                      renderBrandApprovedActions
+                      renderBrandApprovedActions,
+                      { includeStatus: true, includeContent: true }
                     )}
                   </div>
                 )}
@@ -3944,6 +4173,8 @@ export default function CampaignDetailPage() {
                               creatorState.outreach?.[creator.id]?.workflowStatus ||
                               creatorStageOptions[0] ||
                               'Sourced';
+                            const submissionSummary = getCreatorSubmissionSummary(creator.id);
+                            const latestSubmission = submissionSummary.latestEntry;
                             const decisionLabel = isApproved
                               ? 'Approved'
                               : isRejected
@@ -4035,6 +4266,55 @@ export default function CampaignDetailPage() {
                                 ) : null}
                                 <td className="campaign-admin-creators-actions">
                                   <div className="campaign-admin-creators-actions-wrap">
+                                    {isApproved ? (
+                                      <div
+                                        className={`campaign-admin-upload-indicator${
+                                          latestSubmission ? '' : ' campaign-admin-upload-indicator-empty'
+                                        }`}
+                                      >
+                                        {latestSubmission ? (
+                                          <>
+                                            <div className="campaign-admin-upload-indicator-badges">
+                                              <span
+                                                className={`creator-submission-badge creator-submission-badge-${latestSubmission.stage.toLowerCase()}`}
+                                              >
+                                                {latestSubmission.stage}
+                                              </span>
+                                              <span className="creator-submission-badge creator-submission-badge-kind">
+                                                {latestSubmission.kind}
+                                              </span>
+                                            </div>
+                                            <span className="campaign-admin-upload-indicator-copy">
+                                              {submissionSummary.totalCount > 1
+                                                ? `${submissionSummary.totalCount} uploads`
+                                                : latestSubmission.stage === 'Draft'
+                                                  ? 'Draft ready'
+                                                  : 'Upload ready'}
+                                            </span>
+                                          </>
+                                        ) : (
+                                          <span className="campaign-admin-upload-indicator-copy">
+                                            No upload yet
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : null}
+                                    {isApproved && latestSubmission
+                                      ? renderSubmissionActionButton(
+                                          latestSubmission,
+                                          creator.name || creator.display_name || 'Creator',
+                                          {
+                                            videoLabel:
+                                              latestSubmission.stage === 'Draft'
+                                                ? 'Preview Draft'
+                                                : 'Preview Upload',
+                                            linkLabel:
+                                              latestSubmission.stage === 'Draft'
+                                                ? 'Open Draft'
+                                                : 'Open Link',
+                                          }
+                                        )
+                                      : null}
                                     {canManageCreators && currentDecision === 'Suggested' ? (
                                       <button
                                         type="button"
@@ -4400,32 +4680,6 @@ export default function CampaignDetailPage() {
               ) : null}
             </label>
           ) : null}
-          <label>
-            <span>Platform</span>
-            <select
-              className="input"
-              value={contentForm.platform}
-              onChange={(e) => setContentForm((prev) => ({ ...prev, platform: e.target.value }))}
-            >
-              <option value="">Select platform</option>
-              <option value="TikTok">TikTok</option>
-              <option value="Instagram">Instagram</option>
-              <option value="Facebook">Facebook</option>
-            </select>
-          </label>
-          <label>
-            <span>Content Type</span>
-            <select
-              className="input"
-              value={contentForm.type}
-              onChange={(e) => setContentForm((prev) => ({ ...prev, type: e.target.value }))}
-            >
-              <option value="">Select type</option>
-              <option value="Reel">Reel</option>
-              <option value="Post">Post</option>
-              <option value="Story">Story</option>
-            </select>
-          </label>
           <label>
             <span>Notes</span>
             <textarea

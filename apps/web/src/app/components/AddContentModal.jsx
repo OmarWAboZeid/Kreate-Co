@@ -15,16 +15,6 @@ export default function AddContentModal({ open, creator, onClose, onSubmit }) {
           />
         </label>
         <label className="modal-field">
-          <span>Content Type</span>
-          <select className="input">
-            <option value="">Select type</option>
-            <option value="Reel">Reel</option>
-            <option value="Post">Post</option>
-            <option value="Story">Story</option>
-            <option value="Video">Video</option>
-          </select>
-        </label>
-        <label className="modal-field">
           <span>Notes</span>
           <textarea className="input textarea" placeholder="Any additional notes..." rows={3} />
         </label>

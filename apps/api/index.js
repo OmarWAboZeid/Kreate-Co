@@ -3,15 +3,24 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { execFile } = require('node:child_process');
 const fsp = require('node:fs/promises');
+const { URL: NodeURL } = require('node:url');
 
 const { Pool } = require('pg');
 const dotenv = require('dotenv');
 const { json, notFound, parseBody, cors } = require('./lib/http');
 const { checkDatabase, checkTigerbeetle } = require('./lib/health');
-const { getUploadURL, normalizeObjectPath, getObjectFile, streamObject } = require('./lib/upload');
+const {
+  requestUploadTarget,
+  getObjectPathFromUploadPath,
+  writeObjectUpload,
+  getObjectFile,
+  streamObject,
+} = require('./lib/upload');
 const {
   hashPassword,
   comparePasswords,
+  generateRandomToken,
+  hashToken,
   setSessionCookie,
   clearSessionCookie,
   createSession,
@@ -26,6 +35,16 @@ const PORT = IS_PRODUCTION ? 5000 : Number(process.env.API_PORT || 4000);
 const STATIC_DIR = path.resolve(__dirname, '../web/dist');
 const DATABASE_URL = process.env.DATABASE_URL;
 const TIGERBEETLE_ADDRESS = process.env.TIGERBEETLE_ADDRESS || 'localhost:3000';
+const EMAIL_VERIFICATION_TTL_HOURS = Number(process.env.EMAIL_VERIFICATION_TTL_HOURS || 24);
+const APP_BASE_URL =
+  process.env.APP_BASE_URL ||
+  process.env.WEB_BASE_URL ||
+  process.env.PUBLIC_APP_URL ||
+  process.env.PUBLIC_WEB_URL ||
+  `http://localhost:${PORT}`;
+const EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS || process.env.RESEND_FROM_EMAIL || '';
+const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Kreate & Co';
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 
 const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL }) : null;
 
@@ -43,6 +62,134 @@ const normalizeCampaignType = (value) => {
   return null;
 };
 
+const buildAppUrl = (pathname, searchParams = {}, baseUrl = APP_BASE_URL) => {
+  const base = new NodeURL(baseUrl || APP_BASE_URL);
+  base.pathname = pathname;
+  base.search = '';
+  Object.entries(searchParams || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    base.searchParams.set(key, String(value));
+  });
+  return base.toString();
+};
+
+const getRequestAppBaseUrl = (req) => {
+  const origin = String(req?.headers?.origin || '').trim();
+  if (origin) return origin;
+  const host = String(req?.headers?.host || '').trim();
+  if (!host) return APP_BASE_URL;
+  const forwardedProto = String(req?.headers?.['x-forwarded-proto'] || '').trim();
+  const protocol = forwardedProto || (IS_PRODUCTION ? 'https' : 'http');
+  return `${protocol}://${host}`;
+};
+
+const sendTransactionalEmail = async ({ to, subject, html, text }) => {
+  if (!to || !subject) {
+    throw new Error('Missing email recipient or subject');
+  }
+
+  if (RESEND_API_KEY && EMAIL_FROM_ADDRESS) {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: EMAIL_FROM_NAME
+          ? `${EMAIL_FROM_NAME} <${EMAIL_FROM_ADDRESS}>`
+          : EMAIL_FROM_ADDRESS,
+        to: [to],
+        subject,
+        html,
+        text,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data?.message || data?.error || 'Failed to send email');
+    }
+    return { ok: true, provider: 'resend' };
+  }
+
+  const fallbackError = new Error('Email delivery is not configured');
+  fallbackError.code = 'EMAIL_NOT_CONFIGURED';
+  throw fallbackError;
+};
+
+const buildVerificationEmailContent = ({ name, verificationUrl }) => {
+  const safeName = String(name || '').trim() || 'there';
+  const subject = 'Verify your email address';
+  const text = [
+    `Hi ${safeName},`,
+    '',
+    'Verify your email address to finish setting up your Kreate & Co account.',
+    '',
+    verificationUrl,
+    '',
+    `This link expires in ${EMAIL_VERIFICATION_TTL_HOURS} hours.`,
+  ].join('\n');
+  const html = `
+    <div style="font-family:Arial,sans-serif;line-height:1.6;color:#221826">
+      <p>Hi ${safeName},</p>
+      <p>Verify your email address to finish setting up your Kreate &amp; Co account.</p>
+      <p>
+        <a href="${verificationUrl}" style="display:inline-block;padding:12px 18px;border-radius:10px;background:#70113f;color:#ffffff;text-decoration:none;font-weight:700">
+          Verify Email
+        </a>
+      </p>
+      <p style="font-size:14px;color:#5c5560">If the button does not work, use this link:</p>
+      <p style="font-size:14px;word-break:break-all"><a href="${verificationUrl}">${verificationUrl}</a></p>
+      <p style="font-size:14px;color:#5c5560">This link expires in ${EMAIL_VERIFICATION_TTL_HOURS} hours.</p>
+    </div>
+  `;
+  return { subject, text, html };
+};
+
+const sendVerificationEmail = async ({ email, name, token, appBaseUrl }) => {
+  const verificationUrl = buildAppUrl('/verify-email', { token }, appBaseUrl);
+  const payload = buildVerificationEmailContent({ name, verificationUrl });
+  try {
+    const result = await sendTransactionalEmail({
+      to: email,
+      subject: payload.subject,
+      html: payload.html,
+      text: payload.text,
+    });
+    return {
+      ok: true,
+      delivery: result.provider || 'email',
+      previewUrl: !IS_PRODUCTION ? verificationUrl : null,
+    };
+  } catch (error) {
+    console.warn('Email verification delivery fallback:', error?.message || error);
+    console.info(`Email verification link for ${email}: ${verificationUrl}`);
+    return {
+      ok: true,
+      delivery: 'console',
+      previewUrl: !IS_PRODUCTION ? verificationUrl : null,
+    };
+  }
+};
+
+const createEmailVerificationForUser = async ({ userId, email, name, appBaseUrl }) => {
+  const token = generateRandomToken(32);
+  const tokenHash = hashToken(token);
+  const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_TTL_HOURS * 60 * 60 * 1000);
+  await pool.query(
+    `
+    UPDATE users
+    SET email_verification_token_hash = $2,
+        email_verification_sent_at = NOW(),
+        email_verification_expires_at = $3,
+        updated_at = NOW()
+    WHERE id = $1
+    `,
+    [userId, tokenHash, expiresAt]
+  );
+  return sendVerificationEmail({ email, name, token, appBaseUrl });
+};
+
 const ensureRuntimeSchema = async () => {
   if (!pool) return;
   await pool.query(
@@ -55,6 +202,37 @@ const ensureRuntimeSchema = async () => {
     `
     ALTER TABLE users
       ADD COLUMN IF NOT EXISTS logo_url text
+    `
+  );
+  await pool.query(
+    `
+    ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS email_verified_at timestamptz,
+      ADD COLUMN IF NOT EXISTS email_verification_token_hash text,
+      ADD COLUMN IF NOT EXISTS email_verification_sent_at timestamptz,
+      ADD COLUMN IF NOT EXISTS email_verification_expires_at timestamptz
+    `
+  );
+  await pool.query(
+    `
+    UPDATE users
+    SET email_verified_at = COALESCE(email_verified_at, created_at, NOW())
+    WHERE email_verified_at IS NULL
+      AND role IN ('admin', 'creator')
+    `
+  );
+  await pool.query(
+    `
+    UPDATE users
+    SET email_verified_at = COALESCE(email_verified_at, created_at, NOW())
+    WHERE email_verified_at IS NULL
+      AND status = 'approved'
+    `
+  );
+  await pool.query(
+    `
+    CREATE INDEX IF NOT EXISTS users_email_verification_token_hash_idx
+      ON users(email_verification_token_hash)
     `
   );
   await pool.query(
@@ -430,6 +608,20 @@ const normalizeCampaignEventType = (value, options = {}) => {
   }
   return null;
 };
+
+const toSafeUser = (user) => ({
+  id: user.id,
+  email: user.email,
+  name: user.name,
+  role: user.role,
+  status: user.status,
+  logo_url: user.logo_url,
+  created_at: user.created_at,
+  email_verified: Boolean(user.email_verified_at),
+  email_verified_at: user.email_verified_at || null,
+  brand_id: user.brand_id || null,
+  brand_name: user.brand_name || null,
+});
 
 const normalizeCampaignEventTime = (value, options = {}) => {
   const { fallback = null } = options;
@@ -1242,6 +1434,14 @@ async function requireApprovedUser(req, res) {
   const user = await getSessionUser(pool, req);
   if (!user) {
     json(res, 401, { ok: false, error: 'Authentication required' });
+    return null;
+  }
+  if (!user.email_verified_at) {
+    json(res, 403, {
+      ok: false,
+      code: 'EMAIL_NOT_VERIFIED',
+      error: 'Verify your email before accessing the workspace',
+    });
     return null;
   }
   if (user.status !== 'approved') {
@@ -4403,17 +4603,35 @@ const server = http.createServer(async (req, res) => {
       if (!name) {
         return json(res, 400, { ok: false, error: 'Missing required field: name' });
       }
-      const uploadURL = await getUploadURL();
-      const objectPath = normalizeObjectPath(uploadURL);
+      const { uploadURL, objectPath, storage } = await requestUploadTarget({ name });
       return json(res, 200, {
         ok: true,
         uploadURL,
         objectPath,
+        storage,
         metadata: { name, size, contentType },
       });
     } catch (error) {
       console.error('Error generating upload URL:', error);
       return json(res, 500, { ok: false, error: 'Failed to generate upload URL' });
+    }
+  }
+
+  if (method === 'PUT' && pathname.startsWith('/api/uploads/local/')) {
+    const user = await requireApprovedUser(req, res);
+    if (!user) return;
+    try {
+      const objectPath = getObjectPathFromUploadPath(pathname);
+      await writeObjectUpload(objectPath, req, {
+        contentType: String(req.headers['content-type'] || '').trim() || 'application/octet-stream',
+        size: req.headers['content-length'],
+      });
+      res.statusCode = 200;
+      res.end('');
+      return;
+    } catch (error) {
+      console.error('Error storing uploaded object:', error);
+      return json(res, 500, { ok: false, error: 'Failed to store uploaded file' });
     }
   }
 
@@ -4775,14 +4993,33 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const body = await parseBody(req);
-      const { email, password, name } = body;
+      const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+      const password = typeof body?.password === 'string' ? body.password : '';
+      const name = typeof body?.name === 'string' ? body.name.trim() : '';
       
       if (!email || !password || !name) {
         return json(res, 400, { ok: false, error: 'Email, password, and name are required' });
       }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return json(res, 400, { ok: false, error: 'Email format is invalid' });
+      }
+      const strengthError = validatePasswordStrength(password);
+      if (strengthError) {
+        return json(res, 400, { ok: false, error: strengthError });
+      }
       
-      const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email.toLowerCase()]);
+      const existingUser = await pool.query(
+        'SELECT id, email_verified_at FROM users WHERE email = $1 LIMIT 1',
+        [email]
+      );
       if (existingUser.rows.length > 0) {
+        if (!existingUser.rows[0].email_verified_at) {
+          return json(res, 409, {
+            ok: false,
+            code: 'EMAIL_ALREADY_REGISTERED_UNVERIFIED',
+            error: 'An account with this email already exists. Verify your email or request a new link.',
+          });
+        }
         return json(res, 409, { ok: false, error: 'Email already registered' });
       }
       
@@ -4790,27 +5027,172 @@ const server = http.createServer(async (req, res) => {
       const userRole = 'brand';
       
       const result = await pool.query(
-        `INSERT INTO users (email, password_hash, name, role, status) 
-         VALUES ($1, $2, $3, $4, 'pending') 
-         RETURNING id, email, name, role, status, logo_url, created_at`,
-        [email.toLowerCase(), passwordHash, name, userRole]
+        `INSERT INTO users (email, password_hash, name, role, status, email_verified_at) 
+         VALUES ($1, $2, $3, $4, 'pending', NULL) 
+         RETURNING id, email, name, role, status, logo_url, created_at, email_verified_at`,
+        [email, passwordHash, name, userRole]
       );
       
       const user = result.rows[0];
-      const sessionId = await createSession(pool, user.id);
-      setSessionCookie(res, sessionId);
-      
-      return json(res, 201, { ok: true, user });
+      const verificationResult = await createEmailVerificationForUser({
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        appBaseUrl: getRequestAppBaseUrl(req),
+      });
+
+      return json(res, 201, {
+        ok: true,
+        requiresEmailVerification: true,
+        email: user.email,
+        verificationDelivery: verificationResult.delivery,
+        verificationPreviewUrl: verificationResult.previewUrl,
+        user: toSafeUser(user),
+      });
     } catch (error) {
       console.error('Register error:', error);
       return json(res, 500, { ok: false, error: 'Registration failed' });
     }
   }
 
+  if (
+    method === 'GET' &&
+    (url === '/api/auth/verify-email' || url.startsWith('/api/auth/verify-email?'))
+  ) {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    try {
+      const urlObj = new URL(url, `http://localhost:${PORT}`);
+      const token = String(urlObj.searchParams.get('token') || '').trim();
+      if (!token) {
+        return json(res, 400, { ok: false, error: 'Verification token is required' });
+      }
+
+      const tokenHash = hashToken(token);
+      const result = await pool.query(
+        `
+        SELECT id, email, name, role, status, logo_url, created_at, email_verified_at, email_verification_expires_at
+        FROM users
+        WHERE email_verification_token_hash = $1
+        LIMIT 1
+        `,
+        [tokenHash]
+      );
+
+      if (result.rowCount === 0) {
+        return json(res, 400, {
+          ok: false,
+          code: 'INVALID_VERIFICATION_TOKEN',
+          error: 'This verification link is invalid or has already been used.',
+        });
+      }
+
+      const user = result.rows[0];
+      if (user.email_verified_at) {
+        return json(res, 200, {
+          ok: true,
+          alreadyVerified: true,
+          user: toSafeUser(user),
+        });
+      }
+
+      const expiresAt = user.email_verification_expires_at
+        ? new Date(user.email_verification_expires_at)
+        : null;
+      if (expiresAt && Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() < Date.now()) {
+        return json(res, 400, {
+          ok: false,
+          code: 'VERIFICATION_TOKEN_EXPIRED',
+          error: 'This verification link has expired. Request a new email and try again.',
+        });
+      }
+
+      const updateResult = await pool.query(
+        `
+        UPDATE users
+        SET email_verified_at = NOW(),
+            email_verification_token_hash = NULL,
+            email_verification_sent_at = NULL,
+            email_verification_expires_at = NULL,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, email, name, role, status, logo_url, created_at, email_verified_at
+        `,
+        [user.id]
+      );
+
+      return json(res, 200, {
+        ok: true,
+        verified: true,
+        user: toSafeUser(updateResult.rows[0]),
+      });
+    } catch (error) {
+      console.error('Verify email error:', error);
+      return json(res, 500, { ok: false, error: 'Failed to verify email' });
+    }
+  }
+
+  if (method === 'POST' && url === '/api/auth/resend-verification') {
+    if (!pool) {
+      return json(res, 503, { ok: false, error: 'Database not configured' });
+    }
+    try {
+      const body = await parseBody(req);
+      const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+      if (!email) {
+        return json(res, 400, { ok: false, error: 'Email is required' });
+      }
+
+      const result = await pool.query(
+        `
+        SELECT id, email, name, role, status, logo_url, created_at, email_verified_at
+        FROM users
+        WHERE email = $1
+        LIMIT 1
+        `,
+        [email]
+      );
+
+      if (result.rowCount === 0) {
+        return json(res, 200, {
+          ok: true,
+          message: 'If an account exists for this email, a verification link has been sent.',
+        });
+      }
+
+      const user = result.rows[0];
+      if (user.email_verified_at) {
+        return json(res, 200, {
+          ok: true,
+          alreadyVerified: true,
+          message: 'This email is already verified. You can log in now.',
+        });
+      }
+
+      const verificationResult = await createEmailVerificationForUser({
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        appBaseUrl: getRequestAppBaseUrl(req),
+      });
+
+      return json(res, 200, {
+        ok: true,
+        message: 'Verification email sent.',
+        verificationDelivery: verificationResult.delivery,
+        verificationPreviewUrl: verificationResult.previewUrl,
+      });
+    } catch (error) {
+      console.error('Resend verification error:', error);
+      return json(res, 500, { ok: false, error: 'Failed to resend verification email' });
+    }
+  }
+
   if (method === 'GET' && url === '/api/me') {
     const user = await requireApprovedUser(req, res);
     if (!user) return;
-    return json(res, 200, { ok: true, data: user });
+    return json(res, 200, { ok: true, data: toSafeUser(user) });
   }
 
   if (method === 'PUT' && url === '/api/me') {
@@ -4858,7 +5240,7 @@ const server = http.createServer(async (req, res) => {
       );
 
       const refreshedUser = await getSessionUser(pool, req);
-      return json(res, 200, { ok: true, data: refreshedUser });
+      return json(res, 200, { ok: true, data: toSafeUser(refreshedUser) });
     } catch (error) {
       console.error('Update current user error:', error);
       return json(res, 500, { ok: false, error: 'Failed to update profile' });
@@ -4932,15 +5314,29 @@ const server = http.createServer(async (req, res) => {
     }
     try {
       const body = await parseBody(req);
-      const { email, password } = body;
+      const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : '';
+      const password = typeof body?.password === 'string' ? body.password : '';
       
       if (!email || !password) {
         return json(res, 400, { ok: false, error: 'Email and password are required' });
       }
       
       const result = await pool.query(
-        'SELECT id, email, password_hash, name, role, status, logo_url, created_at FROM users WHERE email = $1',
-        [email.toLowerCase()]
+        `
+        SELECT
+          id,
+          email,
+          password_hash,
+          name,
+          role,
+          status,
+          logo_url,
+          created_at,
+          email_verified_at
+        FROM users
+        WHERE email = $1
+        `,
+        [email]
       );
       
       if (result.rows.length === 0) {
@@ -4953,20 +5349,18 @@ const server = http.createServer(async (req, res) => {
       if (!validPassword) {
         return json(res, 401, { ok: false, error: 'Invalid email or password' });
       }
+      if (!user.email_verified_at) {
+        return json(res, 403, {
+          ok: false,
+          code: 'EMAIL_NOT_VERIFIED',
+          error: 'Verify your email before logging in.',
+        });
+      }
       
       const sessionId = await createSession(pool, user.id);
       setSessionCookie(res, sessionId);
       
-      const safeUser = {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        status: user.status,
-        logo_url: user.logo_url,
-        created_at: user.created_at,
-      };
-      return json(res, 200, { ok: true, user: safeUser });
+      return json(res, 200, { ok: true, user: toSafeUser(user) });
     } catch (error) {
       console.error('Login error:', error);
       return json(res, 500, { ok: false, error: 'Login failed' });
@@ -4996,7 +5390,7 @@ const server = http.createServer(async (req, res) => {
       if (!user) {
         return json(res, 401, { ok: false, error: 'Not authenticated' });
       }
-      return json(res, 200, { ok: true, user });
+      return json(res, 200, { ok: true, user: toSafeUser(user) });
     } catch (error) {
       console.error('Get user error:', error);
       return json(res, 500, { ok: false, error: 'Failed to get user' });
@@ -5038,14 +5432,14 @@ const server = http.createServer(async (req, res) => {
       const passwordHash = await hashPassword(password);
       const result = await pool.query(
         `
-        INSERT INTO users (email, password_hash, name, role, status)
-        VALUES ($1, $2, $3, 'admin', 'approved')
-        RETURNING id, email, name, role, status, logo_url, created_at
+        INSERT INTO users (email, password_hash, name, role, status, email_verified_at)
+        VALUES ($1, $2, $3, 'admin', 'approved', NOW())
+        RETURNING id, email, name, role, status, logo_url, created_at, email_verified_at
         `,
         [email, passwordHash, name]
       );
 
-      return json(res, 201, { ok: true, user: result.rows[0] });
+      return json(res, 201, { ok: true, user: toSafeUser(result.rows[0]) });
     } catch (error) {
       console.error('Create admin user error:', error);
       return json(res, 500, { ok: false, error: 'Failed to create admin user' });

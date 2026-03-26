@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth.jsx';
 import { useAuth } from './hooks/useAuth.jsx';
 import AuthPage from './pages/AuthPage.jsx';
+import EmailVerificationPage from './pages/EmailVerificationPage.jsx';
 import PendingReviewPage from './pages/PendingReviewPage.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import AppShell from './app/pages/AppShell.jsx';
@@ -45,6 +46,10 @@ function AppEntryRedirect() {
     return <Navigate to="/" replace />;
   }
 
+  if (user.email_verified === false) {
+    return <Navigate to="/verify-email" replace />;
+  }
+
   if (user.status === 'pending') {
     return <Navigate to="/pending-review" replace />;
   }
@@ -64,6 +69,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<AuthPage />} />
           <Route path="/signup" element={<AuthPage initialMode="signup" />} />
+          <Route path="/verify-email" element={<EmailVerificationPage />} />
           <Route path="/pending-review" element={<PendingReviewPage />} />
           <Route path="/tiktok" element={<TikTokAnalyzePage />} />
           <Route path="/tiktok/results" element={<TikTokResultsPage />} />

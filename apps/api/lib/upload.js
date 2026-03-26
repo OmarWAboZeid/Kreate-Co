@@ -1,7 +1,13 @@
 const { Storage } = require('@google-cloud/storage');
 const crypto = require('crypto');
+const fs = require('node:fs');
+const fsp = require('node:fs/promises');
+const path = require('node:path');
 
 const REPLIT_SIDECAR_ENDPOINT = 'http://127.0.0.1:1106';
+const LOCAL_OBJECT_DIR = process.env.LOCAL_OBJECT_DIR
+  ? path.resolve(process.env.LOCAL_OBJECT_DIR)
+  : path.resolve(process.cwd(), 'data', 'objects');
 
 const storage = new Storage({
   credentials: {
@@ -27,6 +33,73 @@ function getPrivateObjectDir() {
     throw new Error('PRIVATE_OBJECT_DIR not set');
   }
   return dir;
+}
+
+function hasConfiguredObjectStorage() {
+  return Boolean(String(process.env.PRIVATE_OBJECT_DIR || '').trim());
+}
+
+function getLocalObjectPath(name = '') {
+  const extension = path.extname(String(name || '').trim()).toLowerCase();
+  const safeExtension = /^[.a-z0-9_-]{0,16}$/.test(extension) ? extension : '';
+  return `/objects/uploads/${crypto.randomUUID()}${safeExtension}`;
+}
+
+function getLocalUploadURL(objectPath) {
+  if (!objectPath.startsWith('/objects/')) {
+    throw new Error('Invalid object path');
+  }
+  return `/api/uploads/local/${objectPath.slice('/objects/'.length)}`;
+}
+
+function resolveLocalObjectFilePath(objectPath) {
+  if (!objectPath.startsWith('/objects/')) {
+    throw new Error('Invalid object path');
+  }
+
+  const relativeObjectPath = objectPath.slice('/objects/'.length);
+  const normalizedRelativePath = path.posix.normalize(relativeObjectPath).replace(/^\/+/, '');
+  if (!normalizedRelativePath || normalizedRelativePath.startsWith('..')) {
+    throw new Error('Invalid object path');
+  }
+
+  const filePath = path.resolve(LOCAL_OBJECT_DIR, ...normalizedRelativePath.split('/'));
+  const rootPath = path.resolve(LOCAL_OBJECT_DIR);
+  const rootPrefix = rootPath.endsWith(path.sep) ? rootPath : `${rootPath}${path.sep}`;
+  if (filePath !== rootPath && !filePath.startsWith(rootPrefix)) {
+    throw new Error('Invalid object path');
+  }
+  return filePath;
+}
+
+function inferContentType(objectPath) {
+  const extension = path.extname(String(objectPath || '').toLowerCase());
+  switch (extension) {
+    case '.mp4':
+      return 'video/mp4';
+    case '.mov':
+      return 'video/quicktime';
+    case '.m4v':
+      return 'video/x-m4v';
+    case '.webm':
+      return 'video/webm';
+    case '.ogg':
+    case '.ogv':
+      return 'video/ogg';
+    case '.png':
+      return 'image/png';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.gif':
+      return 'image/gif';
+    case '.svg':
+      return 'image/svg+xml';
+    case '.pdf':
+      return 'application/pdf';
+    default:
+      return 'application/octet-stream';
+  }
 }
 
 function parseObjectPath(path) {
@@ -74,6 +147,33 @@ async function getUploadURL() {
   });
 }
 
+async function requestUploadTarget(options = {}) {
+  const { name = '' } = options;
+
+  if (hasConfiguredObjectStorage()) {
+    try {
+      const uploadURL = await getUploadURL();
+      return {
+        uploadURL,
+        objectPath: normalizeObjectPath(uploadURL),
+        storage: 'object-storage',
+      };
+    } catch (error) {
+      if (process.env.NODE_ENV === 'production') {
+        throw error;
+      }
+      console.warn('Object storage signing unavailable, falling back to local uploads:', error);
+    }
+  }
+
+  const objectPath = getLocalObjectPath(name);
+  return {
+    uploadURL: getLocalUploadURL(objectPath),
+    objectPath,
+    storage: 'local',
+  };
+}
+
 function normalizeObjectPath(rawPath) {
   if (!rawPath.startsWith('https://storage.googleapis.com/')) {
     return rawPath;
@@ -91,10 +191,86 @@ function normalizeObjectPath(rawPath) {
   return `/objects/${entityId}`;
 }
 
+function getObjectPathFromUploadPath(uploadPath) {
+  const prefix = '/api/uploads/local/';
+  if (!uploadPath.startsWith(prefix)) {
+    throw new Error('Invalid local upload path');
+  }
+  const relativePath = uploadPath.slice(prefix.length).replace(/^\/+/, '');
+  if (!relativePath) {
+    throw new Error('Invalid local upload path');
+  }
+  return `/objects/${relativePath}`;
+}
+
+async function writeObjectUpload(objectPath, req, metadata = {}) {
+  const filePath = resolveLocalObjectFilePath(objectPath);
+  await fsp.mkdir(path.dirname(filePath), { recursive: true });
+
+  await new Promise((resolve, reject) => {
+    const writeStream = fs.createWriteStream(filePath);
+    let settled = false;
+    const finish = (handler) => (value) => {
+      if (settled) return;
+      settled = true;
+      handler(value);
+    };
+
+    req.on('aborted', finish(() => reject(new Error('Upload aborted'))));
+    req.on('error', finish(reject));
+    writeStream.on('error', finish(reject));
+    writeStream.on('finish', finish(resolve));
+    req.pipe(writeStream);
+  }).catch(async (error) => {
+    await fsp.unlink(filePath).catch(() => {});
+    throw error;
+  });
+
+  const metaPath = `${filePath}.meta.json`;
+  const persistedMetadata = {
+    contentType: metadata.contentType || inferContentType(objectPath),
+    size:
+      metadata.size == null || metadata.size === ''
+        ? null
+        : Number.isFinite(Number(metadata.size))
+          ? Number(metadata.size)
+          : null,
+    originalName: metadata.name || null,
+    uploadedAt: new Date().toISOString(),
+  };
+  await fsp.writeFile(metaPath, JSON.stringify(persistedMetadata), 'utf8');
+  return { filePath, metadata: persistedMetadata };
+}
+
 async function getObjectFile(objectPath) {
   if (!objectPath.startsWith('/objects/')) {
     return null;
   }
+
+  if (!hasConfiguredObjectStorage()) {
+    const filePath = resolveLocalObjectFilePath(objectPath);
+    try {
+      await fsp.access(filePath);
+    } catch (error) {
+      return null;
+    }
+
+    let metadata = {};
+    try {
+      const metaContents = await fsp.readFile(`${filePath}.meta.json`, 'utf8');
+      metadata = JSON.parse(metaContents);
+    } catch (error) {
+      metadata = {};
+    }
+
+    return {
+      kind: 'local',
+      filePath,
+      metadata,
+      objectPath,
+    };
+  }
+
   const parts = objectPath.slice(1).split('/');
   if (parts.length < 2) {
     return null;
@@ -112,11 +288,41 @@ async function getObjectFile(objectPath) {
   if (!exists) {
     return null;
   }
-  return file;
+  return {
+    kind: 'gcs',
+    file,
+  };
 }
 
 async function streamObject(file, res) {
-  const [metadata] = await file.getMetadata();
+  if (file?.kind === 'local') {
+    const stats = await fsp.stat(file.filePath);
+    const contentType = file.metadata?.contentType || inferContentType(file.objectPath);
+    const isVideo = String(contentType).toLowerCase().startsWith('video/');
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', isVideo ? 'private, no-store, max-age=0' : 'public, max-age=31536000');
+    if (isVideo) {
+      res.setHeader('Accept-Ranges', 'none');
+    }
+
+    const stream = fs.createReadStream(file.filePath);
+    stream.on('error', (err) => {
+      console.error('Stream error:', err);
+      if (!res.headersSent) {
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: 'Error streaming file' }));
+      }
+    });
+    stream.pipe(res);
+    return;
+  }
+
+  const sourceFile = file?.kind === 'gcs' ? file.file : file;
+  const [metadata] = await sourceFile.getMetadata();
   const contentType = metadata.contentType || 'application/octet-stream';
   const isVideo = String(contentType).toLowerCase().startsWith('video/');
 
@@ -128,7 +334,7 @@ async function streamObject(file, res) {
   if (isVideo) {
     res.setHeader('Accept-Ranges', 'none');
   }
-  const stream = file.createReadStream();
+  const stream = sourceFile.createReadStream();
   stream.on('error', (err) => {
     console.error('Stream error:', err);
     if (!res.headersSent) {
@@ -141,7 +347,10 @@ async function streamObject(file, res) {
 
 module.exports = {
   getUploadURL,
+  requestUploadTarget,
   normalizeObjectPath,
+  getObjectPathFromUploadPath,
+  writeObjectUpload,
   getObjectFile,
   streamObject,
 };

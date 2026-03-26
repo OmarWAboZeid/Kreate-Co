@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AppStateProvider } from '../state.jsx';
 import ContextChatWidget from '../components/ContextChatWidget.jsx';
-import NotificationCenter from '../components/NotificationCenter.jsx';
 import { roleConfig } from '../config/roles.js';
 import { useAuth } from '../../hooks/useAuth.jsx';
 
@@ -239,9 +238,6 @@ function ShellInner() {
               </span>
             )}
             <h1>{topbarTitle}</h1>
-          </div>
-          <div className="app-topbar-actions">
-            <NotificationCenter role={role} />
           </div>
         </header>
         <main className="app-content">

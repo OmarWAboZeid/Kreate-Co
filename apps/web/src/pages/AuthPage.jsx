@@ -4,15 +4,22 @@ import { useAuth } from '../hooks/useAuth.jsx';
 
 export default function AuthPage({ initialMode = 'login' }) {
   const navigate = useNavigate();
-  const { user, login, register, logout, isLoading } = useAuth();
+  const { user, login, register, resendVerification, logout, isLoading } = useAuth();
   const [mode, setMode] = useState(initialMode);
   const [form, setForm] = useState({ name: '', email: '', password: '', confirm: '' });
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [verificationPreviewUrl, setVerificationPreviewUrl] = useState('');
+  const [verificationEmail, setVerificationEmail] = useState('');
+  const [showVerificationActions, setShowVerificationActions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     if (!isLoading && user) {
-      if (user.status === 'pending') {
+      if (user.email_verified === false) {
+        navigate('/verify-email');
+      } else if (user.status === 'pending') {
         navigate('/pending-review');
       } else if (user.status === 'approved') {
         const targetRole = user.role === 'admin' ? 'admin' : 'brand';
@@ -27,11 +34,16 @@ export default function AuthPage({ initialMode = 'login' }) {
   const updateForm = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setError('');
+    setNotice('');
+    setVerificationPreviewUrl('');
+    setShowVerificationActions(false);
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
+    setNotice('');
+    setVerificationPreviewUrl('');
     setSubmitting(true);
 
     try {
@@ -41,19 +53,68 @@ export default function AuthPage({ initialMode = 'login' }) {
           setSubmitting(false);
           return;
         }
-        if (form.password.length < 6) {
-          setError('Password must be at least 6 characters');
+        if (form.password.length < 8) {
+          setError('Password must be at least 8 characters');
           setSubmitting(false);
           return;
         }
-        await register(form.email, form.password, form.name);
+        const data = await register(form.email, form.password, form.name);
+        setMode('login');
+        setVerificationEmail(form.email.trim());
+        setShowVerificationActions(true);
+        setForm((prev) => ({ ...prev, password: '', confirm: '' }));
+        setNotice(
+          data?.verificationDelivery === 'console'
+            ? 'Account created. Use the verification link below to continue.'
+            : 'Account created. Check your email for a verification link before logging in.'
+        );
+        setVerificationPreviewUrl(String(data?.verificationPreviewUrl || '').trim());
       } else {
         await login(form.email, form.password);
       }
     } catch (err) {
-      setError(err.message || 'An error occurred');
+      if (
+        err?.code === 'EMAIL_NOT_VERIFIED' ||
+        err?.code === 'EMAIL_ALREADY_REGISTERED_UNVERIFIED'
+      ) {
+        setVerificationEmail(form.email.trim());
+        setShowVerificationActions(true);
+        setNotice(
+          err?.code === 'EMAIL_ALREADY_REGISTERED_UNVERIFIED'
+            ? 'This account already exists but still needs email verification.'
+            : 'Your account exists, but your email address is not verified yet.'
+        );
+        setError('');
+      } else {
+        setError(err.message || 'An error occurred');
+      }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    const email = String(verificationEmail || form.email || '').trim();
+    if (!email) {
+      setError('Enter your email address first.');
+      return;
+    }
+
+    setResending(true);
+    setError('');
+    try {
+      const data = await resendVerification(email);
+      setNotice(
+        data?.message ||
+          (data?.verificationDelivery === 'console'
+            ? 'A new verification link is ready below.'
+            : 'A new verification email has been sent.')
+      );
+      setVerificationPreviewUrl(String(data?.verificationPreviewUrl || '').trim());
+    } catch (err) {
+      setError(err.message || 'Failed to resend verification email.');
+    } finally {
+      setResending(false);
     }
   };
 
@@ -83,14 +144,26 @@ export default function AuthPage({ initialMode = 'login' }) {
           <button
             type="button"
             className={mode === 'login' ? 'active' : undefined}
-            onClick={() => setMode('login')}
+            onClick={() => {
+              setMode('login');
+              setError('');
+              setNotice('');
+              setVerificationPreviewUrl('');
+              setShowVerificationActions(false);
+            }}
           >
             Log in
           </button>
           <button
             type="button"
             className={mode === 'signup' ? 'active' : undefined}
-            onClick={() => setMode('signup')}
+            onClick={() => {
+              setMode('signup');
+              setError('');
+              setNotice('');
+              setVerificationPreviewUrl('');
+              setShowVerificationActions(false);
+            }}
           >
             Sign up
           </button>
@@ -154,6 +227,24 @@ export default function AuthPage({ initialMode = 'login' }) {
           )}
 
           {error && <p className="auth-error">{error}</p>}
+          {notice && <p className="auth-notice">{notice}</p>}
+          {verificationPreviewUrl ? (
+            <p className="auth-preview-link">
+              Verification link: <a href={verificationPreviewUrl}>{verificationPreviewUrl}</a>
+            </p>
+          ) : null}
+          {showVerificationActions && (
+            <div className="auth-verification-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleResendVerification}
+                disabled={resending}
+              >
+                {resending ? 'Sending...' : 'Resend verification email'}
+              </button>
+            </div>
+          )}
 
           <button type="submit" className="btn btn-primary" disabled={submitting}>
             {submitting ? 'Please wait...' : mode === 'login' ? 'Log in' : 'Create account'}

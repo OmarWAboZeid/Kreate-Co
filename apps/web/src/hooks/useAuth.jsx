@@ -40,7 +40,10 @@ export function AuthProvider({ children }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Login failed');
+        const authError = new Error(data.error || 'Login failed');
+        authError.code = data.code || 'LOGIN_FAILED';
+        authError.data = data;
+        throw authError;
       }
       setUser(data.user);
       return data.user;
@@ -61,10 +64,55 @@ export function AuthProvider({ children }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || 'Registration failed');
+        const authError = new Error(data.error || 'Registration failed');
+        authError.code = data.code || 'REGISTRATION_FAILED';
+        authError.data = data;
+        throw authError;
       }
-      setUser(data.user);
-      return data.user;
+      return data;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const resendVerification = async (email) => {
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/auth/resend-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const authError = new Error(data.error || 'Failed to resend verification email');
+        authError.code = data.code || 'RESEND_VERIFICATION_FAILED';
+        authError.data = data;
+        throw authError;
+      }
+      return data;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  const verifyEmail = async (token) => {
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/auth/verify-email?token=${encodeURIComponent(token)}`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const authError = new Error(data.error || 'Failed to verify email');
+        authError.code = data.code || 'VERIFY_EMAIL_FAILED';
+        authError.data = data;
+        throw authError;
+      }
+      return data;
     } catch (err) {
       setError(err.message);
       throw err;
@@ -88,6 +136,8 @@ export function AuthProvider({ children }) {
     error,
     login,
     register,
+    resendVerification,
+    verifyEmail,
     logout,
     refetch: fetchUser,
   };

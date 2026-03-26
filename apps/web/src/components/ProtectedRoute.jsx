@@ -17,6 +17,10 @@ export default function ProtectedRoute({ children }) {
     return <Navigate to="/" replace />;
   }
 
+  if (user.email_verified === false) {
+    return <Navigate to="/verify-email" replace />;
+  }
+
   if (user.status === 'pending') {
     return <Navigate to="/pending-review" replace />;
   }

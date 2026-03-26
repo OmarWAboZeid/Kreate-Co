@@ -21,6 +21,11 @@ export default function Modal({ open, onClose, title, description, children, siz
   return createPortal(
     <div className="modal-overlay active" onClick={handleOverlayClick}>
       <div className={`modal-content modal-${size}`}>
+        {onClose && (
+          <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
+            ×
+          </button>
+        )}
         {title && <h3>{title}</h3>}
         {description && <p>{description}</p>}
         {children}

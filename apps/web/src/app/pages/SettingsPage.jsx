@@ -11,6 +11,18 @@ const formatPackageFilterLabel = (value) =>
     .replace(/[_-]+/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
+const getInitials = (value) => {
+  const parts = String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return '?';
+  return parts
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+};
+
 export default function SettingsPage() {
   const { role } = useParams();
   const { user, refetch: refetchAuthUser } = useAuth();
@@ -543,6 +555,24 @@ export default function SettingsPage() {
     }
   };
 
+  const preferencesDisplayName =
+    String(preferencesForm.name || user?.name || '').trim() || 'Your account';
+  const preferencesDisplayEmail =
+    String(preferencesForm.email || user?.email || '').trim() || 'No email on file';
+  const preferencesRoleLabel =
+    role === 'admin'
+      ? 'Admin workspace'
+      : role === 'brand'
+        ? 'Brand workspace'
+        : `${formatPackageFilterLabel(role)} workspace`;
+  const preferencesBrandingLabel =
+    role === 'admin' ? (preferencesLogoPreview ? 'Configured' : 'Not set') : 'Not applicable';
+  const preferencesHeaderCopy =
+    role === 'admin'
+      ? 'Manage your personal details, workspace branding, and password from one clean settings form.'
+      : 'Manage your personal details and password from one clean settings form.';
+  const preferencesInitials = getInitials(preferencesDisplayName || preferencesDisplayEmail);
+
   return (
     <div className="page-stack">
       <div className="page-header">
@@ -761,163 +791,215 @@ export default function SettingsPage() {
 
       {activeTab === 'preferences' && (
         <div className="card settings-preferences-card">
-          <h3>Profile Preferences</h3>
-          <p className="text-muted">
-            {role === 'admin'
-              ? 'Update your current account profile and workspace logo.'
-              : 'Update your current account profile.'}
-          </p>
+          <div className="settings-preferences-shell">
+            <div className="settings-preferences-header">
+              <div className="settings-preferences-header-copy">
+                <h3>Preferences</h3>
+                <p>{preferencesHeaderCopy}</p>
+                <div className="settings-preferences-header-meta">
+                  <span className="settings-preferences-chip">{preferencesRoleLabel}</span>
+                  {role === 'admin' ? (
+                    <span className="settings-preferences-chip">
+                      Workspace Logo: {preferencesBrandingLabel}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
 
-          {preferencesLoading ? (
-            <p className="text-muted">Loading profile...</p>
-          ) : (
-            <form className="package-form-grid" onSubmit={handlePreferencesSubmit}>
-              <label>
-                <span>Full Name *</span>
-                <input
-                  className="input"
-                  value={preferencesForm.name}
-                  onChange={(event) => updatePreferencesForm('name', event.target.value)}
-                  placeholder="Your full name"
-                  required
-                />
-              </label>
-              <label>
-                <span>Email *</span>
-                <input
-                  className="input"
-                  type="email"
-                  value={preferencesForm.email}
-                  onChange={(event) => updatePreferencesForm('email', event.target.value)}
-                  placeholder="you@kreate.co"
-                  required
-                />
-              </label>
+              <div className="settings-preferences-header-badge">
+                <div className="settings-preferences-avatar" aria-hidden="true">
+                  {preferencesInitials}
+                </div>
+                <div className="settings-preferences-header-badge-copy">
+                  <strong>{preferencesDisplayName}</strong>
+                  <span>{preferencesDisplayEmail}</span>
+                </div>
+              </div>
+            </div>
 
-              {role === 'admin' && (
-                <div className="full-width settings-preferences-logo-field">
-                  <span>Workspace Logo</span>
-                  <div className="logo-upload-container">
-                    {preferencesLogoPreview ? (
-                      <div className="logo-preview">
-                        <img src={preferencesLogoPreview} alt="Logo preview" />
-                        <button
-                          type="button"
-                          className="logo-remove"
-                          onClick={handleRemovePreferencesLogo}
-                          aria-label="Remove logo"
+            <div className="settings-preferences-main">
+              <section className="settings-preferences-panel">
+                <div className="settings-preferences-panel-head">
+                  <div>
+                    <span className="settings-preferences-panel-label">Profile</span>
+                    <h4>Account details</h4>
+                    <p>
+                      {role === 'admin'
+                        ? 'Update your name, login email, and workspace logo.'
+                        : 'Update the personal details tied to your current account.'}
+                    </p>
+                  </div>
+                </div>
+
+                {preferencesLoading ? (
+                  <div className="settings-preferences-loading">
+                    <p className="text-muted">Loading profile...</p>
+                  </div>
+                ) : (
+                  <form className="settings-preferences-form" onSubmit={handlePreferencesSubmit}>
+                    <div className="settings-preferences-grid">
+                      <label className="settings-preferences-field">
+                        <span>Full Name *</span>
+                        <input
+                          className="input"
+                          value={preferencesForm.name}
+                          onChange={(event) => updatePreferencesForm('name', event.target.value)}
+                          placeholder="Your full name"
+                          required
+                        />
+                        <small>Shown in workspace activity and account menus.</small>
+                      </label>
+
+                      <label className="settings-preferences-field">
+                        <span>Email *</span>
+                        <input
+                          className="input"
+                          type="email"
+                          value={preferencesForm.email}
+                          onChange={(event) => updatePreferencesForm('email', event.target.value)}
+                          placeholder="you@kreate.co"
+                          required
+                        />
+                        <small>Used for sign-in and account notifications.</small>
+                      </label>
+
+                      {role === 'admin' && (
+                        <div className="settings-preferences-branding settings-preferences-span-full">
+                          <div className="settings-preferences-branding-visual">
+                            {preferencesLogoPreview ? (
+                              <div className="logo-preview settings-preferences-logo-preview">
+                                <img src={preferencesLogoPreview} alt="Logo preview" />
+                              </div>
+                            ) : (
+                              <div className="settings-preferences-logo-placeholder" aria-hidden="true">
+                                {preferencesInitials}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="settings-preferences-branding-copy">
+                            <div className="settings-preferences-branding-head">
+                              <span>Workspace Logo</span>
+                              <p>Displayed in the admin workspace header and branded account surfaces.</p>
+                            </div>
+
+                            <div className="logo-upload-container settings-preferences-branding-actions">
+                              <label className="logo-upload-btn">
+                                {preferencesLogoPreview ? 'Change Logo' : 'Upload Logo'}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handlePreferencesLogoSelect}
+                                  style={{ display: 'none' }}
+                                />
+                              </label>
+                              {preferencesLogoPreview ? (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-small"
+                                  onClick={handleRemovePreferencesLogo}
+                                >
+                                  Remove Logo
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {(preferencesError || preferencesSuccess) && (
+                        <p
+                          className={`settings-preferences-message settings-preferences-span-full ${
+                            preferencesError
+                              ? 'settings-preferences-message-error'
+                              : 'settings-preferences-message-success'
+                          }`}
                         >
-                          ×
+                          {preferencesError || preferencesSuccess}
+                        </p>
+                      )}
+
+                      <div className="modal-actions settings-preferences-actions settings-preferences-span-full">
+                        <button type="submit" className="btn btn-primary" disabled={preferencesSaving}>
+                          {preferencesSaving ? 'Saving...' : 'Save Profile'}
                         </button>
                       </div>
-                    ) : null}
-                    {!preferencesLogoPreview && (
-                      <label className="logo-upload-btn">
-                        Upload Logo
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handlePreferencesLogoSelect}
-                          style={{ display: 'none' }}
-                        />
-                      </label>
-                    )}
-                    {preferencesLogoPreview && (
-                      <label className="logo-upload-btn">
-                        Change Logo
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handlePreferencesLogoSelect}
-                          style={{ display: 'none' }}
-                        />
-                      </label>
-                    )}
+                    </div>
+                  </form>
+                )}
+              </section>
+
+              <section className="settings-preferences-panel settings-preferences-panel-security">
+                <div className="settings-preferences-panel-head">
+                  <div>
+                    <span className="settings-preferences-panel-label">Security</span>
+                    <h4>Password</h4>
+                    <p>Choose a strong password with at least 8 characters.</p>
                   </div>
-                  <p className="text-muted">Used in the admin workspace header.</p>
                 </div>
-              )}
 
-              {(preferencesError || preferencesSuccess) && (
-                <p className={`full-width ${preferencesError ? 'error-text' : 'text-muted'}`}>
-                  {preferencesError || preferencesSuccess}
-                </p>
-              )}
+                <form className="settings-preferences-form settings-password-form" onSubmit={handlePasswordSubmit}>
+                  <div className="settings-preferences-grid">
+                    <label className="settings-preferences-field">
+                      <span>Current Password *</span>
+                      <input
+                        className="input"
+                        type="password"
+                        value={passwordForm.currentPassword}
+                        onChange={(event) => updatePasswordForm('currentPassword', event.target.value)}
+                        autoComplete="current-password"
+                        required
+                      />
+                    </label>
 
-              <div className="modal-actions full-width settings-preferences-actions">
-                <button type="submit" className="btn btn-primary" disabled={preferencesSaving}>
-                  {preferencesSaving ? 'Saving...' : 'Save Profile'}
-                </button>
-              </div>
-            </form>
-          )}
+                    <label className="settings-preferences-field">
+                      <span>New Password *</span>
+                      <input
+                        className="input"
+                        type="password"
+                        value={passwordForm.newPassword}
+                        onChange={(event) => updatePasswordForm('newPassword', event.target.value)}
+                        autoComplete="new-password"
+                        minLength={8}
+                        required
+                      />
+                      <small>Use at least 8 characters and avoid reusing old passwords.</small>
+                    </label>
 
-          <div className="settings-preferences-divider" />
+                    <label className="settings-preferences-field settings-preferences-span-full">
+                      <span>Confirm New Password *</span>
+                      <input
+                        className="input"
+                        type="password"
+                        value={passwordForm.confirmPassword}
+                        onChange={(event) => updatePasswordForm('confirmPassword', event.target.value)}
+                        autoComplete="new-password"
+                        minLength={8}
+                        required
+                      />
+                    </label>
 
-          <h3>Security</h3>
-          <p className="text-muted">Change your account password.</p>
-          <form className="package-form-grid settings-password-form" onSubmit={handlePasswordSubmit}>
-            <label>
-              <span>Current Password *</span>
-              <input
-                className="input"
-                type="password"
-                value={passwordForm.currentPassword}
-                onChange={(event) => updatePasswordForm('currentPassword', event.target.value)}
-                autoComplete="current-password"
-                required
-              />
-            </label>
-            <label>
-              <span>New Password *</span>
-              <input
-                className="input"
-                type="password"
-                value={passwordForm.newPassword}
-                onChange={(event) => updatePasswordForm('newPassword', event.target.value)}
-                autoComplete="new-password"
-                minLength={8}
-                required
-              />
-            </label>
-            <label className="full-width">
-              <span>Confirm New Password *</span>
-              <input
-                className="input"
-                type="password"
-                value={passwordForm.confirmPassword}
-                onChange={(event) => updatePasswordForm('confirmPassword', event.target.value)}
-                autoComplete="new-password"
-                minLength={8}
-                required
-              />
-            </label>
-            {(passwordError || passwordSuccess) && (
-              <p className={`full-width ${passwordError ? 'error-text' : 'text-muted'}`}>
-                {passwordError || passwordSuccess}
-              </p>
-            )}
-            <div className="modal-actions full-width settings-preferences-actions">
-              <button type="submit" className="btn btn-primary" disabled={passwordSaving}>
-                {passwordSaving ? 'Updating...' : 'Update Password'}
-              </button>
+                    {(passwordError || passwordSuccess) && (
+                      <p
+                        className={`settings-preferences-message settings-preferences-span-full ${
+                          passwordError
+                            ? 'settings-preferences-message-error'
+                            : 'settings-preferences-message-success'
+                        }`}
+                      >
+                        {passwordError || passwordSuccess}
+                      </p>
+                    )}
+
+                    <div className="modal-actions settings-preferences-actions settings-preferences-span-full">
+                      <button type="submit" className="btn btn-primary" disabled={passwordSaving}>
+                        {passwordSaving ? 'Updating...' : 'Update Password'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </section>
             </div>
-          </form>
-
-          <div className="settings-preferences-divider" />
-
-          <h3>Notification Channels</h3>
-          <div className="toggle-row">
-            <span>Email summaries</span>
-            <button type="button" className="toggle">
-              On
-            </button>
-          </div>
-          <div className="toggle-row">
-            <span>WhatsApp alerts</span>
-            <button type="button" className="toggle">
-              Paused
-            </button>
           </div>
         </div>
       )}

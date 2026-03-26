@@ -1,7 +1,16 @@
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth.jsx';
 
 export default function PendingReviewPage() {
   const { user, logout } = useAuth();
+
+  if (!user) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (user.email_verified === false) {
+    return <Navigate to="/verify-email" replace />;
+  }
 
   const handleLogout = async () => {
     await logout();
